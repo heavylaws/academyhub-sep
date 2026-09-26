@@ -1,0 +1,15 @@
+{"name":"users","id":10001}
+{"name":"academies","id":10002}
+{"name":"invites","id":10003}
+{"name":"athletes","id":10004}
+{"name":"attendanceRecords","id":10005}
+{"name":"teamMembers","id":10006}
+{"name":"teams","id":10007}
+{"name":"trainingSessions","id":10008}
+{"name":"planItems","id":10009}
+{"name":"trainingPlans","id":10010}
+{"name":"assessments","id":10011}
+{"name":"videoAnalyses","id":10012}
+{"name":"athleteFees","id":10013}
+{"name":"feePayments","id":10014}
+{"name":"invoices","id":10015}

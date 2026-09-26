@@ -1,0 +1,8 @@
+{
+  "name": "PeakForm Athletics",
+  "description": "The performance and biomechanics platform for sports academies.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,43 @@
+# Logs
+/logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies and build artifacts
+node_modules
+/dist
+/dist-ssr
+*.local
+.eslintcache
+tsconfig.tsbuildinfo
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
+.env*
+!.env.example
+
+# Convex local deployment cache
+.convex/
+
+# Archive directory
+archives/
+
+# Build artifacts (build locally; never commit bundles)
+dist.zip
+
+# Local test credentials (never commit)
+credentials.md
