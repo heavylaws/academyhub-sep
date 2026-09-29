@@ -523,6 +523,8 @@ export default function AthleteDetail() {
       {/* Performance Analytics & Radar Profile */}
       <AthletePerformanceAnalytics
         athleteName={`${athlete.firstName} ${athlete.lastName}`}
+        athleteId={athlete._id}
+        canManage={canManage}
         assessmentData={assessmentData}
       />
 

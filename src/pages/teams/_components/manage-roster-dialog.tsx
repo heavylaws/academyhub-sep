@@ -83,7 +83,7 @@ export default function ManageRosterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage roster</DialogTitle>
           <DialogDescription>
@@ -95,16 +95,16 @@ export default function ManageRosterDialog({
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search athletes..."
-            className="pl-9"
+            className="pl-9 h-11 sm:h-10 text-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
           {allAthletes === undefined ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
+              <Skeleton key={i} className="h-11 w-full rounded-xl" />
             ))
           ) : filtered.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -114,17 +114,18 @@ export default function ManageRosterDialog({
             filtered.map((athlete) => (
               <label
                 key={athlete._id}
-                className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-accent"
+                className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 min-h-[44px] hover:bg-accent active:bg-muted/80 transition-colors border border-transparent hover:border-border/50"
               >
                 <Checkbox
                   checked={selected.has(athlete._id)}
                   onCheckedChange={() => toggle(athlete._id)}
+                  className="size-4.5 rounded"
                 />
                 <span className="text-sm font-medium">
                   {athlete.firstName} {athlete.lastName}
                 </span>
                 {athlete.sport && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground ml-auto">
                     {athlete.sport}
                   </span>
                 )}
@@ -134,7 +135,11 @@ export default function ManageRosterDialog({
         </div>
 
         <DialogFooter>
-          <Button onClick={handleSave} disabled={submitting}>
+          <Button
+            onClick={handleSave}
+            disabled={submitting}
+            className="h-10 sm:h-9 text-xs sm:text-sm font-semibold w-full sm:w-auto"
+          >
             {submitting && <Spinner className="size-4" />}
             Save roster
           </Button>

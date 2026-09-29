@@ -17,6 +17,7 @@ import {
 } from "./schema/trainingPlans.ts";
 import { assessments } from "./schema/assessments.ts";
 import { videoAnalyses } from "./schema/videoAnalyses.ts";
+import { drills } from "./schema/drills.ts";
 import {
   athleteFees,
   feePayments,
@@ -64,6 +65,7 @@ export default defineSchema({
   attendanceRecords,
   trainingPlans,
   planItems,
+  drills,
   assessments,
   videoAnalyses,
   athleteFees,

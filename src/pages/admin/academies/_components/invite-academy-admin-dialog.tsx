@@ -26,6 +26,11 @@ import {
   FormMessage,
 } from "@/components/ui/form.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { localMockStore } from "@/lib/local-mock-store.ts";
+import {
+  CredentialsSuccessDialog,
+  type GeneratedCredentials,
+} from "@/components/auth/credentials-success-dialog.tsx";
 
 const formSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
@@ -40,6 +45,7 @@ export default function InviteAcademyAdminDialog({
 }) {
   const createInvite = useMutation(api.invites.createInvite);
   const [submitting, setSubmitting] = useState(false);
+  const [generatedCreds, setGeneratedCreds] = useState<GeneratedCredentials | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -55,11 +61,16 @@ export default function InviteAcademyAdminDialog({
         email: values.email,
         role: "academy_admin",
       });
-      toast.success("Invite sent", {
-        description: `An email has been sent to ${values.email} with instructions to join ${academy.name}.`,
+      const createdUser = localMockStore.getUserByEmail(values.email);
+      const generatedPassword = createdUser?.password || "Admin2026!";
+
+      setGeneratedCreds({
+        email: values.email,
+        password: generatedPassword,
+        role: "academy_admin",
+        academyName: academy.name,
       });
       form.reset();
-      onOpenChange(false);
     } catch (error) {
       toast.error(
         error instanceof ConvexError
@@ -72,49 +83,66 @@ export default function InviteAcademyAdminDialog({
   };
 
   return (
-    <Dialog
-      open={academy !== null}
-      onOpenChange={(next) => {
-        if (!next) form.reset();
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite academy admin</DialogTitle>
-          <DialogDescription>
-            {academy
-              ? `Invite someone to manage ${academy.name}. They'll be assigned the Academy Admin role when they sign in with this email.`
-              : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="flex flex-col gap-4"
-          >
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email address</FormLabel>
-                  <FormControl>
-                    <Input placeholder="admin@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type="submit" disabled={submitting}>
-                {submitting && <Spinner className="size-4" />}
-                Send invite
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog
+        open={academy !== null && !generatedCreds}
+        onOpenChange={(next) => {
+          if (!next) form.reset();
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite academy admin</DialogTitle>
+            <DialogDescription>
+              {academy
+                ? `Invite someone to manage ${academy.name}. A secure temporary password will be generated automatically for their account.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(handleSubmit)}
+              className="flex flex-col gap-4"
+            >
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email address</FormLabel>
+                    <FormControl>
+                      <Input placeholder="admin@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Spinner className="size-4" />}
+                  Generate Credentials & Invite
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <CredentialsSuccessDialog
+        open={Boolean(generatedCreds)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setGeneratedCreds(null);
+            onOpenChange(false);
+          }
+        }}
+        credentials={generatedCreds}
+        onDone={() => {
+          setGeneratedCreds(null);
+          onOpenChange(false);
+        }}
+      />
+    </>
   );
 }

@@ -122,27 +122,45 @@ export default function SessionCalendar({ sessions }: Props) {
                 }
               }}
               className={cn(
-                "group relative flex min-h-[68px] flex-col gap-1 bg-background p-1.5 text-left transition-colors",
+                "group relative flex min-h-[50px] sm:min-h-[68px] flex-col justify-between bg-background p-1 sm:p-1.5 text-left transition-colors",
                 !isCurrentMonth && "bg-muted/30",
-                daySessions.length > 0 && "cursor-pointer hover:bg-muted/50",
+                daySessions.length > 0 && "cursor-pointer hover:bg-muted/50 active:bg-muted/70",
                 daySessions.length === 0 && "cursor-default",
-                isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
+                isSelected && "bg-primary/5 ring-2 ring-inset ring-primary",
               )}
             >
               {/* Date number */}
               <span
                 className={cn(
-                  "flex size-6 items-center justify-center self-end rounded-full text-xs font-medium",
+                  "flex size-5 sm:size-6 items-center justify-center self-end rounded-full text-[11px] sm:text-xs font-semibold",
                   !isCurrentMonth && "text-muted-foreground/50",
                   isCurrentMonth && !todayDay && "text-foreground",
-                  todayDay && "bg-primary text-primary-foreground font-bold",
+                  todayDay && "bg-primary text-primary-foreground font-bold shadow-xs",
                 )}
               >
                 {format(day, "d")}
               </span>
 
-              {/* Session chips — show up to 2, then "+N more" */}
-              <div className="flex flex-col gap-0.5">
+              {/* Mobile indicator dots */}
+              <div className="flex sm:hidden items-center justify-center gap-1 mt-auto pb-0.5">
+                {daySessions.slice(0, 3).map((s, idx) => (
+                  <span
+                    key={s._id || idx}
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      s.startsAt < now ? "bg-muted-foreground/60" : "bg-primary",
+                    )}
+                  />
+                ))}
+                {daySessions.length > 3 && (
+                  <span className="text-[8px] font-bold text-muted-foreground leading-none">
+                    +
+                  </span>
+                )}
+              </div>
+
+              {/* Tablet & Desktop Session chips — show up to 2, then "+N more" */}
+              <div className="hidden sm:flex flex-col gap-0.5">
                 {daySessions.slice(0, 2).map((s) => {
                   const isPast = s.startsAt < now;
                   return (

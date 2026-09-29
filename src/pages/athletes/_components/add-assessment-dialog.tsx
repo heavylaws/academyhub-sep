@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,7 +26,20 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import {
+  SOCCER_DRILLS,
+  combineAllDrills,
+  getDrillMetricSpec,
+} from "@/data/soccer-drills.ts";
 
 /** Common metric presets shown as quick-select chips. */
 const METRIC_PRESETS = [
@@ -144,7 +157,7 @@ export default function AddAssessmentDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record assessment</DialogTitle>
           <DialogDescription>
@@ -167,7 +180,7 @@ export default function AddAssessmentDialog({
                     key={p.label}
                     type="button"
                     onClick={() => handlePreset(p.label, p.unit)}
-                    className="rounded-full border px-2.5 py-1 text-xs transition-colors hover:bg-accent/20 hover:border-accent/40"
+                    className="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent/30 hover:border-accent/50 active:scale-95 bg-muted/20"
                   >
                     {p.label}
                   </button>
@@ -175,15 +188,19 @@ export default function AddAssessmentDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <FormField
                 control={form.control}
                 name="metric"
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem className="sm:col-span-2">
                     <FormLabel>Metric</FormLabel>
                     <FormControl>
-                      <Input placeholder="Sprint 40m" {...field} />
+                      <Input
+                        placeholder="Sprint 40m"
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -196,7 +213,11 @@ export default function AddAssessmentDialog({
                   <FormItem>
                     <FormLabel>Unit</FormLabel>
                     <FormControl>
-                      <Input placeholder="s" {...field} />
+                      <Input
+                        placeholder="s"
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -204,7 +225,7 @@ export default function AddAssessmentDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="value"
@@ -216,6 +237,7 @@ export default function AddAssessmentDialog({
                         type="number"
                         step="any"
                         placeholder="4.62"
+                        className="h-11 sm:h-10 text-sm"
                         {...field}
                       />
                     </FormControl>
@@ -230,7 +252,11 @@ export default function AddAssessmentDialog({
                   <FormItem>
                     <FormLabel>Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input
+                        type="date"
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -248,6 +274,7 @@ export default function AddAssessmentDialog({
                     <Textarea
                       placeholder="Conditions, technique observations…"
                       rows={2}
+                      className="text-sm"
                       {...field}
                     />
                   </FormControl>
@@ -257,7 +284,11 @@ export default function AddAssessmentDialog({
             />
 
             <DialogFooter>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="h-10 sm:h-9 text-xs sm:text-sm font-semibold w-full sm:w-auto"
+              >
                 {submitting && <Spinner className="size-4" />}
                 Save assessment
               </Button>

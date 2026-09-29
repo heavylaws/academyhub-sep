@@ -107,7 +107,7 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="size-5 text-primary" />
@@ -129,6 +129,7 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
                   <FormControl>
                     <Input
                       placeholder="e.g. ⚡ Lightning Warning: Track Session Moved to Gym B"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -137,7 +138,7 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="category"
@@ -146,7 +147,7 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
                     <FormLabel>Category</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 sm:h-9">
                           <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
                       </FormControl>
@@ -171,7 +172,7 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
                     <FormLabel>Priority Level</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 sm:h-9">
                           <SelectValue placeholder="Priority" />
                         </SelectTrigger>
                       </FormControl>
@@ -258,15 +259,16 @@ export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) 
               )}
             />
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="pt-2 gap-2 sm:gap-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                className="h-10 sm:h-9"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="h-10 sm:h-9">
                 {isSubmitting ? "Broadcasting..." : "Broadcast Notice"}
               </Button>
             </DialogFooter>

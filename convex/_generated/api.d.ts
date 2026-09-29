@@ -16,6 +16,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as devSeed from "../devSeed.js";
+import type * as drills from "../drills.js";
 import type * as emails from "../emails.js";
 import type * as feeAutomation from "../feeAutomation.js";
 import type * as fees from "../fees.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dashboard: typeof dashboard;
   devSeed: typeof devSeed;
+  drills: typeof drills;
   emails: typeof emails;
   feeAutomation: typeof feeAutomation;
   fees: typeof fees;

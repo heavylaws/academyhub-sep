@@ -96,18 +96,29 @@ export default function Athletes() {
           </p>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setImportOpen(true)}
+              className="h-10 sm:h-9 text-xs gap-1.5"
+            >
               <Upload className="size-4" />
-              Import CSV
+              <span>Import CSV</span>
             </Button>
-            <Button variant="secondary" onClick={handleGeneratePins}>
+            <Button
+              variant="secondary"
+              onClick={handleGeneratePins}
+              className="h-10 sm:h-9 text-xs gap-1.5"
+            >
               <KeyRound className="size-4" />
-              Assign missing PINs
+              <span>Assign PINs</span>
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="h-10 sm:h-9 text-xs gap-1.5 font-medium"
+            >
               <Plus className="size-4" />
-              Add athlete
+              <span>Add athlete</span>
             </Button>
           </div>
         )}
@@ -118,7 +129,7 @@ export default function Athletes() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search athletes by name..."
-            className="pl-9"
+            className="pl-9 h-11 sm:h-10 text-sm"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
           />
@@ -161,55 +172,95 @@ export default function Athletes() {
               )}
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Athlete</TableHead>
-                    <TableHead>Sport</TableHead>
-                    <TableHead>Age</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {athletes.map((athlete) => (
-                    <TableRow key={athlete._id} className="cursor-pointer">
-                      <TableCell>
-                        <Link
-                          to={`/athletes/${athlete._id}`}
-                          className="flex items-center gap-3"
-                        >
-                          <Avatar className="size-8">
-                            <AvatarFallback className="bg-secondary text-xs">
-                              {initials(athlete.firstName, athlete.lastName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">
-                            {athlete.firstName} {athlete.lastName}
-                          </span>
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {athlete.sport ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {calculateAge(athlete.dateOfBirth) ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            athlete.status === "active"
-                              ? "secondary"
-                              : "outline"
-                          }
-                        >
-                          {athlete.status === "active" ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
+            <div>
+              {/* Mobile View: High-ergonomics cards */}
+              <div className="flex flex-col divide-y sm:hidden -mx-2">
+                {athletes.map((athlete) => (
+                  <Link
+                    key={athlete._id}
+                    to={`/athletes/${athlete._id}`}
+                    className="flex items-center justify-between p-3 active:bg-muted/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarFallback className="bg-secondary text-xs font-semibold">
+                          {initials(athlete.firstName, athlete.lastName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm text-foreground truncate">
+                          {athlete.firstName} {athlete.lastName}
+                        </span>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span>{athlete.sport || "Soccer"}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>Age {calculateAge(athlete.dateOfBirth) ?? "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={
+                        athlete.status === "active" ? "secondary" : "outline"
+                      }
+                      className="ml-2 shrink-0 text-[10px]"
+                    >
+                      {athlete.status === "active" ? "Active" : "Inactive"}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Tablet & Desktop View: Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Athlete</TableHead>
+                      <TableHead>Sport</TableHead>
+                      <TableHead>Age</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {athletes.map((athlete) => (
+                      <TableRow key={athlete._id} className="cursor-pointer">
+                        <TableCell>
+                          <Link
+                            to={`/athletes/${athlete._id}`}
+                            className="flex items-center gap-3"
+                          >
+                            <Avatar className="size-8">
+                              <AvatarFallback className="bg-secondary text-xs">
+                                {initials(athlete.firstName, athlete.lastName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">
+                              {athlete.firstName} {athlete.lastName}
+                            </span>
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {athlete.sport ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {calculateAge(athlete.dateOfBirth) ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              athlete.status === "active"
+                                ? "secondary"
+                                : "outline"
+                            }
+                          >
+                            {athlete.status === "active" ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

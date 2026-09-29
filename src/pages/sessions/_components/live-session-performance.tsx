@@ -143,6 +143,52 @@ const PRESET_METRICS: MetricPreset[] = [
     ratingPresets: [3, 5, 7, 8, 9, 10],
     lowerIsBetter: false,
   },
+  {
+    id: "slalom_dribble",
+    name: "Soccer Cone Slalom Course",
+    unit: "s",
+    category: "technical",
+    step: 0.1,
+    lowerIsBetter: true,
+  },
+  {
+    id: "rondo_streak",
+    name: "4v2 Rondo Pass Streak",
+    unit: "passes",
+    category: "technical",
+    step: 1,
+    lowerIsBetter: false,
+  },
+  {
+    id: "one_v_one_wins",
+    name: "1v1 Duel Success Rate",
+    unit: "%",
+    category: "technical",
+    step: 5,
+    min: 0,
+    max: 100,
+    ratingPresets: [50, 60, 70, 80, 90, 100],
+    lowerIsBetter: false,
+  },
+  {
+    id: "first_touch_box",
+    name: "First Touch Precision Box",
+    unit: "made",
+    category: "technical",
+    step: 1,
+    min: 0,
+    max: 10,
+    ratingPresets: [5, 6, 7, 8, 9, 10],
+    lowerIsBetter: false,
+  },
+  {
+    id: "illinois_agility",
+    name: "Illinois Soccer Agility Test",
+    unit: "s",
+    category: "power",
+    step: 0.1,
+    lowerIsBetter: true,
+  },
 ];
 
 export interface SessionRosterAthlete {
@@ -499,168 +545,316 @@ export default function LiveSessionPerformance({
               {onlyCheckedIn && "No athletes are checked in yet. Toggle 'Entire Roster' or check in athletes above."}
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border/80 bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40">
-                    <TableHead className="w-[200px]">Athlete</TableHead>
-                    <TableHead className="w-[100px]">Status</TableHead>
-                    <TableHead className="min-w-[220px]">
-                      Result ({activeMetricUnit || "value"})
-                    </TableHead>
-                    <TableHead className="min-w-[150px]">Quick Note / Tag</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedAthletes.map((ath, index) => {
-                    const status = attendanceMap.get(ath._id);
-                    const currentVal = draftValues[ath._id] || "";
-                    const currentNote = draftNotes[ath._id] || "";
+            <div>
+              {/* Mobile View: High-ergonomics touch cards */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                {displayedAthletes.map((ath, index) => {
+                  const status = attendanceMap.get(ath._id);
+                  const currentVal = draftValues[ath._id] || "";
+                  const currentNote = draftNotes[ath._id] || "";
 
-                    return (
-                      <TableRow key={ath._id} className="hover:bg-muted/20">
-                        <TableCell>
-                          <div className="flex items-center gap-2.5">
-                            <Avatar className="size-7">
-                              <AvatarFallback className="bg-secondary text-xs">
-                                {ath.firstName[0]}
-                                {ath.lastName[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="text-sm font-medium leading-none">
-                                {ath.firstName} {ath.lastName}
-                              </div>
-                              {ath.sport && (
-                                <span className="text-[11px] text-muted-foreground">
-                                  {ath.sport}
-                                </span>
-                              )}
+                  return (
+                    <div
+                      key={ath._id}
+                      className="p-3.5 rounded-2xl border border-border bg-card shadow-xs flex flex-col gap-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Avatar className="size-8 shrink-0">
+                            <AvatarFallback className="bg-secondary text-xs font-semibold">
+                              {ath.firstName[0]}
+                              {ath.lastName[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-foreground truncate">
+                              {ath.firstName} {ath.lastName}
                             </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          {status === "present" ? (
-                            <Badge variant="secondary" className="text-[10px] px-2 py-0">
-                              Present
-                            </Badge>
-                          ) : status === "late" ? (
-                            <Badge variant="outline" className="text-[10px] px-2 py-0 text-amber-500 border-amber-500/40">
-                              Late
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] px-2 py-0 text-muted-foreground">
-                              Not Checked
-                            </Badge>
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {/* Direct numeric input with auto-advance */}
-                            <div className="relative flex items-center">
-                              <Input
-                                ref={(el) => {
-                                  inputRefs.current[ath._id] = el;
-                                }}
-                                type="number"
-                                step={activePreset?.step || "any"}
-                                placeholder="0.00"
-                                value={currentVal}
-                                onChange={(e) =>
-                                  handleValueChange(ath._id, e.target.value)
-                                }
-                                onKeyDown={(e) => handleKeyDown(e, index)}
-                                disabled={!canManage}
-                                className={cn(
-                                  "h-9 w-28 text-center font-mono font-semibold text-sm transition-all",
-                                  currentVal
-                                    ? "border-primary/80 bg-primary/5 text-primary"
-                                    : "bg-background",
-                                )}
-                              />
-                              {activeMetricUnit && (
-                                <span className="pointer-events-none absolute right-2 text-[11px] font-medium text-muted-foreground">
-                                  {activeMetricUnit}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Steppers (+ / -) */}
-                            {canManage && (
-                              <div className="flex items-center gap-0.5">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                  onClick={() => adjustValue(ath._id, 1)}
-                                  title="Increase score"
-                                >
-                                  <ChevronUp className="size-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-                                  onClick={() => adjustValue(ath._id, -1)}
-                                  title="Decrease score"
-                                >
-                                  <ChevronDown className="size-3.5" />
-                                </Button>
-                              </div>
+                            {ath.sport && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {ath.sport}
+                              </span>
                             )}
+                          </div>
+                        </div>
 
-                            {/* Preset Buttons for ratings / fast touches */}
-                            {canManage &&
-                              activePreset?.ratingPresets && (
-                                <div className="hidden sm:flex items-center gap-1">
-                                  {activePreset.ratingPresets.map((rVal) => (
-                                    <button
-                                      key={rVal}
-                                      type="button"
-                                      onClick={() =>
-                                        handleValueChange(
-                                          ath._id,
-                                          rVal.toString(),
-                                        )
-                                      }
-                                      className={cn(
-                                        "size-6 rounded border text-[11px] font-semibold transition-colors",
-                                        currentVal === rVal.toString()
-                                          ? "border-primary bg-primary text-primary-foreground"
-                                          : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-accent",
-                                      )}
-                                    >
-                                      {rVal}
-                                    </button>
-                                  ))}
+                        {status === "present" ? (
+                          <Badge variant="secondary" className="text-[10px] px-2 py-0.5 font-semibold">
+                            Present
+                          </Badge>
+                        ) : status === "late" ? (
+                          <Badge variant="outline" className="text-[10px] px-2 py-0.5 text-amber-500 border-amber-500/40 font-semibold">
+                            Late
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] px-2 py-0.5 text-muted-foreground">
+                            Not Checked
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Numeric Input & Steppers */}
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            ref={(el) => {
+                              inputRefs.current[ath._id] = el;
+                            }}
+                            type="number"
+                            step={activePreset?.step || "any"}
+                            placeholder="0.00"
+                            value={currentVal}
+                            onChange={(e) =>
+                              handleValueChange(ath._id, e.target.value)
+                            }
+                            onKeyDown={(e) => handleKeyDown(e, index)}
+                            disabled={!canManage}
+                            className={cn(
+                              "h-11 w-full text-center font-mono font-bold text-base transition-all rounded-xl",
+                              currentVal
+                                ? "border-primary/80 bg-primary/5 text-primary"
+                                : "bg-background",
+                            )}
+                          />
+                          {activeMetricUnit && (
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                              {activeMetricUnit}
+                            </span>
+                          )}
+                        </div>
+
+                        {canManage && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="size-11 shrink-0 rounded-xl text-foreground active:scale-95 transition-transform"
+                              onClick={() => adjustValue(ath._id, -1)}
+                              title="Decrease score"
+                            >
+                              <ChevronDown className="size-5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="size-11 shrink-0 rounded-xl text-foreground active:scale-95 transition-transform"
+                              onClick={() => adjustValue(ath._id, 1)}
+                              title="Increase score"
+                            >
+                              <ChevronUp className="size-5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quick rating presets on mobile */}
+                      {canManage && activePreset?.ratingPresets && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground mr-1">
+                            Preset:
+                          </span>
+                          {activePreset.ratingPresets.map((rVal) => (
+                            <button
+                              key={rVal}
+                              type="button"
+                              onClick={() =>
+                                handleValueChange(ath._id, rVal.toString())
+                              }
+                              className={cn(
+                                "min-w-[36px] h-8 px-2 rounded-lg border text-xs font-bold transition-colors active:scale-95",
+                                currentVal === rVal.toString()
+                                  ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                                  : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-accent",
+                              )}
+                            >
+                              {rVal}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Quick Note */}
+                      <Input
+                        placeholder="Add quick note (e.g. clean technique, PR)..."
+                        value={currentNote}
+                        onChange={(e) =>
+                          setDraftNotes((prev) => ({
+                            ...prev,
+                            [ath._id]: e.target.value,
+                          }))
+                        }
+                        disabled={!canManage}
+                        className="h-9 text-xs bg-background rounded-lg"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tablet & Desktop View: High-speed Table */}
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-border/80 bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="w-[200px]">Athlete</TableHead>
+                      <TableHead className="w-[100px]">Status</TableHead>
+                      <TableHead className="min-w-[220px]">
+                        Result ({activeMetricUnit || "value"})
+                      </TableHead>
+                      <TableHead className="min-w-[150px]">Quick Note / Tag</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedAthletes.map((ath, index) => {
+                      const status = attendanceMap.get(ath._id);
+                      const currentVal = draftValues[ath._id] || "";
+                      const currentNote = draftNotes[ath._id] || "";
+
+                      return (
+                        <TableRow key={ath._id} className="hover:bg-muted/20">
+                          <TableCell>
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="size-7">
+                                <AvatarFallback className="bg-secondary text-xs">
+                                  {ath.firstName[0]}
+                                  {ath.lastName[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="text-sm font-medium leading-none">
+                                  {ath.firstName} {ath.lastName}
+                                </div>
+                                {ath.sport && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {ath.sport}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            {status === "present" ? (
+                              <Badge variant="secondary" className="text-[10px] px-2 py-0">
+                                Present
+                              </Badge>
+                            ) : status === "late" ? (
+                              <Badge variant="outline" className="text-[10px] px-2 py-0 text-amber-500 border-amber-500/40">
+                                Late
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] px-2 py-0 text-muted-foreground">
+                                Not Checked
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Direct numeric input with auto-advance */}
+                              <div className="relative flex items-center">
+                                <Input
+                                  ref={(el) => {
+                                    inputRefs.current[ath._id] = el;
+                                  }}
+                                  type="number"
+                                  step={activePreset?.step || "any"}
+                                  placeholder="0.00"
+                                  value={currentVal}
+                                  onChange={(e) =>
+                                    handleValueChange(ath._id, e.target.value)
+                                  }
+                                  onKeyDown={(e) => handleKeyDown(e, index)}
+                                  disabled={!canManage}
+                                  className={cn(
+                                    "h-9 w-28 text-center font-mono font-semibold text-sm transition-all",
+                                    currentVal
+                                      ? "border-primary/80 bg-primary/5 text-primary"
+                                      : "bg-background",
+                                  )}
+                                />
+                                {activeMetricUnit && (
+                                  <span className="pointer-events-none absolute right-2 text-[11px] font-medium text-muted-foreground">
+                                    {activeMetricUnit}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Steppers (+ / -) */}
+                              {canManage && (
+                                <div className="flex items-center gap-0.5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => adjustValue(ath._id, 1)}
+                                    title="Increase score"
+                                  >
+                                    <ChevronUp className="size-3.5" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => adjustValue(ath._id, -1)}
+                                    title="Decrease score"
+                                  >
+                                    <ChevronDown className="size-3.5" />
+                                  </Button>
                                 </div>
                               )}
-                          </div>
-                        </TableCell>
 
-                        <TableCell>
-                          <Input
-                            placeholder="Optional note (e.g. PR, tired)"
-                            value={currentNote}
-                            onChange={(e) =>
-                              setDraftNotes((prev) => ({
-                                ...prev,
-                                [ath._id]: e.target.value,
-                              }))
-                            }
-                            disabled={!canManage}
-                            className="h-8 text-xs bg-background"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                              {/* Preset Buttons for ratings / fast touches */}
+                              {canManage &&
+                                activePreset?.ratingPresets && (
+                                  <div className="hidden sm:flex items-center gap-1">
+                                    {activePreset.ratingPresets.map((rVal) => (
+                                      <button
+                                        key={rVal}
+                                        type="button"
+                                        onClick={() =>
+                                          handleValueChange(
+                                            ath._id,
+                                            rVal.toString(),
+                                          )
+                                        }
+                                        className={cn(
+                                          "size-6 rounded border text-[11px] font-semibold transition-colors",
+                                          currentVal === rVal.toString()
+                                            ? "border-primary bg-primary text-primary-foreground"
+                                            : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-accent",
+                                        )}
+                                      >
+                                        {rVal}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell>
+                            <Input
+                              placeholder="Optional note (e.g. PR, tired)"
+                              value={currentNote}
+                              onChange={(e) =>
+                                setDraftNotes((prev) => ({
+                                  ...prev,
+                                  [ath._id]: e.target.value,
+                                }))
+                              }
+                              disabled={!canManage}
+                              className="h-8 text-xs bg-background"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
 

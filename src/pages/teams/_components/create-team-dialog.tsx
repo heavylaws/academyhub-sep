@@ -78,7 +78,7 @@ export default function CreateTeamDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New team</DialogTitle>
           <DialogDescription>
@@ -97,7 +97,11 @@ export default function CreateTeamDialog({
                 <FormItem>
                   <FormLabel>Team name</FormLabel>
                   <FormControl>
-                    <Input placeholder="U16 Boys Soccer" {...field} />
+                    <Input
+                      placeholder="U16 Boys Soccer"
+                      className="h-11 sm:h-10 text-sm"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -110,14 +114,22 @@ export default function CreateTeamDialog({
                 <FormItem>
                   <FormLabel>Sport (optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Soccer" {...field} />
+                    <Input
+                      placeholder="Soccer"
+                      className="h-11 sm:h-10 text-sm"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="h-10 sm:h-9 text-xs sm:text-sm font-semibold w-full sm:w-auto"
+              >
                 {submitting && <Spinner className="size-4" />}
                 Create team
               </Button>

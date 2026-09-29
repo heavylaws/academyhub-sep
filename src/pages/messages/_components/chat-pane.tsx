@@ -184,40 +184,41 @@ export default function ChatPane({
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3 bg-card/40 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between border-b px-3 sm:px-4 py-3 bg-card/40 backdrop-blur-sm gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           {onBackToList && (
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden size-8"
+              className="md:hidden size-9 shrink-0 -ml-1 text-muted-foreground hover:text-foreground"
               onClick={onBackToList}
+              aria-label="Back to conversations"
             >
-              <ArrowLeft className="size-4" />
+              <ArrowLeft className="size-5" />
             </Button>
           )}
 
-          <Avatar className="size-10 border shadow-xs">
+          <Avatar className="size-9 sm:size-10 border shadow-xs shrink-0">
             <AvatarFallback className="text-xs font-bold bg-secondary">
               {getInitials(otherParticipant?.name, otherParticipant?.email)}
             </AvatarFallback>
           </Avatar>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-display font-semibold text-sm leading-none">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h3 className="font-display font-semibold text-sm leading-none truncate">
                 {otherParticipant?.name || otherParticipant?.email || "Direct Channel"}
               </h3>
               {otherParticipant?.role && (
                 <Badge
                   variant="outline"
-                  className="text-[10px] px-1.5 py-0 capitalize"
+                  className="text-[10px] px-1.5 py-0 capitalize shrink-0 hidden xs:inline-flex"
                 >
                   {otherParticipant.role.replace("_", " ")}
                 </Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {otherParticipant?.email || "1-on-1 Direct Channel"}
             </p>
           </div>
@@ -229,11 +230,11 @@ export default function ChatPane({
             variant="outline"
             size="sm"
             asChild
-            className="hidden sm:flex gap-1.5 text-xs h-8"
+            className="flex items-center gap-1.5 text-xs h-9 sm:h-8 px-2.5 sm:px-3 shrink-0"
           >
             <Link to={`/athletes/${conversation.athleteId}`}>
               <User className="size-3.5" />
-              Athlete Profile
+              <span className="hidden sm:inline">Athlete Profile</span>
             </Link>
           </Button>
         )}

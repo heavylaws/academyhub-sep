@@ -311,7 +311,7 @@ export default function SchedulePage() {
                       type="button"
                       onClick={() => setSelectedDate(isSelected ? null : day)}
                       className={cn(
-                        "group relative flex min-h-[76px] flex-col gap-1 bg-background p-1.5 text-left transition-colors cursor-pointer",
+                        "group relative flex min-h-[50px] sm:min-h-[76px] flex-col justify-between bg-background p-1 sm:p-1.5 text-left transition-colors cursor-pointer",
                         !isCurrentMonth &&
                           "bg-muted/30 text-muted-foreground/60",
                         daySessions.length > 0 && "hover:bg-muted/50",
@@ -319,19 +319,40 @@ export default function SchedulePage() {
                           "bg-primary/10 ring-2 ring-inset ring-primary",
                       )}
                     >
-                      <span
-                        className={cn(
-                          "flex size-6 items-center justify-center self-end rounded-full text-xs font-medium",
-                          !isCurrentMonth && "text-muted-foreground/40",
-                          isCurrentMonth && !todayDay && "text-foreground",
-                          todayDay &&
-                            "bg-primary text-primary-foreground font-bold",
-                        )}
-                      >
-                        {format(day, "d")}
-                      </span>
+                      <div className="flex w-full items-center justify-between">
+                        <span
+                          className={cn(
+                            "flex size-5 sm:size-6 items-center justify-center rounded-full text-[11px] sm:text-xs font-medium ml-auto",
+                            !isCurrentMonth && "text-muted-foreground/40",
+                            isCurrentMonth && !todayDay && "text-foreground",
+                            todayDay &&
+                              "bg-primary text-primary-foreground font-bold",
+                          )}
+                        >
+                          {format(day, "d")}
+                        </span>
+                      </div>
 
-                      <div className="flex flex-col gap-0.5 overflow-hidden">
+                      {/* Mobile view: Compact dot indicators */}
+                      <div className="flex sm:hidden items-center justify-center gap-1 mt-auto pb-0.5">
+                        {daySessions.slice(0, 3).map((s) => (
+                          <span
+                            key={s._id}
+                            className={cn(
+                              "size-1.5 rounded-full shrink-0",
+                              s.startsAt < now ? "bg-muted-foreground" : "bg-primary",
+                            )}
+                          />
+                        ))}
+                        {daySessions.length > 3 && (
+                          <span className="text-[9px] font-bold text-muted-foreground leading-none">
+                            +
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Tablet/Desktop view: Text chips */}
+                      <div className="hidden sm:flex flex-col gap-0.5 overflow-hidden w-full">
                         {daySessions.slice(0, 2).map((s) => {
                           const isPast = s.startsAt < now;
                           return (
@@ -637,7 +658,7 @@ function CreateAcademySessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Schedule training session</DialogTitle>
           <DialogDescription>
@@ -661,7 +682,7 @@ function CreateAcademySessionDialog({
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-10 sm:h-9">
                         <SelectValue placeholder="Select team" />
                       </SelectTrigger>
                     </FormControl>
@@ -687,6 +708,7 @@ function CreateAcademySessionDialog({
                   <FormControl>
                     <Input
                       placeholder="e.g. Tactical Drill, Strength & Conditioning"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -695,7 +717,7 @@ function CreateAcademySessionDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="startsAtLocal"
@@ -703,7 +725,7 @@ function CreateAcademySessionDialog({
                   <FormItem>
                     <FormLabel>Date & time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input type="datetime-local" className="h-10 sm:h-9" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -722,6 +744,7 @@ function CreateAcademySessionDialog({
                         min="1"
                         step="5"
                         placeholder="60"
+                        className="h-10 sm:h-9"
                         {...field}
                       />
                     </FormControl>
@@ -740,6 +763,7 @@ function CreateAcademySessionDialog({
                   <FormControl>
                     <Input
                       placeholder="e.g. Main Pitch, Weight Room"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -767,16 +791,17 @@ function CreateAcademySessionDialog({
               )}
             />
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={submitting}
+                className="h-10 sm:h-9"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
+              <Button type="submit" disabled={submitting} className="h-10 sm:h-9">
                 {submitting && <Spinner className="mr-2 size-4" />}
                 Schedule session
               </Button>

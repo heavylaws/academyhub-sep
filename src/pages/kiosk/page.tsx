@@ -353,32 +353,32 @@ export default function KioskPage() {
               onValueChange={(v) => setActiveTab(v as typeof activeTab)}
               className="w-full space-y-6"
             >
-              <div className="flex justify-center">
-                <TabsList className="h-14 p-1.5 rounded-2xl bg-card border border-border shadow-sm">
+              <div className="flex justify-center overflow-x-auto pb-1 max-w-full scrollbar-none">
+                <TabsList className="h-12 sm:h-14 p-1 sm:p-1.5 rounded-2xl bg-card border border-border shadow-sm flex shrink-0">
                   <TabsTrigger
                     value="roster"
-                    className="h-11 px-6 rounded-xl font-bold text-sm gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                    className="h-10 sm:h-11 px-3.5 sm:px-6 rounded-xl font-bold text-xs sm:text-sm gap-1.5 sm:gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
                   >
                     <LayoutGrid className="size-4" />
-                    <span>1-Tap Roster</span>
+                    <span>Roster</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="keypad"
-                    className="h-11 px-6 rounded-xl font-bold text-sm gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                    className="h-10 sm:h-11 px-3.5 sm:px-6 rounded-xl font-bold text-xs sm:text-sm gap-1.5 sm:gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
                   >
                     <KeyRound className="size-4" />
-                    <span>Keypad PIN</span>
+                    <span>Keypad</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="monitor"
-                    className="h-11 px-6 rounded-xl font-bold text-sm gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                    className="h-10 sm:h-11 px-3.5 sm:px-6 rounded-xl font-bold text-xs sm:text-sm gap-1.5 sm:gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
                   >
                     <MonitorCheck className="size-4" />
-                    <span>Coach Monitor</span>
+                    <span>Monitor</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="drills"
-                    className="h-11 px-6 rounded-xl font-bold text-sm gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+                    className="h-10 sm:h-11 px-3.5 sm:px-6 rounded-xl font-bold text-xs sm:text-sm gap-1.5 sm:gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
                   >
                     <Zap className="size-4" />
                     <span>Live Drills</span>

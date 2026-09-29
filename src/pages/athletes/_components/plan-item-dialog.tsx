@@ -26,7 +26,15 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
 
 const formSchema = z.object({
   name: z.string().trim().min(1, "Exercise name is required"),
@@ -140,6 +148,50 @@ export default function PlanItemDialog({
             onSubmit={form.handleSubmit(handleSubmit)}
             className="flex flex-col gap-4"
           >
+            {!isEditing && (
+              <div className="flex flex-col gap-1.5 p-3 rounded-lg border bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    ⚽ Quick Pick: U16 Soccer Drill
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Born 2011–2020
+                  </span>
+                </div>
+                <Select
+                  onValueChange={(drillId) => {
+                    const drill = SOCCER_DRILLS.find((d) => d.id === drillId);
+                    if (!drill) return;
+                    form.setValue("name", `${drill.title} (${drill.ageGroup})`);
+                    form.setValue("sets", String(drill.recommendedSets));
+                    form.setValue("reps", String(drill.recommendedReps));
+                    form.setValue(
+                      "durationSeconds",
+                      String(drill.durationSeconds || drill.durationMinutes * 60),
+                    );
+                    form.setValue(
+                      "notes",
+                      `[${drill.gridDimensions}] Coaching: ${drill.coachingPoints.slice(0, 2).join(". ")}`,
+                    );
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs bg-background">
+                    <SelectValue placeholder="Select a preset soccer drill to auto-fill..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {SOCCER_DRILLS.map((d) => (
+                      <SelectItem key={d.id} value={d.id} className="text-xs">
+                        <span className="font-medium">{d.title}</span>{" "}
+                        <span className="text-muted-foreground">
+                          — {d.ageGroup} ({d.categoryLabel})
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="name"

@@ -171,7 +171,7 @@ export default function Staff() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={() => setInviteOpen(true)}>
+          <Button onClick={() => setInviteOpen(true)} className="h-10 sm:h-9">
             <UserPlus className="size-4" />
             Invite staff
           </Button>
@@ -182,7 +182,7 @@ export default function Staff() {
         <CardHeader>
           <CardTitle className="text-base">Members</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-6">
           {members === undefined ? (
             <div className="flex flex-col gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -204,7 +204,7 @@ export default function Staff() {
               </EmptyHeader>
               {isAdmin && (
                 <EmptyContent>
-                  <Button size="sm" onClick={() => setInviteOpen(true)}>
+                  <Button size="sm" onClick={() => setInviteOpen(true)} className="h-10 sm:h-9">
                     <UserPlus className="size-4" />
                     Invite staff
                   </Button>
@@ -212,85 +212,165 @@ export default function Staff() {
               )}
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    {isAdmin && (
-                      <TableHead className="text-right">Actions</TableHead>
+            <>
+              {/* Mobile View: High-ergonomics cards */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                {members.map((member) => (
+                  <div
+                    key={member._id}
+                    className="flex items-center justify-between rounded-xl border border-border/80 bg-background/60 p-3.5 shadow-xs gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-10 rounded-full bg-secondary flex items-center justify-center font-bold text-xs shrink-0 border">
+                        {(member.name ? member.name.slice(0, 2) : member.email?.slice(0, 2) ?? "U").toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-sm text-foreground truncate">
+                            {member.name ?? "—"}
+                          </p>
+                          {member._id === user?._id && (
+                            <span className="text-[10px] text-muted-foreground font-normal">
+                              (You)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {member.email ?? "—"}
+                        </p>
+                        <div className="mt-1">
+                          <Badge variant="secondary" className="gap-1 text-[10px] py-0 px-1.5">
+                            {member.role === "academy_admin" ? (
+                              <ShieldCheck className="size-2.5" />
+                            ) : (
+                              <UserRound className="size-2.5" />
+                            )}
+                            {member.role ? ROLE_LABEL[member.role] : "Unassigned"}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isAdmin && member._id !== user?._id && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="size-9 shrink-0"
+                            aria-label="Member options"
+                          >
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedMember(member);
+                              setEditRoleOpen(true);
+                            }}
+                          >
+                            <Pencil className="size-4 mr-2" />
+                            Change role
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => {
+                              setSelectedMember(member);
+                              setRemoveOpen(true);
+                            }}
+                          >
+                            <Trash2 className="size-4 mr-2" />
+                            Remove from academy
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {members.map((member) => (
-                    <TableRow key={member._id}>
-                      <TableCell className="font-medium">
-                        {member.name ?? "—"}
-                        {member._id === user?._id && (
-                          <span className="ml-2 text-xs text-muted-foreground font-normal">
-                            (You)
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {member.email ?? "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="gap-1">
-                          {member.role === "academy_admin" ? (
-                            <ShieldCheck className="size-2.5" />
-                          ) : (
-                            <UserRound className="size-2.5" />
-                          )}
-                          {member.role ? ROLE_LABEL[member.role] : "Unassigned"}
-                        </Badge>
-                      </TableCell>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tablet & Desktop View: Standard Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
                       {isAdmin && (
-                        <TableCell className="text-right">
-                          {member._id !== user?._id && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedMember(member);
-                                    setEditRoleOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="size-4 mr-2" />
-                                  Change role
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => {
-                                    setSelectedMember(member);
-                                    setRemoveOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="size-4 mr-2" />
-                                  Remove from academy
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </TableCell>
+                        <TableHead className="text-right">Actions</TableHead>
                       )}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {members.map((member) => (
+                      <TableRow key={member._id}>
+                        <TableCell className="font-medium">
+                          {member.name ?? "—"}
+                          {member._id === user?._id && (
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">
+                              (You)
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {member.email ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="gap-1">
+                            {member.role === "academy_admin" ? (
+                              <ShieldCheck className="size-2.5" />
+                            ) : (
+                              <UserRound className="size-2.5" />
+                            )}
+                            {member.role ? ROLE_LABEL[member.role] : "Unassigned"}
+                          </Badge>
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            {member._id !== user?._id && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                  >
+                                    <MoreHorizontal className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedMember(member);
+                                      setEditRoleOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="size-4 mr-2" />
+                                    Change role
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => {
+                                      setSelectedMember(member);
+                                      setRemoveOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="size-4 mr-2" />
+                                    Remove from academy
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -320,56 +400,93 @@ export default function Staff() {
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Sent</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingInvites.map((invite) => (
-                      <TableRow key={invite._id}>
-                        <TableCell className="font-medium">
+              <>
+                {/* Mobile View: High-ergonomics pending invite cards */}
+                <div className="flex flex-col gap-3 p-3 sm:hidden">
+                  {pendingInvites.map((invite) => (
+                    <div
+                      key={invite._id}
+                      className="flex items-center justify-between rounded-xl border border-border/80 bg-background/60 p-3.5 shadow-xs gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-foreground truncate">
                           {invite.email}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5">
                             {ROLE_LABEL[invite.role]}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(invite.createdAt).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleCancelInvite(invite._id)}
-                              >
-                                <X className="size-4" />
-                                Cancel invite
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(invite.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 px-2.5 text-xs text-muted-foreground hover:text-destructive gap-1 shrink-0"
+                        onClick={() => handleCancelInvite(invite._id)}
+                      >
+                        <X className="size-4" />
+                        <span>Cancel</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tablet & Desktop View: Standard Table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Sent</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingInvites.map((invite) => (
+                        <TableRow key={invite._id}>
+                          <TableCell className="font-medium">
+                            {invite.email}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {ROLE_LABEL[invite.role]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(invite.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => handleCancelInvite(invite._id)}
+                                >
+                                  <X className="size-4" />
+                                  Cancel invite
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -387,7 +504,7 @@ export default function Staff() {
           setEditRoleOpen(open);
         }}
       >
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Change Member Role</DialogTitle>
             <DialogDescription>
@@ -405,7 +522,7 @@ export default function Staff() {
                 )
               }
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-10 sm:h-9">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -416,15 +533,16 @@ export default function Staff() {
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setEditRoleOpen(false)}
               disabled={isSubmitting}
+              className="h-10 sm:h-9"
             >
               Cancel
             </Button>
-            <Button onClick={handleUpdateRole} disabled={isSubmitting}>
+            <Button onClick={handleUpdateRole} disabled={isSubmitting} className="h-10 sm:h-9">
               {isSubmitting ? "Updating..." : "Save Role"}
             </Button>
           </DialogFooter>

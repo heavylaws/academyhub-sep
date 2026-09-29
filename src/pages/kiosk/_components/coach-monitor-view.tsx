@@ -198,100 +198,188 @@ export function CoachMonitorView({
         )}
       </div>
 
-      {/* Table of Athletes */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="font-bold">Athlete</TableHead>
-              <TableHead className="font-bold">Check-In Status</TableHead>
-              <TableHead className="font-bold">Timestamp</TableHead>
-              <TableHead className="text-right font-bold">Quick Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {displayedAthletes.map((athlete) => {
-              const formattedTime = athlete.recordedAt
-                ? new Date(athlete.recordedAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                  })
-                : "—";
+      {/* Athlete List: Mobile Cards + Tablet/Desktop Table */}
+      <div className="space-y-3">
+        {/* Mobile View: High-ergonomics touch cards */}
+        <div className="flex flex-col gap-3 sm:hidden">
+          {displayedAthletes.map((athlete) => {
+            const formattedTime = athlete.recordedAt
+              ? new Date(athlete.recordedAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : null;
 
-              return (
-                <TableRow key={athlete._id} className="hover:bg-muted/30">
-                  <TableCell>
-                    <div className="font-bold text-sm text-foreground">
+            return (
+              <div
+                key={athlete._id}
+                className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-display font-bold text-sm text-foreground">
                       {athlete.firstName} {athlete.lastName}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                      {athlete.sport && <span>{athlete.sport}</span>}
+                      {formattedTime && (
+                        <>
+                          <span>•</span>
+                          <span className="font-mono text-[11px]">{formattedTime}</span>
+                        </>
+                      )}
                     </div>
-                    {athlete.sport && (
-                      <div className="text-xs text-muted-foreground">
-                        {athlete.sport}
-                      </div>
-                    )}
-                  </TableCell>
+                  </div>
 
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        athlete.status === "present"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs"
-                          : athlete.status === "late"
-                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs"
-                            : athlete.status === "absent"
-                              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-xs"
-                              : "bg-muted text-muted-foreground text-xs"
-                      }
-                    >
-                      {athlete.status === "present"
-                        ? "Present (On Time)"
+                  <Badge
+                    variant="outline"
+                    className={
+                      athlete.status === "present"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[11px] font-semibold"
                         : athlete.status === "late"
-                          ? "Late Arrival"
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[11px] font-semibold"
                           : athlete.status === "absent"
-                            ? "Absent"
-                            : "Unrecorded"}
-                    </Badge>
-                  </TableCell>
+                            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[11px] font-semibold"
+                            : "bg-muted text-muted-foreground text-[11px]"
+                    }
+                  >
+                    {athlete.status === "present"
+                      ? "Present"
+                      : athlete.status === "late"
+                        ? "Late"
+                        : athlete.status === "absent"
+                          ? "Absent"
+                          : "Unrecorded"}
+                  </Badge>
+                </div>
 
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {formattedTime}
-                  </TableCell>
+                {/* 1-Tap Quick Action Buttons */}
+                <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-border/50">
+                  <Button
+                    type="button"
+                    variant={athlete.status === "present" ? "default" : "outline"}
+                    onClick={() => onSetStatus(athlete._id, "present")}
+                    className="h-10 text-xs font-semibold rounded-xl active:scale-95 transition-transform"
+                  >
+                    Present
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={athlete.status === "late" ? "default" : "outline"}
+                    onClick={() => onSetStatus(athlete._id, "late")}
+                    className="h-10 text-xs font-semibold rounded-xl active:scale-95 transition-transform"
+                  >
+                    Late
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={athlete.status === "absent" ? "destructive" : "outline"}
+                    onClick={() => onSetStatus(athlete._id, "absent")}
+                    className="h-10 text-xs font-semibold rounded-xl active:scale-95 transition-transform"
+                  >
+                    Absent
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        size="sm"
-                        variant={athlete.status === "present" ? "default" : "outline"}
-                        onClick={() => onSetStatus(athlete._id, "present")}
-                        className="h-8 px-2.5 text-xs font-semibold"
+        {/* Tablet & Desktop View: Table */}
+        <div className="hidden sm:block overflow-x-auto rounded-2xl border border-border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="font-bold">Athlete</TableHead>
+                <TableHead className="font-bold">Check-In Status</TableHead>
+                <TableHead className="font-bold">Timestamp</TableHead>
+                <TableHead className="text-right font-bold">Quick Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {displayedAthletes.map((athlete) => {
+                const formattedTime = athlete.recordedAt
+                  ? new Date(athlete.recordedAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })
+                  : "—";
+
+                return (
+                  <TableRow key={athlete._id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <div className="font-bold text-sm text-foreground">
+                        {athlete.firstName} {athlete.lastName}
+                      </div>
+                      {athlete.sport && (
+                        <div className="text-xs text-muted-foreground">
+                          {athlete.sport}
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          athlete.status === "present"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs"
+                            : athlete.status === "late"
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs"
+                              : athlete.status === "absent"
+                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-xs"
+                                : "bg-muted text-muted-foreground text-xs"
+                        }
                       >
-                        Present
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={athlete.status === "late" ? "default" : "outline"}
-                        onClick={() => onSetStatus(athlete._id, "late")}
-                        className="h-8 px-2.5 text-xs font-semibold"
-                      >
-                        Late
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={athlete.status === "absent" ? "destructive" : "outline"}
-                        onClick={() => onSetStatus(athlete._id, "absent")}
-                        className="h-8 px-2.5 text-xs font-semibold"
-                      >
-                        Absent
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                        {athlete.status === "present"
+                          ? "Present (On Time)"
+                          : athlete.status === "late"
+                            ? "Late Arrival"
+                            : athlete.status === "absent"
+                              ? "Absent"
+                              : "Unrecorded"}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {formattedTime}
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant={athlete.status === "present" ? "default" : "outline"}
+                          onClick={() => onSetStatus(athlete._id, "present")}
+                          className="h-8 px-2.5 text-xs font-semibold"
+                        >
+                          Present
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={athlete.status === "late" ? "default" : "outline"}
+                          onClick={() => onSetStatus(athlete._id, "late")}
+                          className="h-8 px-2.5 text-xs font-semibold"
+                        >
+                          Late
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={athlete.status === "absent" ? "destructive" : "outline"}
+                          onClick={() => onSetStatus(athlete._id, "absent")}
+                          className="h-8 px-2.5 text-xs font-semibold"
+                        >
+                          Absent
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api.js";
+import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import {
@@ -38,6 +39,7 @@ export default function CreateAcademyDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const createAcademy = useMutation(api.academies.createAcademy);
+  const setActiveAcademy = useMutation(api.academies.setActiveAcademy);
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -48,8 +50,11 @@ export default function CreateAcademyDialog({
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     setSubmitting(true);
     try {
-      await createAcademy({ name: values.name });
-      toast.success("Academy created");
+      const newId = await createAcademy({ name: values.name });
+      if (newId) {
+        await setActiveAcademy({ academyId: newId as Id<"academies"> });
+      }
+      toast.success(`Academy "${values.name}" created and set as active workspace`);
       form.reset();
       onOpenChange(false);
     } catch (error) {

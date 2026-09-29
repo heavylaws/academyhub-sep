@@ -238,15 +238,16 @@ export default function Academies() {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                       <Button
-                        variant="outline"
+                        variant={user?.academyId === academy._id ? "outline" : "default"}
                         size="sm"
+                        className="text-xs h-8"
                         onClick={() =>
                           user?.academyId === academy._id
                             ? navigate("/athletes")
                             : handleSetActive(academy._id, academy.name)
                         }
                       >
-                        Open
+                        {user?.academyId === academy._id ? "Working Here" : "Switch Here"}
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

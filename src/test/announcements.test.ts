@@ -4,6 +4,7 @@ import { localMockStore } from "@/lib/local-mock-store.ts";
 describe("Academy Announcements & Team Notification Board Suite", () => {
   beforeEach(() => {
     localMockStore.resetToDefault();
+    localMockStore.seedTestFixtures();
   });
 
   describe("Announcement Queries & Filtering", () => {

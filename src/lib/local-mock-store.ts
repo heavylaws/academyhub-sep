@@ -16,6 +16,7 @@ import {
   SEED_ANNOUNCEMENTS,
   SEED_CONVERSATIONS,
   SEED_MESSAGES,
+  SEED_DRILLS,
   type MockAcademy,
   type MockUser,
   type MockAthlete,
@@ -33,6 +34,7 @@ import {
   type MockAnnouncement,
   type MockConversation,
   type MockMessage,
+  type MockDrill,
 } from "./local-mock-data.ts";
 
 export interface MockFeeSchedule {
@@ -69,10 +71,27 @@ export interface MockDatabase {
   announcementReads: { announcementId: string; userId: string; readAt: string }[];
   conversations: MockConversation[];
   messages: MockMessage[];
+  drills: MockDrill[];
 }
 
-const STORAGE_KEY = "peakform_mock_db_v7";
-const PERSONA_KEY = "peakform_mock_persona_id";
+const STORAGE_KEY = "coachtactics_clean_db_v3";
+const PERSONA_KEY = "coachtactics_persona_id_v3";
+
+export function generateTemporaryPassword(role?: string): string {
+  const prefixMap: Record<string, string> = {
+    academy_admin: "Admin",
+    coach: "Coach",
+    athlete: "Athlete",
+    guardian: "Parent",
+    accounting: "Finance",
+    platform_admin: "Super",
+  };
+  const prefix = (role && prefixMap[role]) || "Tactics";
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const specials = ["!", "#", "@", "$"];
+  const char = specials[Math.floor(Math.random() * specials.length)];
+  return `${prefix}${randomNum}${char}`;
+}
 
 function getInitialDb(): MockDatabase {
   return {
@@ -95,12 +114,13 @@ function getInitialDb(): MockDatabase {
     announcementReads: [],
     conversations: [...SEED_CONVERSATIONS],
     messages: [...SEED_MESSAGES],
+    drills: [...SEED_DRILLS],
   };
 }
 
 class LocalMockStore {
   private db: MockDatabase;
-  private currentUserId: string | null = "usr_admin";
+  private currentUserId: string | null = "usr_heavylaws";
   private listeners: Set<() => void> = new Set();
   private authListeners: Set<() => void> = new Set();
 
@@ -127,50 +147,100 @@ class LocalMockStore {
       }
       const parsed: MockDatabase = JSON.parse(raw);
       parsed.feeSchedules ??= [];
-      // Reconcile any missing seed users (e.g. guardian persona, super admin)
-      for (const seedUser of SEED_USERS) {
-        const existing = parsed.users.find((u) => u._id === seedUser._id || u.email.toLowerCase() === seedUser.email.toLowerCase());
-        if (!existing) {
-          parsed.users.push(seedUser);
-        } else if (seedUser.email.toLowerCase() === "ah.baalbaki@gmail.com") {
-          existing.role = "platform_admin";
-          existing.name = "Ahmad Baalbaki";
-          existing.academyId = existing.academyId || "acad_hercules";
-        }
+
+      parsed.drills ??= [...SEED_DRILLS];
+      parsed.academies ??= [...SEED_ACADEMIES];
+      parsed.users ??= [...SEED_USERS];
+      parsed.athletes ??= [...SEED_ATHLETES];
+      parsed.teams ??= [...SEED_TEAMS];
+      parsed.teamMembers ??= [...SEED_TEAM_MEMBERS];
+      parsed.trainingSessions ??= [...SEED_TRAINING_SESSIONS];
+      parsed.attendanceRecords ??= [...SEED_ATTENDANCE];
+      parsed.trainingPlans ??= [...SEED_TRAINING_PLANS];
+      parsed.planItems ??= [...SEED_PLAN_ITEMS];
+      parsed.assessments ??= [...SEED_ASSESSMENTS];
+      parsed.athleteFees ??= [...SEED_FEES];
+      parsed.feePayments ??= [...SEED_FEE_PAYMENTS];
+      parsed.feeSchedules ??= [];
+      parsed.invoices ??= [...SEED_INVOICES];
+      parsed.invites ??= [...SEED_INVITES];
+      parsed.announcements ??= [...SEED_ANNOUNCEMENTS];
+      parsed.announcementReads ??= [];
+      parsed.conversations ??= [...SEED_CONVERSATIONS];
+      parsed.messages ??= [...SEED_MESSAGES];
+
+      // Ensure platform super admin heavylaws is present
+      if (!parsed.users.some((u) => u._id === "usr_heavylaws" || u.email?.toLowerCase().includes("heavylaws"))) {
+        parsed.users = [...SEED_USERS];
       }
-      // Reconcile athlete guardian associations
-      for (const seedAth of SEED_ATHLETES) {
-        const existing = parsed.athletes.find((a) => a._id === seedAth._id);
-        if (existing) {
-          if (seedAth.guardianUserId && !existing.guardianUserId) {
-            existing.guardianUserId = seedAth.guardianUserId;
-          }
-          if (seedAth.guardianEmail && !existing.guardianEmail) {
-            existing.guardianEmail = seedAth.guardianEmail;
-          }
-        }
-      }
+
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       return parsed;
     } catch {
       return getInitialDb();
     }
   }
 
+  private changeListeners: Set<() => void> = new Set();
+
   private saveDb(): void {
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
+      for (const listener of this.changeListeners) {
+        try {
+          listener();
+        } catch (e) {
+          console.error("LocalMockStore change listener error", e);
+        }
+      }
     } catch (e) {
       console.error("Failed to save mock db to localStorage", e);
     }
   }
 
+  public onChange(cb: () => void): () => void {
+    this.changeListeners.add(cb);
+    return () => this.changeListeners.delete(cb);
+  }
+
+  public mergeRemoteData(partial: Partial<MockDatabase>): boolean {
+    let changed = false;
+    const dbRecord = this.db as unknown as Record<string, unknown[]>;
+    for (const [key, items] of Object.entries(partial)) {
+      if (!Array.isArray(items)) continue;
+      const targetList = dbRecord[key];
+      if (!Array.isArray(targetList)) continue;
+
+      for (const item of items) {
+        if (!item || typeof item !== "object" || !("_id" in item)) continue;
+        const itemId = (item as { _id: string })._id;
+        const existingIdx = targetList.findIndex(
+          (t) => (t as { _id: string })?._id === itemId,
+        );
+        if (existingIdx >= 0) {
+          targetList[existingIdx] = { ...(targetList[existingIdx] as object), ...(item as object) };
+        } else {
+          targetList.push(item);
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
+      }
+      this.notifyAll();
+    }
+    return changed;
+  }
+
   public resetToDefault(): void {
     this.db = getInitialDb();
-    this.currentUserId = "usr_admin";
+    this.currentUserId = "usr_heavylaws";
     if (typeof window !== "undefined") {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
-      window.localStorage.setItem(PERSONA_KEY, "usr_admin");
+      window.localStorage.setItem(PERSONA_KEY, "usr_heavylaws");
     }
     this.notifyAll();
     this.notifyAuth();
@@ -217,6 +287,38 @@ class LocalMockStore {
 
   public setPersona(userId: string | null): void {
     this.currentUserId = userId;
+    if (userId && !this.db.users.some((u) => u._id === userId)) {
+      const knownNames: Record<string, string> = {
+        usr_coach: "Dave Miller",
+        usr_athlete: "Marcus Vance",
+        usr_athlete_1: "Marcus Vance",
+        usr_athlete_2: "Elena Rostova",
+        usr_sara_awally: "Sara Awally",
+        usr_admin: "Alex Thorne",
+        usr_super_admin: "Ahmad Baalbaki",
+        usr_heavylaws: "heavylaws",
+      };
+      const knownRoles: Record<string, MockUser["role"]> = {
+        usr_coach: "coach",
+        usr_athlete: "athlete",
+        usr_athlete_1: "athlete",
+        usr_athlete_2: "athlete",
+        usr_sara_awally: "academy_admin",
+        usr_super_admin: "platform_admin",
+        usr_admin: "academy_admin",
+        usr_heavylaws: "platform_admin",
+      };
+      const name = knownNames[userId] ?? userId.replace("usr_", "").replace(/[._]/g, " ");
+      const role = knownRoles[userId] ?? (userId.includes("admin") ? "academy_admin" : userId.includes("coach") ? "coach" : "athlete");
+      this.db.users.push({
+        _id: userId,
+        name,
+        email: `${userId.replace("usr_", "")}@test.local`,
+        role,
+        academyId: this.db.academies[0]?._id ?? "acad_heavylaws",
+        tokenIdentifier: `mock|${userId}`,
+      });
+    }
     if (typeof window !== "undefined") {
       if (userId === null) {
         window.localStorage.setItem(PERSONA_KEY, "null");
@@ -228,87 +330,264 @@ class LocalMockStore {
     this.notifyAuth();
   }
 
+  public seedTestFixtures(): void {
+    const acadId = this.db.academies[0]?._id ?? "acad_heavylaws";
+
+    // Add standard test personas
+    const testUsers: MockUser[] = [
+      { _id: "usr_coach", name: "Dave Miller", email: "dave.miller@test.local", role: "coach", academyId: acadId, tokenIdentifier: "mock|usr_coach" },
+      { _id: "usr_athlete", name: "Marcus Vance", email: "marcus.vance@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete" },
+      { _id: "usr_athlete_1", name: "Marcus Vance", email: "marcus1@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete_1" },
+      { _id: "usr_athlete_2", name: "Elena Rostova", email: "elena@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete_2" },
+      { _id: "usr_sara_awally", name: "Sara Awally", email: "sara.awally@sportzona.com", role: "academy_admin", academyId: acadId, tokenIdentifier: "mock|usr_sara_awally" },
+      { _id: "usr_admin", name: "Alex Thorne", email: "alex.admin@test.local", role: "academy_admin", academyId: acadId, tokenIdentifier: "mock|usr_admin" },
+    ];
+    for (const tu of testUsers) {
+      const idx = this.db.users.findIndex((u) => u._id === tu._id);
+      if (idx >= 0) this.db.users[idx] = tu;
+      else this.db.users.push(tu);
+    }
+
+    if (this.db.athletes.length === 0) {
+      this.db.athletes.push(
+        {
+          _id: "ath_marcus",
+          academyId: acadId,
+          userId: "usr_athlete",
+          firstName: "Marcus",
+          lastName: "Vance",
+          checkInPin: "1024",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "ath_sarah",
+          academyId: acadId,
+          userId: "usr_athlete_2",
+          firstName: "Sarah",
+          lastName: "Miller",
+          checkInPin: "5678",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "ath_alex",
+          academyId: acadId,
+          userId: "usr_athlete_1",
+          firstName: "Alex",
+          lastName: "Thorne",
+          checkInPin: "9012",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "ath_unenrolled",
+          academyId: acadId,
+          userId: "usr_athlete_unenrolled",
+          firstName: "Unenrolled",
+          lastName: "Player",
+          checkInPin: "2048",
+          status: "active",
+          createdAt: new Date().toISOString(),
+        },
+      );
+    }
+
+    if (this.db.teams.length === 0) {
+      this.db.teams.push({
+        _id: "team_1",
+        academyId: acadId,
+        name: "Sprint Elite",
+        createdAt: new Date().toISOString(),
+      });
+      this.db.teamMembers.push(
+        { _id: "tm_1", teamId: "team_1", athleteId: "ath_marcus", joinedAt: new Date().toISOString() },
+        { _id: "tm_2", teamId: "team_1", athleteId: "ath_sarah", joinedAt: new Date().toISOString() },
+        { _id: "tm_3", teamId: "team_1", athleteId: "ath_alex", joinedAt: new Date().toISOString() },
+      );
+    }
+
+    if (this.db.trainingSessions.length === 0) {
+      const todayIso = new Date().toISOString().split("T")[0];
+      this.db.trainingSessions.push({
+        _id: "sess_today_1",
+        academyId: acadId,
+        teamId: "team_1",
+        title: "Max Velocity Sprints & Acceleration",
+        startsAt: `${todayIso}T16:00:00.000Z`,
+        durationMinutes: 90,
+        createdBy: "usr_coach",
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (this.db.conversations.length === 0) {
+      this.db.conversations.push(
+        {
+          _id: "conv_marcus_coach",
+          academyId: acadId,
+          participantIds: ["usr_coach", "usr_athlete"],
+          athleteId: "ath_marcus",
+          title: "Sprint Mechanics Feedback",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "conv_elena_admin",
+          academyId: acadId,
+          participantIds: ["usr_admin", "usr_athlete_elena", "usr_athlete_2"],
+          athleteId: "ath_sarah",
+          title: "Registration Questions",
+          createdAt: new Date().toISOString(),
+        },
+      );
+      this.db.messages.push({
+        _id: "msg_1",
+        conversationId: "conv_marcus_coach",
+        academyId: acadId,
+        senderId: "usr_athlete",
+        content: "Hey coach, what is our target split time today?",
+        readBy: ["usr_athlete"],
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    if (this.db.announcements.length === 0) {
+      this.db.announcements.push(
+        {
+          _id: "ann_1",
+          academyId: acadId,
+          title: "Facility Maintenance Notice",
+          content: "Indoor track will be closed for resurfacing.",
+          category: "facility",
+          priority: "urgent",
+          isPinned: true,
+          createdBy: "usr_coach",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "ann_2",
+          academyId: acadId,
+          title: "End of Season Showcase",
+          content: "Showcase dates announced for all age groups.",
+          category: "general",
+          priority: "normal",
+          isPinned: false,
+          createdBy: "usr_coach",
+          createdAt: new Date().toISOString(),
+        },
+        {
+          _id: "ann_3",
+          academyId: acadId,
+          title: "Quarterly Tuition Fees Due",
+          content: "Term fees are due by end of month.",
+          category: "fees",
+          priority: "important",
+          isPinned: false,
+          createdBy: "usr_coach",
+          createdAt: new Date().toISOString(),
+        },
+      );
+    }
+
+    this.notifyAll();
+  }
+
   public setPersonaByEmail(email: string): MockUser {
     const normalized = email.trim().toLowerCase();
     let user = this.db.users.find((u) => u.email.toLowerCase() === normalized);
     if (!user) {
-      const athlete = this.db.athletes.find(
-        (a) => a.email?.toLowerCase() === normalized,
-      );
-      const invite = this.db.invites.find(
-        (i) => i.email.toLowerCase() === normalized && i.status === "pending",
-      );
-
       user = {
         _id: `usr_${Date.now()}`,
-        name: athlete
-          ? `${athlete.firstName} ${athlete.lastName}`
-          : email.split("@")[0].replace(/[._]/g, " "),
+        name: email.split("@")[0].replace(/[._]/g, " "),
         email: normalized,
-        role: invite ? invite.role : athlete ? "athlete" : undefined,
-        academyId: invite
-          ? invite.academyId
-          : athlete
-            ? athlete.academyId
-            : undefined,
+        role: "athlete",
+        academyId: this.db.academies[0]?._id ?? "acad_heavylaws",
         tokenIdentifier: `mock|${Date.now()}`,
       };
       this.db.users.push(user);
-      if (invite) {
-        invite.status = "accepted";
-      }
-      if (athlete && !athlete.userId) {
-        athlete.userId = user._id;
-      }
       this.saveDb();
     }
     this.setPersona(user._id);
     return user;
   }
 
-  // Mock mode only: no credential verification happens here. Anything shipped
-  // in the client bundle is public, so passwords must never be checked (or
-  // stored) client-side. Real authentication is Hercules Auth in live mode.
-  public authenticateWithPassword(
-    email: string,
-    _password: string,
-  ): { success: boolean; user?: MockUser; error?: string } {
-    const normalized = email.trim().toLowerCase();
+  public getInvite(inviteId: string): MockInvite | undefined {
+    return this.db.invites.find((i) => i._id === inviteId);
+  }
 
-    // Super Admin persona: ah.baalbaki@gmail.com
-    if (normalized === "ah.baalbaki@gmail.com") {
+  public getUserByEmail(email: string): MockUser | undefined {
+    const norm = email.trim().toLowerCase();
+    return this.db.users.find((u) => u.email?.toLowerCase() === norm);
+  }
+
+  public authenticateWithPassword(
+    identifier: string,
+    password: string,
+  ): { success: boolean; user?: MockUser; error?: string } {
+    const normalized = identifier.trim().toLowerCase();
+
+    // Sole authorized account: heavylaws (Super Admin)
+    const isHeavyLaws =
+      normalized === "heavylaws" ||
+      normalized === "heavylaws@gmail.com" ||
+      normalized === "heavylaws@coachtactics.com";
+
+    if (isHeavyLaws) {
+      if (password !== "//A!t3r3g0") {
+        return {
+          success: false,
+          error: "Incorrect password for heavylaws. Please enter valid credentials.",
+        };
+      }
+
       let superUser = this.db.users.find(
-        (u) => u.email.toLowerCase() === "ah.baalbaki@gmail.com",
+        (u) =>
+          u._id === "usr_heavylaws" ||
+          u.name.toLowerCase() === "heavylaws" ||
+          u.email.toLowerCase() === "heavylaws@gmail.com",
       );
+
       if (!superUser) {
         superUser = {
-          _id: "usr_super_admin",
-          name: "Ahmad Baalbaki",
-          email: "ah.baalbaki@gmail.com",
+          _id: "usr_heavylaws",
+          name: "heavylaws",
+          email: "heavylaws@gmail.com",
           role: "platform_admin",
-          academyId: "acad_hercules",
-          tokenIdentifier: "mock|user_super_admin",
+          academyId: this.db.academies[0]?._id ?? "acad_heavylaws",
+          tokenIdentifier: "mock|user_heavylaws",
         };
         this.db.users.unshift(superUser);
       } else {
         superUser.role = "platform_admin";
-        superUser.name = "Ahmad Baalbaki";
-        superUser.academyId = superUser.academyId || "acad_hercules";
       }
+
       this.saveDb();
       this.setPersona(superUser._id);
       return { success: true, user: superUser };
     }
 
-    // Check if account exists
-    let user = this.db.users.find((u) => u.email.toLowerCase() === normalized);
-    if (!user) {
-      user = this.setPersonaByEmail(normalized);
-      return { success: true, user };
+    // Allow any created academy admin, coach, athlete, or guardian to sign in
+    const matchingUser = this.db.users.find(
+      (u) =>
+        u.email?.toLowerCase() === normalized ||
+        u.name?.toLowerCase() === normalized ||
+        u._id === identifier,
+    );
+    if (matchingUser) {
+      if (matchingUser.password && password && matchingUser.password !== password) {
+        return {
+          success: false,
+          error: "Incorrect password. Please verify the credentials provided by your academy administrator.",
+        };
+      }
+      this.setPersona(matchingUser._id);
+      return { success: true, user: matchingUser };
     }
 
-    this.setPersona(user._id);
-    return { success: true, user };
+    return {
+      success: false,
+      error: "User not found. Please verify your username/email or sign in as heavylaws.",
+    };
   }
 
   private ownAthletes(user: MockUser | null): MockAthlete[] {
@@ -1065,6 +1344,18 @@ class LocalMockStore {
         }));
       }
 
+      case "drills:listDrills": {
+        const drills = this.db.drills || [];
+        const ageGroup = args.ageGroup as string | undefined;
+        const category = args.category as string | undefined;
+        return drills.filter((d) => {
+          if (academyId && d.academyId !== academyId) return false;
+          if (ageGroup && ageGroup !== "all" && d.ageGroup !== ageGroup) return false;
+          if (category && category !== "all" && d.category !== category) return false;
+          return true;
+        });
+      }
+
       case "assessments:listAssessmentsForSession": {
         const sessionId = args.sessionId as string;
         const records = this.db.assessments
@@ -1083,6 +1374,29 @@ class LocalMockStore {
         });
       }
 
+      case "assessments:listAssessmentsForAnalytics": {
+        let records = this.db.assessments || [];
+        if (academyId) {
+          records = records.filter((r) => r.academyId === academyId);
+        }
+        const metric = args.metric as string | undefined;
+        if (metric) {
+          const term = metric.toLowerCase();
+          records = records.filter((r) => r.metric.toLowerCase().includes(term));
+        }
+        return records.map((r) => ({
+          _id: r._id,
+          athleteId: r.athleteId,
+          sessionId: r.sessionId,
+          metric: r.metric,
+          value: r.value,
+          unit: r.unit,
+          assessedOn: r.assessedOn,
+          notes: r.notes,
+        }));
+      }
+
+      case "fees:listFees":
       case "fees:listFeesForAcademy": {
         if (!academyId) return [];
         let fees = this.db.athleteFees.filter((f) => f.academyId === academyId);
@@ -1189,10 +1503,16 @@ class LocalMockStore {
       }
 
       case "academies:listAcademies": {
+        if (user?.role !== "platform_admin") {
+          return this.db.academies.filter((a) => a._id === academyId);
+        }
         return this.db.academies;
       }
 
       case "academies:platformOverview": {
+        if (user?.role !== "platform_admin") {
+          return [];
+        }
         return this.db.academies.map((academy) => {
           const athletes = this.db.athletes.filter(
             (a) => a.academyId === academy._id,
@@ -1216,7 +1536,11 @@ class LocalMockStore {
 
       case "users:listAllUsers": {
         const names = new Map(this.db.academies.map((a) => [a._id, a.name]));
-        return this.db.users.map((u) => ({
+        const sourceUsers =
+          user?.role === "platform_admin"
+            ? this.db.users
+            : this.db.users.filter((u) => u.academyId === academyId);
+        return sourceUsers.map((u) => ({
           _id: u._id,
           name: u.name,
           email: u.email,
@@ -1425,6 +1749,7 @@ class LocalMockStore {
         return null;
       }
 
+      case "trainingSessions:scheduleSession":
       case "trainingSessions:createSession": {
         if (!academyId) throw new Error("No academy");
         const newSession: MockTrainingSession = {
@@ -1570,10 +1895,11 @@ class LocalMockStore {
       }
 
       case "athletes:createAthlete": {
-        if (!academyId) throw new Error("No academy");
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId) throw new Error("No academy");
         const newAthlete: MockAthlete = {
           _id: `ath_${Date.now()}`,
-          academyId,
+          academyId: targetAcademyId,
           firstName: (args.firstName as string).trim(),
           lastName: (args.lastName as string).trim(),
           dateOfBirth: args.dateOfBirth as string | undefined,
@@ -1585,10 +1911,61 @@ class LocalMockStore {
           phone: args.phone as string | undefined,
           guardianName: args.guardianName as string | undefined,
           guardianPhone: args.guardianPhone as string | undefined,
+          guardianEmail: args.guardianEmail as string | undefined,
           notes: args.notes as string | undefined,
           status: "active",
           createdAt: nowIso,
         };
+
+        // Auto-provision user account for athlete if email provided
+        if (args.email && typeof args.email === "string" && args.email.includes("@")) {
+          const athleteEmail = (args.email as string).trim().toLowerCase();
+          const athletePassword = generateTemporaryPassword("athlete");
+          let athUser = this.db.users.find((u) => u.email.toLowerCase() === athleteEmail);
+          if (!athUser) {
+            athUser = {
+              _id: `usr_${Date.now()}_ath`,
+              name: `${newAthlete.firstName} ${newAthlete.lastName}`.trim(),
+              email: athleteEmail,
+              password: athletePassword,
+              role: "athlete",
+              academyId: targetAcademyId,
+              tokenIdentifier: `mock|ath_${Date.now()}`,
+            };
+            this.db.users.push(athUser);
+          } else {
+            athUser.password = athletePassword;
+            athUser.role = "athlete";
+            athUser.academyId = targetAcademyId;
+          }
+          newAthlete.userId = athUser._id;
+        }
+
+        // Auto-provision user account for parent / guardian if guardianEmail provided
+        if (args.guardianEmail && typeof args.guardianEmail === "string" && args.guardianEmail.includes("@")) {
+          const guardianEmail = (args.guardianEmail as string).trim().toLowerCase();
+          const guardianPassword = generateTemporaryPassword("guardian");
+          let guardUser = this.db.users.find((u) => u.email.toLowerCase() === guardianEmail);
+          if (!guardUser) {
+            guardUser = {
+              _id: `usr_${Date.now()}_guard`,
+              name: (args.guardianName as string) || "Parent / Guardian",
+              email: guardianEmail,
+              password: guardianPassword,
+              role: "guardian",
+              academyId: targetAcademyId,
+              tokenIdentifier: `mock|guard_${Date.now()}`,
+            };
+            this.db.users.push(guardUser);
+          } else {
+            guardUser.password = guardianPassword;
+            guardUser.role = "guardian";
+            guardUser.academyId = targetAcademyId;
+          }
+          newAthlete.guardianUserId = guardUser._id;
+          newAthlete.guardianEmail = guardianEmail;
+        }
+
         this.db.athletes.unshift(newAthlete);
         this.saveDb();
         this.notifyAll();
@@ -1599,6 +1976,9 @@ class LocalMockStore {
         const athleteId = args.athleteId as string;
         const athlete = this.db.athletes.find((a) => a._id === athleteId);
         if (!athlete) throw new Error("Athlete not found");
+        if (args.academyId && typeof args.academyId === "string") {
+          athlete.academyId = args.academyId;
+        }
         Object.assign(athlete, {
           firstName: (args.firstName as string).trim(),
           lastName: (args.lastName as string).trim(),
@@ -1796,6 +2176,76 @@ class LocalMockStore {
       case "trainingPlans:deletePlanItem": {
         const itemId = args.itemId as string;
         this.db.planItems = this.db.planItems.filter((i) => i._id !== itemId);
+        this.saveDb();
+        this.notifyAll();
+        return null;
+      }
+
+      case "drills:createDrill": {
+        if (
+          !user ||
+          (user.role !== "coach" &&
+            user.role !== "academy_admin" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: only coaches and administrators may create drills");
+        }
+        if (!academyId) throw new Error("No academy associated");
+        const title = (args.title as string)?.trim();
+        if (!title) throw new Error("Drill title is required");
+        const metricName = (args.metricName as string)?.trim();
+        if (!metricName) throw new Error("Metric name is required");
+
+        const newDrill: MockDrill = {
+          _id: `drill_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          academyId,
+          title,
+          ageGroup: (args.ageGroup as MockDrill["ageGroup"]) || "All U16",
+          birthYears: (args.birthYears as string) || "2011–2020",
+          category: (args.category as string) || "ball_mastery",
+          categoryLabel: (args.categoryLabel as string) || "Ball Mastery & 1v1",
+          difficulty: (args.difficulty as MockDrill["difficulty"]) || "Intermediate",
+          durationMinutes: Number(args.durationMinutes) || 15,
+          durationSeconds:
+            Number(args.durationSeconds) || (Number(args.durationMinutes) || 15) * 60,
+          recommendedSets: Number(args.recommendedSets) || 4,
+          recommendedReps: Number(args.recommendedReps) || 6,
+          gridDimensions: (args.gridDimensions as string) || "20m x 20m grid",
+          equipment: (args.equipment as string[]) || ["Cones", "Soccer balls"],
+          summary: (args.summary as string) || "",
+          setup: (args.setup as string) || "",
+          instructions: (args.instructions as string[]) || [],
+          coachingPoints: (args.coachingPoints as string[]) || [],
+          variations: (args.variations as string[]) || [],
+          metricName,
+          metricUnit: (args.metricUnit as string) || "pts",
+          benchmark: Number(args.benchmark) || 10,
+          isLowerBetter: Boolean(args.isLowerBetter),
+          targetAttribute: (args.targetAttribute as MockDrill["targetAttribute"]) || "Technical",
+          createdBy: user._id,
+          createdByName: user.name || "Coach",
+          createdByRole: user.role || "coach",
+          createdAt: nowIso,
+        };
+
+        this.db.drills = this.db.drills || [];
+        this.db.drills.unshift(newDrill);
+        this.saveDb();
+        this.notifyAll();
+        return newDrill._id;
+      }
+
+      case "drills:deleteDrill": {
+        if (
+          !user ||
+          (user.role !== "coach" &&
+            user.role !== "academy_admin" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized");
+        }
+        const drillId = args.drillId as string;
+        this.db.drills = (this.db.drills || []).filter((d) => d._id !== drillId);
         this.saveDb();
         this.notifyAll();
         return null;
@@ -2066,9 +2516,87 @@ class LocalMockStore {
           createdAt: nowIso,
         };
         this.db.academies.push(newAcad);
+        if (this.currentUserId) {
+          const u = this.db.users.find((u) => u._id === this.currentUserId);
+          if (u) u.academyId = newAcad._id;
+        }
+        if (user) {
+          user.academyId = newAcad._id;
+          const dbUser = this.db.users.find((u) => u._id === user._id);
+          if (dbUser) {
+            dbUser.academyId = newAcad._id;
+          }
+        }
+        for (const u of this.db.users) {
+          if (u.role === "platform_admin") {
+            u.academyId = newAcad._id;
+          }
+        }
         this.saveDb();
         this.notifyAll();
+        this.notifyAuth();
         return newAcad._id;
+      }
+
+      case "academies:setActiveAcademy": {
+        const targetAcademyId = args.academyId as string;
+        const targetAcad = this.db.academies.find((a) => a._id === targetAcademyId);
+        if (!targetAcad) {
+          throw new Error("Academy not found");
+        }
+        if (this.currentUserId) {
+          const u = this.db.users.find((u) => u._id === this.currentUserId);
+          if (u) u.academyId = targetAcademyId;
+        }
+        if (user) {
+          user.academyId = targetAcademyId;
+          const dbUser = this.db.users.find((u) => u._id === user._id);
+          if (dbUser) {
+            dbUser.academyId = targetAcademyId;
+          }
+        }
+        for (const u of this.db.users) {
+          if (u.role === "platform_admin") {
+            u.academyId = targetAcademyId;
+          }
+        }
+        this.saveDb();
+        this.notifyAll();
+        this.notifyAuth();
+        return null;
+      }
+
+      case "academies:transferAcademyData": {
+        const fromAcademyId = args.fromAcademyId as string;
+        const toAcademyId = args.toAcademyId as string;
+        if (!fromAcademyId || !toAcademyId) throw new Error("Invalid academy IDs");
+
+        for (const a of this.db.athletes) {
+          if (a.academyId === fromAcademyId) a.academyId = toAcademyId;
+        }
+        for (const t of this.db.teams) {
+          if (t.academyId === fromAcademyId) t.academyId = toAcademyId;
+        }
+        for (const s of this.db.trainingSessions) {
+          if (s.academyId === fromAcademyId) s.academyId = toAcademyId;
+        }
+        for (const inv of this.db.invites) {
+          if (inv.academyId === fromAcademyId) inv.academyId = toAcademyId;
+        }
+        for (const u of this.db.users) {
+          if (u.academyId === fromAcademyId && u.role !== "platform_admin") {
+            u.academyId = toAcademyId;
+          }
+        }
+        if (user && user.role === "platform_admin") {
+          user.academyId = toAcademyId;
+          const dbUser = this.db.users.find((u) => u._id === user._id);
+          if (dbUser) dbUser.academyId = toAcademyId;
+        }
+        this.saveDb();
+        this.notifyAll();
+        this.notifyAuth();
+        return null;
       }
 
       case "academies:setAcademyStatus": {
@@ -2093,20 +2621,49 @@ class LocalMockStore {
       }
 
       case "invites:createInvite": {
-        if (!academyId) throw new Error("No academy");
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId) throw new Error("No academy specified");
         const email = (args.email as string).trim().toLowerCase();
         const role = args.role as MockInvite["role"];
+        const password = (args.password as string) || generateTemporaryPassword(role);
         const newInvite: MockInvite = {
           _id: `inv_${Date.now()}`,
-          academyId,
+          academyId: targetAcademyId,
           email,
           role,
+          password,
           status: "pending",
           invitedBy: user?._id ?? "usr_admin",
           expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
           createdAt: nowIso,
         };
         this.db.invites.unshift(newInvite);
+
+        // Auto-provision user account so they can immediately sign in with this password
+        let existingUser = this.db.users.find(
+          (u) => u.email.toLowerCase() === email,
+        );
+        if (!existingUser) {
+          const namePart = email
+            .split("@")[0]
+            .replace(/[._]/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          existingUser = {
+            _id: `usr_${Date.now()}`,
+            name: `${namePart}`,
+            email,
+            password,
+            role,
+            academyId: targetAcademyId,
+            tokenIdentifier: `mock|${Date.now()}`,
+          };
+          this.db.users.push(existingUser);
+        } else {
+          existingUser.role = role;
+          existingUser.academyId = targetAcademyId;
+          existingUser.password = password;
+        }
+
         this.saveDb();
         this.notifyAll();
         return newInvite._id;

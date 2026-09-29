@@ -41,14 +41,17 @@ export default function Teams() {
           <h1 className="font-display text-2xl font-bold tracking-tight">
             Teams
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Group athletes into teams and schedule training sessions.
           </p>
         </div>
         {canManage && (
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
+          >
             <Plus className="size-4" />
-            New team
+            <span>New team</span>
           </Button>
         )}
       </div>

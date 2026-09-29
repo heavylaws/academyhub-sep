@@ -4,6 +4,7 @@ import { localMockStore } from "@/lib/local-mock-store.ts";
 describe("Direct Coach-Athlete 1-on-1 Messaging Channels Suite", () => {
   beforeEach(() => {
     localMockStore.resetToDefault();
+    localMockStore.seedTestFixtures();
   });
 
   describe("Privacy & Channel Isolation", () => {

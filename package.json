@@ -15,6 +15,7 @@
   "dependencies": {
     "@auth/core": "0.41.3",
     "@convex-dev/auth": "^0.0.95",
+    "@google/genai": "^2.24.0",
     "@hookform/resolvers": "^5.7.1",
     "@tanstack/react-query": "^5.101.4",
     "@types/escape-html": "^1.0.4",
@@ -26,6 +27,7 @@
     "date-fns": "^4.4.0",
     "embla-carousel-react": "^8.6.0",
     "escape-html": "^1.0.3",
+    "firebase": "^12.19.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.31.0",
     "motion": "^12.43.0",
@@ -52,6 +54,7 @@
     "@convex-dev/eslint-plugin": "^3.0.0",
     "@edge-runtime/vm": "^5.0.0",
     "@eslint/js": "^10.0.1",
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",

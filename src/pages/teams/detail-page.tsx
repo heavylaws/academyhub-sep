@@ -171,23 +171,26 @@ export default function TeamDetail() {
           </p>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
-              size="sm"
               onClick={() => setEditOpen(true)}
+              className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
             >
               <Pencil className="size-4" />
-              Edit
+              <span>Edit</span>
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="secondary" size="sm">
+                <Button
+                  variant="secondary"
+                  className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5 text-destructive hover:bg-destructive/10"
+                >
                   <Trash2 className="size-4" />
-                  Delete
+                  <span>Delete</span>
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this team?</AlertDialogTitle>
                   <AlertDialogDescription>
@@ -217,11 +220,11 @@ export default function TeamDetail() {
             {canManage && (
               <Button
                 variant="secondary"
-                size="sm"
                 onClick={() => setRosterOpen(true)}
+                className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
               >
                 <UserRoundPlus className="size-4" />
-                Manage roster
+                <span>Manage roster</span>
               </Button>
             )}
           </div>
@@ -240,48 +243,85 @@ export default function TeamDetail() {
               </EmptyHeader>
               {canManage && (
                 <EmptyContent>
-                  <Button size="sm" onClick={() => setRosterOpen(true)}>
+                  <Button
+                    onClick={() => setRosterOpen(true)}
+                    className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
+                  >
                     <UserRoundPlus className="size-4" />
-                    Manage roster
+                    <span>Manage roster</span>
                   </Button>
                 </EmptyContent>
               )}
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Athlete</TableHead>
-                    <TableHead>Sport</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {roster.map((athlete: Doc<"athletes">) => (
-                    <TableRow key={athlete._id}>
-                      <TableCell>
-                        <Link
-                          to={`/athletes/${athlete._id}`}
-                          className="flex items-center gap-3"
-                        >
-                          <Avatar className="size-8">
-                            <AvatarFallback className="bg-secondary text-xs">
-                              {athlete.firstName[0]}
-                              {athlete.lastName[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium">
-                            {athlete.firstName} {athlete.lastName}
-                          </span>
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {athlete.sport ?? "—"}
-                      </TableCell>
+            <div>
+              {/* Mobile View: High-ergonomics cards */}
+              <div className="flex flex-col divide-y sm:hidden -mx-2">
+                {roster.map((athlete: Doc<"athletes">) => (
+                  <Link
+                    key={athlete._id}
+                    to={`/athletes/${athlete._id}`}
+                    className="flex items-center justify-between p-3 active:bg-muted/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="size-10 shrink-0">
+                        <AvatarFallback className="bg-secondary text-xs font-semibold">
+                          {athlete.firstName[0]}
+                          {athlete.lastName[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-sm text-foreground truncate">
+                          {athlete.firstName} {athlete.lastName}
+                        </span>
+                        <span className="text-xs text-muted-foreground mt-0.5">
+                          {athlete.sport || "Soccer"}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
+                      Profile
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Tablet & Desktop View: Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Athlete</TableHead>
+                      <TableHead>Sport</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {roster.map((athlete: Doc<"athletes">) => (
+                      <TableRow key={athlete._id}>
+                        <TableCell>
+                          <Link
+                            to={`/athletes/${athlete._id}`}
+                            className="flex items-center gap-3"
+                          >
+                            <Avatar className="size-8">
+                              <AvatarFallback className="bg-secondary text-xs">
+                                {athlete.firstName[0]}
+                                {athlete.lastName[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">
+                              {athlete.firstName} {athlete.lastName}
+                            </span>
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {athlete.sport ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
@@ -289,42 +329,47 @@ export default function TeamDetail() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle className="text-base">Training sessions</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* View toggle */}
-              <div className="flex rounded-md border overflow-hidden">
+              <div className="flex rounded-xl border overflow-hidden p-0.5 bg-muted/30">
                 <button
+                  type="button"
                   onClick={() => setSessionView("calendar")}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                     sessionView === "calendar"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-muted",
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                   aria-label="Calendar view"
                 >
                   <CalendarDays className="size-3.5" />
-                  Calendar
+                  <span>Calendar</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSessionView("list")}
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition-colors",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                     sessionView === "list"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-muted",
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                   aria-label="List view"
                 >
                   <List className="size-3.5" />
-                  List
+                  <span>List</span>
                 </button>
               </div>
               {canManage && (
-                <Button size="sm" onClick={() => setScheduleOpen(true)}>
+                <Button
+                  onClick={() => setScheduleOpen(true)}
+                  className="h-9 text-xs sm:text-sm font-semibold gap-1.5 ml-auto sm:ml-0"
+                >
                   <Plus className="size-4" />
-                  Schedule session
+                  <span>Schedule session</span>
                 </Button>
               )}
             </div>

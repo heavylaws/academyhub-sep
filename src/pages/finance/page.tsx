@@ -230,14 +230,14 @@ export default function FinancePage() {
           </p>
         </div>
         {canManage && (
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
             <Plus className="size-4" /> New fee
           </Button>
         )}
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-5">
         {(
           ["unpaid", "partially_paid", "overdue", "paid", "waived"] as const
         ).map((s) => {
@@ -249,7 +249,7 @@ export default function FinancePage() {
               type="button"
               onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
               className={cn(
-                "flex flex-col gap-1.5 rounded-xl border p-4 text-left transition-all cursor-pointer",
+                "flex flex-col gap-1.5 rounded-xl border p-3 sm:p-4 text-left transition-all cursor-pointer",
                 statusFilter === s
                   ? "ring-2 ring-primary/50"
                   : "hover:border-primary/30",
@@ -259,7 +259,7 @@ export default function FinancePage() {
                 <Icon className="size-3.5" />
                 {cfg.label}
               </div>
-              <span className="font-display text-2xl font-bold">
+              <span className="font-display text-xl sm:text-2xl font-bold">
                 {allFees === undefined ? "—" : counts[s]}
               </span>
             </button>
@@ -269,7 +269,7 @@ export default function FinancePage() {
 
       {canManage && <RecurringFees />}
 
-      {/* Fees table */}
+      {/* Fees list: Mobile cards + Desktop table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -283,6 +283,7 @@ export default function FinancePage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setStatusFilter("all")}
+                className="h-8 text-xs"
               >
                 Clear filter
               </Button>
@@ -311,125 +312,235 @@ export default function FinancePage() {
               </EmptyHeader>
               {canManage && (
                 <EmptyContent>
-                  <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
                     <Plus className="size-4" /> New fee
                   </Button>
                 </EmptyContent>
               )}
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Athlete</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Due date</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canManage && (
-                      <TableHead className="text-right">Actions</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(fees as FeeWithAthlete[]).map((fee) => {
-                    const cfg = STATUS_CONFIG[fee.status];
-                    const Icon = cfg.icon;
-                    return (
-                      <TableRow key={fee._id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {fee.athleteName}
-                            </span>
-                            {fee.athleteSport && (
-                              <span className="text-xs text-muted-foreground">
-                                {fee.athleteSport}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{fee.label}</TableCell>
-                        <TableCell className="font-mono font-semibold">
-                          <div>
+            <>
+              {/* Mobile View: High-ergonomics touch cards */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                {(fees as FeeWithAthlete[]).map((fee) => {
+                  const cfg = STATUS_CONFIG[fee.status];
+                  const Icon = cfg.icon;
+                  return (
+                    <div
+                      key={fee._id}
+                      className="rounded-xl border border-border/80 bg-background/60 p-3.5 space-y-2.5 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm text-foreground">
+                            {fee.athleteName}
+                          </p>
+                          {fee.athleteSport && (
+                            <p className="text-xs text-muted-foreground">
+                              {fee.athleteSport}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            {fee.label}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0",
+                            cfg.className,
+                          )}
+                        >
+                          <Icon className="size-3" />
+                          {cfg.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline justify-between border-t border-border/40 pt-2 text-xs">
+                        <div className="text-muted-foreground">
+                          Due: <span className="font-medium text-foreground">{fee.dueDate}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-bold text-base text-foreground">
                             {fee.currency} {fee.amountDue.toFixed(2)}
-                          </div>
+                          </span>
                           {fee.status === "partially_paid" &&
                             fee.remainingBalance !== undefined && (
-                              <div className="text-xs font-normal text-muted-foreground">
-                                {fee.currency} {fee.remainingBalance.toFixed(2)}{" "}
-                                rem.
+                              <div className="text-[11px] text-muted-foreground">
+                                {fee.currency} {fee.remainingBalance.toFixed(2)} rem.
                               </div>
                             )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {fee.dueDate}
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-                              cfg.className,
-                            )}
+                        </div>
+                      </div>
+
+                      {canManage && (
+                        <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="h-9 px-3 text-xs font-semibold gap-1.5 flex-1"
+                            onClick={() => setPaymentTarget(fee)}
                           >
-                            <Icon className="size-3" />
-                            {cfg.label}
-                          </span>
-                        </TableCell>
-                        {canManage && (
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                >
-                                  <MoreHorizontal className="size-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => setPaymentTarget(fee)}
-                                >
-                                  <CheckCircle2 className="size-4" /> Record
-                                  payment
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                {(["unpaid", "overdue", "waived"] as const)
-                                  .filter((s) => s !== fee.status)
-                                  .map((s) => (
-                                    <DropdownMenuItem
-                                      key={s}
-                                      onClick={() =>
-                                        handleStatusChange(fee._id, s)
-                                      }
-                                    >
-                                      {(() => {
-                                        const Icon = STATUS_CONFIG[s].icon;
-                                        return <Icon className="size-4" />;
-                                      })()}
-                                      Mark as {STATUS_CONFIG[s].label}
-                                    </DropdownMenuItem>
-                                  ))}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeleteTarget(fee)}
-                                >
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <CheckCircle2 className="size-3.5 text-primary" />
+                            Record payment
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="size-9 shrink-0"
+                                aria-label="Fee actions"
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {(["unpaid", "overdue", "waived"] as const)
+                                .filter((s) => s !== fee.status)
+                                .map((s) => (
+                                  <DropdownMenuItem
+                                    key={s}
+                                    onClick={() =>
+                                      handleStatusChange(fee._id, s)
+                                    }
+                                  >
+                                    {(() => {
+                                      const StatusIcon = STATUS_CONFIG[s].icon;
+                                      return <StatusIcon className="size-4" />;
+                                    })()}
+                                    Mark as {STATUS_CONFIG[s].label}
+                                  </DropdownMenuItem>
+                                ))}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget(fee)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tablet & Desktop View: Standard Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Athlete</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Due date</TableHead>
+                      <TableHead>Status</TableHead>
+                      {canManage && (
+                        <TableHead className="text-right">Actions</TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(fees as FeeWithAthlete[]).map((fee) => {
+                      const cfg = STATUS_CONFIG[fee.status];
+                      const Icon = cfg.icon;
+                      return (
+                        <TableRow key={fee._id}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {fee.athleteName}
+                              </span>
+                              {fee.athleteSport && (
+                                <span className="text-xs text-muted-foreground">
+                                  {fee.athleteSport}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                          <TableCell>{fee.label}</TableCell>
+                          <TableCell className="font-mono font-semibold">
+                            <div>
+                              {fee.currency} {fee.amountDue.toFixed(2)}
+                            </div>
+                            {fee.status === "partially_paid" &&
+                              fee.remainingBalance !== undefined && (
+                                <div className="text-xs font-normal text-muted-foreground">
+                                  {fee.currency} {fee.remainingBalance.toFixed(2)}{" "}
+                                  rem.
+                                </div>
+                              )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {fee.dueDate}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                                cfg.className,
+                              )}
+                            >
+                              <Icon className="size-3" />
+                              {cfg.label}
+                            </span>
+                          </TableCell>
+                          {canManage && (
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                  >
+                                    <MoreHorizontal className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => setPaymentTarget(fee)}
+                                  >
+                                    <CheckCircle2 className="size-4" /> Record
+                                    payment
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  {(["unpaid", "overdue", "waived"] as const)
+                                    .filter((s) => s !== fee.status)
+                                    .map((s) => (
+                                      <DropdownMenuItem
+                                        key={s}
+                                        onClick={() =>
+                                          handleStatusChange(fee._id, s)
+                                        }
+                                      >
+                                        {(() => {
+                                          const StatusIcon = STATUS_CONFIG[s].icon;
+                                          return <StatusIcon className="size-4" />;
+                                        })()}
+                                        Mark as {STATUS_CONFIG[s].label}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeleteTarget(fee)}
+                                  >
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -535,7 +646,7 @@ function NewFeeDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New fee</DialogTitle>
           <DialogDescription>
@@ -556,7 +667,7 @@ function NewFeeDialog({
                   <FormLabel>Athlete</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full h-10 sm:h-9">
                         <SelectValue placeholder="Select athlete" />
                       </SelectTrigger>
                     </FormControl>
@@ -581,6 +692,7 @@ function NewFeeDialog({
                   <FormControl>
                     <Input
                       placeholder="Monthly fee – October 2026"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -588,7 +700,7 @@ function NewFeeDialog({
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="amountDue"
@@ -601,6 +713,7 @@ function NewFeeDialog({
                         min="0"
                         step="0.01"
                         placeholder="0.00"
+                        className="h-10 sm:h-9"
                         {...field}
                         onChange={(e) => field.onChange(e.target.valueAsNumber)}
                       />
@@ -617,7 +730,7 @@ function NewFeeDialog({
                     <FormLabel>Currency</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full h-10 sm:h-9">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -642,7 +755,7 @@ function NewFeeDialog({
                 <FormItem>
                   <FormLabel>Due date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input type="date" className="h-10 sm:h-9" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -655,14 +768,14 @@ function NewFeeDialog({
                 <FormItem>
                   <FormLabel>Notes (optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Any notes for the athlete" {...field} />
+                    <Input placeholder="Any notes for the athlete" className="h-10 sm:h-9" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting} className="h-10 sm:h-9 w-full sm:w-auto">
                 {form.formState.isSubmitting && <Spinner className="size-4" />}
                 Create fee
               </Button>

@@ -37,7 +37,7 @@ export default function MessagesPage() {
 
   return (
     <>
-      <div className="flex h-[calc(100vh-4.25rem)] w-full overflow-hidden rounded-xl border bg-background shadow-xs">
+      <div className="flex h-[calc(100dvh-10.5rem)] md:h-[calc(100vh-7rem)] w-full overflow-hidden rounded-xl border bg-background shadow-xs">
         {/* Left: Conversation List */}
         <div
           className={`w-full md:w-80 lg:w-96 shrink-0 h-full ${

@@ -5,6 +5,11 @@ describe("Live Team Session Rapid Performance Recording Suite", () => {
   beforeEach(() => {
     localMockStore.resetToDefault();
     localMockStore.setPersona("usr_coach");
+    localMockStore.getDb().athletes.push(
+      { _id: "ath_marcus", academyId: "acad_heavylaws", firstName: "Marcus", lastName: "Vance", status: "active", createdAt: new Date().toISOString() },
+      { _id: "ath_sarah", academyId: "acad_heavylaws", firstName: "Sarah", lastName: "Miller", status: "active", createdAt: new Date().toISOString() },
+      { _id: "ath_alex", academyId: "acad_heavylaws", firstName: "Alex", lastName: "Thorne", status: "active", createdAt: new Date().toISOString() },
+    );
   });
 
   it("batch records drill results for multiple athletes in a team session", async () => {

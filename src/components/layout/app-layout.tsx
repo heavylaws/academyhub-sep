@@ -15,10 +15,14 @@ import {
   Megaphone,
   MessageSquare,
   HeartPulse,
+  Target,
+  Compass,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/notifications/notification-bell.tsx";
+import { CloudSyncIndicator } from "@/components/layout/cloud-sync-indicator.tsx";
 import { AcademySwitcher } from "@/components/layout/academy-switcher.tsx";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav.tsx";
 import {
   Sidebar,
   SidebarContent,
@@ -61,6 +65,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: "/", label: "Overview", icon: LayoutDashboard },
     { to: "/athletes", label: "Athletes", icon: UserRound },
     { to: "/teams", label: "Teams", icon: Shield },
+    { to: "/drills", label: "Soccer Drills", icon: Target },
+    { to: "/tactical-board", label: "Tactical Board", icon: Compass },
     { to: "/schedule", label: "Schedule", icon: Calendar },
     { to: "/video-hub", label: "Video Hub", icon: Video },
     { to: "/messages", label: "Messages", icon: MessageSquare },
@@ -76,6 +82,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: "/", label: "Overview", icon: LayoutDashboard },
     { to: "/athletes", label: "Athletes", icon: UserRound },
     { to: "/teams", label: "Teams", icon: Shield },
+    { to: "/drills", label: "Soccer Drills", icon: Target },
+    { to: "/tactical-board", label: "Tactical Board", icon: Compass },
     { to: "/schedule", label: "Schedule", icon: Calendar },
     { to: "/video-hub", label: "Video Hub", icon: Video },
     { to: "/messages", label: "Messages", icon: MessageSquare },
@@ -88,6 +96,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: "/", label: "Overview", icon: LayoutDashboard },
     { to: "/athletes", label: "Athletes", icon: UserRound },
     { to: "/teams", label: "Teams", icon: Shield },
+    { to: "/drills", label: "Soccer Drills", icon: Target },
+    { to: "/tactical-board", label: "Tactical Board", icon: Compass },
     { to: "/schedule", label: "Schedule", icon: Calendar },
     { to: "/video-hub", label: "Video Hub", icon: Video },
     { to: "/messages", label: "Messages", icon: MessageSquare },
@@ -104,6 +114,8 @@ const NAV_BY_ROLE: Record<UserRole, NavItem[]> = {
     { to: "/", label: "Overview", icon: LayoutDashboard },
     { to: "/athletes", label: "My profile", icon: UserRound },
     { to: "/teams", label: "My teams", icon: Shield },
+    { to: "/drills", label: "Soccer Drills", icon: Target },
+    { to: "/tactical-board", label: "Tactical Board", icon: Compass },
     { to: "/schedule", label: "Schedule", icon: Calendar },
     { to: "/video-hub", label: "Video Hub", icon: Video },
     { to: "/messages", label: "Messages", icon: MessageSquare },
@@ -243,25 +255,29 @@ export default function AppLayout({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger />
-            <Separator orientation="vertical" className="h-4" />
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3 sm:px-4">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <SidebarTrigger className="h-9 w-9 shrink-0" />
+            <Separator orientation="vertical" className="h-4 hidden sm:block" />
             {role === "platform_admin" ? (
-              <AcademySwitcher currentAcademyId={user?.academyId} />
+              <div className="truncate max-w-[170px] sm:max-w-xs">
+                <AcademySwitcher currentAcademyId={user?.academyId} />
+              </div>
             ) : (
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                 {role ? ROLE_LABEL[role] : ""} Workspace
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <CloudSyncIndicator />
             <NotificationBell />
           </div>
         </header>
-        <div className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="flex-1 overflow-auto p-3 sm:p-5 md:p-6 pb-20 md:pb-6">
           {children ?? <Outlet />}
         </div>
+        <MobileBottomNav />
       </SidebarInset>
     </SidebarProvider>
   );

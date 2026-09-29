@@ -37,59 +37,7 @@ import VideoAssessmentStudio, {
   type VideoAnalysisItem,
 } from "./_components/video-assessment-studio.tsx";
 
-const FALLBACK_ANALYSES: VideoAnalysisItem[] = [
-  {
-    _id: "va_sprint_1" as Id<"videoAnalyses">,
-    _creationTime: 1725800000000,
-    academyId: "acad_hercules" as Id<"academies">,
-    athleteId: "ath_marcus" as Id<"athletes">,
-    storageId: "storage_mock_1" as Id<"_storage">,
-    filename: "marcus_40m_sprint_drive_phase.mp4",
-    context: "Block start & first 3 steps drive angle",
-    status: "complete",
-    requestedAt: "2026-09-07T14:30:00.000Z",
-    completedAt: "2026-09-07T14:30:15.000Z",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    createdBy: "usr_coach" as Id<"users">,
-    feedback: {
-      summary: "Excellent low torso drive angle during initial 3 steps. Knee drive is aggressive at 84° with minimal lateral sway.",
-      strengths: ["Drive phase shin angle (42°)", "Force vector alignment", "Arm carriage cadence"],
-      improvements: ["Slight overstride on step 4", "Head rises too early"],
-      metrics: [
-        { label: "Block Exit Velocity", value: "4.8 m/s" },
-        { label: "Ground Contact Time", value: "0.108 s" },
-        { label: "Torso Inclination", value: "44°" },
-        { label: "Stride Frequency", value: "4.4 Hz" },
-      ],
-      recommendations: ["Maintain downward visual focus for 10m", "Incorporate resisted sled pushes"],
-    },
-  },
-  {
-    _id: "va_sprint_2" as Id<"videoAnalyses">,
-    _creationTime: 1725700000000,
-    academyId: "acad_hercules" as Id<"academies">,
-    athleteId: "ath_marcus" as Id<"athletes">,
-    storageId: "storage_mock_2" as Id<"_storage">,
-    filename: "marcus_upright_mechanics_slowmo.mp4",
-    context: "Top-end speed mechanics at 60m mark",
-    status: "complete",
-    requestedAt: "2026-09-05T09:15:00.000Z",
-    completedAt: "2026-09-05T09:15:20.000Z",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-    createdBy: "usr_coach" as Id<"users">,
-    feedback: {
-      summary: "High knee lift and tall posture observed. Dorsiflexion prior to ground contact is solid.",
-      strengths: ["Vertical posture (1.5° lean)", "Active pawback action"],
-      improvements: ["Heel recovery loops slightly wide behind hip"],
-      metrics: [
-        { label: "Top Speed", value: "10.4 m/s" },
-        { label: "Step Length", value: "2.18 m" },
-        { label: "Flight Time", value: "0.124 s" },
-      ],
-      recommendations: ["Mini-hurdle wicket drills to tighten backside mechanics"],
-    },
-  },
-];
+const FALLBACK_ANALYSES: VideoAnalysisItem[] = [];
 
 export default function VideoHubPage() {
   const { user } = useCurrentUser();
@@ -162,7 +110,7 @@ export default function VideoHubPage() {
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
                 placeholder="Search clips or techniques..."
-                className="pl-8 h-9 text-xs"
+                className="pl-8 h-10 sm:h-9 text-xs sm:text-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -170,7 +118,7 @@ export default function VideoHubPage() {
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-36 text-xs">
+                <SelectTrigger className="h-10 sm:h-9 w-full sm:w-36 text-xs sm:text-sm">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -265,12 +213,11 @@ export default function VideoHubPage() {
                   <div className="pt-2 border-t flex items-center justify-between">
                     <Button
                       variant="secondary"
-                      size="sm"
-                      className="w-full gap-1.5 text-xs font-semibold"
+                      className="w-full h-10 sm:h-9 gap-1.5 text-xs sm:text-sm font-semibold"
                       onClick={() => setActiveStudioAnalysis(analysis)}
                     >
                       <Maximize2 className="size-3.5" />
-                      Open Biomechanics Studio
+                      <span>Open Biomechanics Studio</span>
                     </Button>
                   </div>
                 </CardContent>

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { DefaultProviders } from "./components/providers/default.tsx";
@@ -6,8 +6,8 @@ import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/protected-route.tsx";
-import { DevPersonaSwitcher } from "./components/ui/dev-persona-switcher.tsx";
 import { isLocalDev } from "@/lib/env.ts";
+import { validateFirestoreConnection } from "@/lib/firebase.ts";
 
 // Code-split pages for high-performance lazy loading
 const Academies = lazy(() => import("./pages/admin/academies/page.tsx"));
@@ -31,6 +31,8 @@ const VideoHubPage = lazy(() => import("./pages/athletes/video-hub-page.tsx"));
 const AnnouncementsPage = lazy(() => import("./pages/announcements/page.tsx"));
 const MessagesPage = lazy(() => import("./pages/messages/page.tsx"));
 const KioskPage = lazy(() => import("./pages/kiosk/page.tsx"));
+const DrillsPage = lazy(() => import("./pages/drills/page.tsx"));
+const TacticalBoardPage = lazy(() => import("./pages/tactical-board/page.tsx"));
 
 function PageLoadingFallback() {
   return (
@@ -46,6 +48,13 @@ function PageLoadingFallback() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Validate live Firestore connectivity on boot
+    validateFirestoreConnection().catch((err) => {
+      console.warn("Firestore initialization notice:", err);
+    });
+  }, []);
+
   return (
     <DefaultProviders>
       <BrowserRouter>
@@ -122,6 +131,22 @@ export default function App() {
               element={
                 <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete", "guardian"]}>
                   <SchedulePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/drills"
+              element={
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                  <DrillsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/tactical-board"
+              element={
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                  <TacticalBoardPage />
                 </ProtectedRoute>
               }
             />
@@ -226,7 +251,6 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
-        {isLocalDev && <DevPersonaSwitcher />}
       </BrowserRouter>
     </DefaultProviders>
   );

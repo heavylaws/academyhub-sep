@@ -103,41 +103,45 @@ export function KioskHeader({
   const activeSession = sessions.find((s) => s._id === currentSessionId);
 
   return (
-    <header className="flex h-20 shrink-0 items-center justify-between border-b border-border/80 bg-card/80 px-6 backdrop-blur-xl">
+    <header className="flex flex-col sm:flex-row h-auto sm:h-20 shrink-0 sm:items-center justify-between gap-3 border-b border-border/80 bg-card/80 p-3 sm:px-6 backdrop-blur-xl">
       {/* Brand & Station Info */}
-      <div className="flex items-center gap-3.5">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/20">
-          <Shield className="size-6" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-display text-lg font-black tracking-tight text-foreground">
-              PeakForm
-            </span>
-            <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-primary">
-              Kiosk Station
-            </span>
+      <div className="flex items-center justify-between sm:justify-start gap-3.5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 sm:size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/20 shrink-0">
+            <Shield className="size-5 sm:size-6" />
           </div>
-          <p className="text-xs font-medium text-muted-foreground">
-            {academy?.name ? `${academy.name} · ` : ""}Attendance Terminal
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display text-base sm:text-lg font-black tracking-tight text-foreground">
+                PeakForm
+              </span>
+              <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-primary">
+                Kiosk
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground truncate max-w-[200px] sm:max-w-none">
+              {academy?.name ? `${academy.name} · ` : ""}Terminal
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Center: Session Switcher (if multiple) */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {sessions.length > 1 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="h-11 gap-2 rounded-xl px-4 font-semibold text-sm border-border hover:bg-muted"
+                className="h-10 sm:h-11 gap-2 rounded-xl px-3 sm:px-4 font-semibold text-xs sm:text-sm border-border hover:bg-muted w-full sm:w-auto justify-between"
               >
-                <Layers className="size-4 text-primary" />
-                <span className="max-w-[220px] truncate">
-                  {activeSession ? activeSession.title : "Select Training Session"}
-                </span>
-                <ChevronDown className="size-3.5 opacity-60" />
+                <div className="flex items-center gap-2 truncate">
+                  <Layers className="size-4 text-primary shrink-0" />
+                  <span className="max-w-[200px] sm:max-w-[220px] truncate">
+                    {activeSession ? activeSession.title : "Select Training Session"}
+                  </span>
+                </div>
+                <ChevronDown className="size-3.5 opacity-60 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-80 p-1.5">
@@ -182,23 +186,23 @@ export function KioskHeader({
       </div>
 
       {/* Right Controls: Connection, Sync, Audio, Fullscreen, Clock & Exit */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
         {/* Network & Queue status */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {isOnline ? (
             offlineQueue.length > 0 ? (
-              <Badge variant="outline" className="gap-1.5 bg-amber-500/10 text-amber-500 border-amber-500/20 text-xs py-1">
+              <Badge variant="outline" className="gap-1 bg-amber-500/10 text-amber-500 border-amber-500/20 text-xs py-1">
                 <Wifi className="size-3.5" />
                 <span>{offlineQueue.length} Queued</span>
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs py-1">
+              <Badge variant="outline" className="gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-xs py-1">
                 <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Online</span>
               </Badge>
             )
           ) : (
-            <Badge variant="outline" className="gap-1.5 bg-destructive/10 text-destructive border-destructive/20 text-xs py-1">
+            <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20 text-xs py-1">
               <WifiOff className="size-3.5" />
               <span>Offline ({offlineQueue.length})</span>
             </Badge>
@@ -220,35 +224,38 @@ export function KioskHeader({
           )}
         </div>
 
-        {/* Audio feedback toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleAudio}
-          className="size-10 rounded-xl text-muted-foreground hover:text-foreground"
-          title={audioEnabled ? "Audio chimes enabled" : "Audio chimes muted"}
-        >
-          {audioEnabled ? (
-            <Volume2 className="size-5 text-primary" />
-          ) : (
-            <VolumeX className="size-5" />
-          )}
-        </Button>
+        {/* Action icons group */}
+        <div className="flex items-center gap-1">
+          {/* Audio feedback toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleAudio}
+            className="size-10 rounded-xl text-muted-foreground hover:text-foreground active:scale-95"
+            title={audioEnabled ? "Audio chimes enabled" : "Audio chimes muted"}
+          >
+            {audioEnabled ? (
+              <Volume2 className="size-5 text-primary" />
+            ) : (
+              <VolumeX className="size-5" />
+            )}
+          </Button>
 
-        {/* Fullscreen Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleFullscreen}
-          className="size-10 rounded-xl text-muted-foreground hover:text-foreground"
-          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen kiosk mode"}
-        >
-          {isFullscreen ? (
-            <Minimize2 className="size-5 text-primary" />
-          ) : (
-            <Maximize2 className="size-5" />
-          )}
-        </Button>
+          {/* Fullscreen Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleFullscreen}
+            className="size-10 rounded-xl text-muted-foreground hover:text-foreground active:scale-95"
+            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen kiosk mode"}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="size-5 text-primary" />
+            ) : (
+              <Maximize2 className="size-5" />
+            )}
+          </Button>
+        </div>
 
         {/* Live Clock */}
         <div className="hidden md:flex flex-col items-end text-right">
@@ -264,9 +271,8 @@ export function KioskHeader({
         {/* Exit Kiosk */}
         <Button
           variant="outline"
-          size="sm"
           onClick={() => navigate(currentSessionId ? `/sessions/${currentSessionId}` : "/schedule")}
-          className="h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+          className="h-10 sm:h-9 gap-1.5 rounded-xl px-3.5 text-xs font-semibold border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 ml-auto sm:ml-0"
         >
           <DoorOpen className="size-3.5" />
           <span>Exit</span>

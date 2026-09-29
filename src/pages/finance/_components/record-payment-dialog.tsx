@@ -116,7 +116,7 @@ export default function RecordPaymentDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record payment</DialogTitle>
           <DialogDescription>
@@ -137,7 +137,7 @@ export default function RecordPaymentDialog({
             onSubmit={form.handleSubmit(handleSubmit)}
             className="flex flex-col gap-4"
           >
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="amountPaid"
@@ -149,6 +149,7 @@ export default function RecordPaymentDialog({
                         type="number"
                         min="0"
                         step="0.01"
+                        className="h-10 sm:h-9"
                         {...field}
                         onChange={(e) => field.onChange(e.target.valueAsNumber)}
                       />
@@ -164,7 +165,7 @@ export default function RecordPaymentDialog({
                   <FormItem>
                     <FormLabel>Date paid</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" className="h-10 sm:h-9" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -182,7 +183,7 @@ export default function RecordPaymentDialog({
                     onValueChange={field.onChange}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full h-10 sm:h-9">
                         <SelectValue placeholder="Select method" />
                       </SelectTrigger>
                     </FormControl>
@@ -209,6 +210,7 @@ export default function RecordPaymentDialog({
                   <FormControl>
                     <Input
                       placeholder="Any notes about this payment"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -217,7 +219,7 @@ export default function RecordPaymentDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting} className="h-10 sm:h-9 w-full sm:w-auto">
                 {form.formState.isSubmitting && <Spinner className="size-4" />}
                 Record payment
               </Button>

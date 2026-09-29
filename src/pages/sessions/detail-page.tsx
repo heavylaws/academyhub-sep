@@ -215,32 +215,34 @@ export default function SessionDetail() {
               </div>
             </div>
             {canManage && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  size="sm"
                   onClick={() => navigate(`/kiosk/${session._id}`)}
-                  className="gap-1.5 border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-semibold"
+                  className="h-10 sm:h-9 text-xs sm:text-sm gap-1.5 border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-semibold"
                 >
                   <TabletSmartphone className="size-4" />
-                  Kiosk Mode
+                  <span>Kiosk Mode</span>
                 </Button>
                 <Button
                   variant="secondary"
-                  size="sm"
                   onClick={() => setEditOpen(true)}
+                  className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
                 >
                   <Pencil className="size-4" />
-                  Edit
+                  <span>Edit</span>
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="secondary" size="sm">
+                    <Button
+                      variant="secondary"
+                      className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5 text-destructive hover:bg-destructive/10"
+                    >
                       <Trash2 className="size-4" />
-                      Delete
+                      <span>Delete</span>
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent>
+                  <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete this session?</AlertDialogTitle>
                       <AlertDialogDescription>
@@ -323,84 +325,153 @@ export default function SessionDetail() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Athlete</TableHead>
-                    <TableHead className="text-right">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {roster.map((athlete: Doc<"athletes">) => {
-                    const record = attendanceByAthlete.get(athlete._id);
-                    const status = record?.status;
-                    return (
-                      <TableRow key={athlete._id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="size-8">
-                              <AvatarFallback className="bg-secondary text-xs">
-                                {athlete.firstName[0]}
-                                {athlete.lastName[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium">
-                              {athlete.firstName} {athlete.lastName}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {canManage ? (
-                            <div className="flex justify-end gap-1">
-                              {STATUS_OPTIONS.map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() =>
-                                    handleSetStatus(athlete._id, option.value)
-                                  }
-                                  className={cn(
-                                    "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                                    status === option.value
-                                      ? STATUS_STYLES[option.value]
-                                      : "border-transparent text-muted-foreground hover:bg-accent",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          ) : status ? (
-                            <span
+            <div>
+              {/* Mobile View: High-ergonomics touch attendance cards */}
+              <div className="flex flex-col divide-y sm:hidden -mx-2">
+                {roster.map((athlete: Doc<"athletes">) => {
+                  const record = attendanceByAthlete.get(athlete._id);
+                  const status = record?.status;
+
+                  return (
+                    <div key={athlete._id} className="p-3 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="size-8">
+                            <AvatarFallback className="bg-secondary text-xs">
+                              {athlete.firstName[0]}
+                              {athlete.lastName[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-semibold text-sm text-foreground">
+                            {athlete.firstName} {athlete.lastName}
+                          </span>
+                        </div>
+
+                        {status && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                              STATUS_STYLES[status],
+                            )}
+                          >
+                            {status === "present" ? (
+                              <CheckCircle2 className="size-2.5" />
+                            ) : status === "absent" ? (
+                              <XCircle className="size-2.5" />
+                            ) : (
+                              <Clock className="size-2.5" />
+                            )}
+                            {STATUS_OPTIONS.find((o) => o.value === status)?.label}
+                          </span>
+                        )}
+                      </div>
+
+                      {canManage && (
+                        <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-muted/40 border border-border/50">
+                          {STATUS_OPTIONS.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                handleSetStatus(athlete._id, option.value)
+                              }
                               className={cn(
-                                "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
-                                STATUS_STYLES[status],
+                                "h-9 rounded-lg text-xs font-semibold transition-all active:scale-95 flex items-center justify-center",
+                                status === option.value
+                                  ? STATUS_STYLES[option.value] + " shadow-xs font-bold"
+                                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground",
                               )}
                             >
-                              {status === "present" ? (
-                                <CheckCircle2 className="size-3" />
-                              ) : status === "absent" ? (
-                                <XCircle className="size-3" />
-                              ) : (
-                                <Clock className="size-3" />
-                              )}
-                              {
-                                STATUS_OPTIONS.find((o) => o.value === status)
-                                  ?.label
-                              }
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Not recorded
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tablet & Desktop View: Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Athlete</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {roster.map((athlete: Doc<"athletes">) => {
+                      const record = attendanceByAthlete.get(athlete._id);
+                      const status = record?.status;
+                      return (
+                        <TableRow key={athlete._id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="size-8">
+                                <AvatarFallback className="bg-secondary text-xs">
+                                  {athlete.firstName[0]}
+                                  {athlete.lastName[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">
+                                {athlete.firstName} {athlete.lastName}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {canManage ? (
+                              <div className="flex justify-end gap-1">
+                                {STATUS_OPTIONS.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSetStatus(athlete._id, option.value)
+                                    }
+                                    className={cn(
+                                      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                                      status === option.value
+                                        ? STATUS_STYLES[option.value]
+                                        : "border-transparent text-muted-foreground hover:bg-accent",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : status ? (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
+                                  STATUS_STYLES[status],
+                                )}
+                              >
+                                {status === "present" ? (
+                                  <CheckCircle2 className="size-3" />
+                                ) : status === "absent" ? (
+                                  <XCircle className="size-3" />
+                                ) : (
+                                  <Clock className="size-3" />
+                                )}
+                                {
+                                  STATUS_OPTIONS.find((o) => o.value === status)
+                                    ?.label
+                                }
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Not recorded
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

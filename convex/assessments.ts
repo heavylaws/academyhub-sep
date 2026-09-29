@@ -218,3 +218,40 @@ export const listAssessmentsForSession = query({
     return enriched;
   },
 });
+
+/** Query all assessments for academy analytics and drill performance tracking. */
+export const listAssessmentsForAnalytics = query({
+  args: {
+    metric: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    let records: Doc<"assessments">[];
+    if (user.role === "platform_admin" && !user.academyId) {
+      records = await ctx.db.query("assessments").order("desc").take(500);
+    } else {
+      const academyId = user.academyId!;
+      records = await ctx.db
+        .query("assessments")
+        .withIndex("by_academy", (q) => q.eq("academyId", academyId))
+        .order("desc")
+        .take(500);
+    }
+
+    if (args.metric) {
+      const term = args.metric.toLowerCase();
+      records = records.filter((r) => r.metric.toLowerCase().includes(term));
+    }
+
+    return records.map((r) => ({
+      _id: r._id,
+      athleteId: r.athleteId,
+      sessionId: r.sessionId,
+      metric: r.metric,
+      value: r.value,
+      unit: r.unit,
+      assessedOn: r.assessedOn,
+      notes: r.notes,
+    }));
+  },
+});

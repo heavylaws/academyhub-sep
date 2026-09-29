@@ -12,6 +12,7 @@ import { linkGuardianByEmail } from "./lib/onboarding.ts";
 import { athleteGenderValidator } from "./schema.ts";
 
 const athleteFields = {
+  academyId: v.optional(v.id("academies")),
   firstName: v.string(),
   lastName: v.string(),
   dateOfBirth: v.optional(v.string()),
@@ -39,12 +40,13 @@ function normalizeEmails<T extends { email?: string; guardianEmail?: string }>(
   };
 }
 
-/** Academy admin/coach: create a new athlete record in their academy. */
+/** Academy admin/coach/platform_admin: create a new athlete record in their academy. */
 export const createAthlete = mutation({
   args: athleteFields,
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
-    if (!user.academyId) {
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const targetAcademyId = (user.role === "platform_admin" && args.academyId) ? args.academyId : user.academyId;
+    if (!targetAcademyId) {
       throw new ConvexError({
         code: "FORBIDDEN",
         message: "You are not part of an academy",
@@ -58,7 +60,7 @@ export const createAthlete = mutation({
     }
     const athleteId = await ctx.db.insert("athletes", {
       ...normalizeEmails(args),
-      academyId: user.academyId,
+      academyId: targetAcademyId,
       status: "active",
       createdBy: user._id,
       createdAt: new Date().toISOString(),

@@ -6,21 +6,15 @@ import { toast } from "sonner";
 import {
   Users,
   ShieldCheck,
-  Timer,
-  User,
-  DollarSign,
   Crown,
   RotateCcw,
   LogOut,
   ChevronDown,
   ChevronUp,
-  Sparkles,
   Mail,
-  HeartPulse,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input.tsx";
-import { RoleTestRunner } from "@/components/ui/role-test-runner.tsx";
 import { isLocalDev } from "@/lib/env.ts";
 
 interface PersonaOption {
@@ -44,73 +38,18 @@ const PERSONAS: PersonaOption[] = [
     color: "bg-rose-500/15 text-rose-500 border-rose-500/30",
   },
   {
-    id: "usr_admin",
-    name: "Jane Sterling",
-    email: "admin@hercules.com",
+    id: "usr_sara_awally",
+    name: "Sara Awally",
+    email: "sara.awally@sportzona.com",
     role: "academy_admin",
-    label: "Academy Admin",
+    label: "SportZona Academy Admin",
     icon: ShieldCheck,
-    color: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-  },
-  {
-    id: "usr_coach",
-    name: "Dave Miller",
-    email: "dave@hercules.com",
-    role: "coach",
-    label: "Coach",
-    icon: Timer,
-    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  },
-  {
-    id: "usr_athlete",
-    name: "Marcus Vance",
-    email: "marcus@hercules.com",
-    role: "athlete",
-    label: "Athlete (Track & Field)",
-    icon: User,
-    color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  },
-  {
-    id: "usr_guardian_mary",
-    name: "Mary Vance",
-    email: "mary.vance@gmail.com",
-    role: "guardian",
-    label: "Parent / Guardian (Mary Vance)",
-    icon: HeartPulse,
-    color: "bg-pink-500/10 text-pink-500 border-pink-500/20",
-  },
-  {
-    id: "usr_athlete_elena",
-    name: "Elena Rostova",
-    email: "elena@hercules.com",
-    role: "athlete",
-    label: "Athlete (Gymnastics)",
-    icon: User,
-    color: "bg-teal-500/10 text-teal-500 border-teal-500/20",
-  },
-  {
-    id: "usr_accounting",
-    name: "Sarah Lin",
-    email: "finance@hercules.com",
-    role: "accounting",
-    label: "Accounting",
-    icon: DollarSign,
-    color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  },
-  {
-    id: "usr_platform",
-    name: "Alex Woods",
-    email: "super@peakform.io",
-    role: "platform_admin",
-    label: "Platform Admin",
-    icon: Crown,
-    color: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+    color: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
   },
 ];
 
 export function DevPersonaSwitcher() {
   const [expanded, setExpanded] = useState(false);
-  const [testSuiteOpen, setTestSuiteOpen] = useState(false);
   const [customEmail, setCustomEmail] = useState("");
   const [currentUser, setCurrentUser] = useState(() =>
     localMockStore.getCurrentUser(),
@@ -248,22 +187,6 @@ export function DevPersonaSwitcher() {
             </Button>
           </form>
 
-          {/* Interactive Role Test Runner Trigger */}
-          <div className="pt-1">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setExpanded(false);
-                setTestSuiteOpen(true);
-              }}
-              className="h-8 gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 text-xs font-semibold shadow-sm w-full"
-            >
-              <Sparkles className="size-3.5 text-primary" />
-              🧪 Live Role Test Suite
-            </Button>
-          </div>
-
           <div className="flex items-center justify-between border-t pt-2.5 gap-2">
             <Button
               variant="outline"
@@ -288,7 +211,7 @@ export function DevPersonaSwitcher() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => handleSelectPersona("usr_admin")}
+                onClick={() => handleSelectPersona("usr_sara_awally")}
                 className="h-8 text-xs gap-1.5"
               >
                 Sign In
@@ -329,9 +252,6 @@ export function DevPersonaSwitcher() {
           <ChevronUp className="size-3.5 text-muted-foreground" />
         )}
       </button>
-
-      {/* Global Interactive Role Test Suite Modal */}
-      <RoleTestRunner open={testSuiteOpen} onOpenChange={setTestSuiteOpen} />
     </aside>
   );
 }

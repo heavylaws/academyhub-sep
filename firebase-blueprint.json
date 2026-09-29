@@ -1,0 +1,301 @@
+{
+  "entities": {
+    "Academy": {
+      "title": "Academy",
+      "description": "Sports academy entity managing teams, coaches, and athletes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 128 },
+        "subdomain": { "type": "string", "maxLength": 64 },
+        "sport": { "type": "string", "maxLength": 64 },
+        "tier": { "type": "string", "enum": ["free", "starter", "pro", "enterprise"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "trial"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "sport", "status"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role-based access information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["platform_admin", "academy_admin", "coach", "athlete", "guardian"] },
+        "status": { "type": "string", "enum": ["active", "invited", "disabled"] },
+        "phone": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "name", "role", "status"]
+    },
+    "Athlete": {
+      "title": "Athlete",
+      "description": "Academy athlete profile and sports metrics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "firstName": { "type": "string", "maxLength": 64 },
+        "lastName": { "type": "string", "maxLength": 64 },
+        "dateOfBirth": { "type": "string" },
+        "gender": { "type": "string", "enum": ["male", "female", "other"] },
+        "status": { "type": "string", "enum": ["active", "inactive", "injured"] },
+        "primaryPosition": { "type": "string", "maxLength": 32 },
+        "secondaryPosition": { "type": "string", "maxLength": 32 },
+        "jerseyNumber": { "type": "string", "maxLength": 8 },
+        "medicalNotes": { "type": "string", "maxLength": 500 },
+        "emergencyContactName": { "type": "string", "maxLength": 128 },
+        "emergencyContactPhone": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "firstName", "lastName", "status"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Academy sports team squad",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 128 },
+        "ageGroup": { "type": "string", "maxLength": 32 },
+        "gender": { "type": "string", "enum": ["male", "female", "coed"] },
+        "color": { "type": "string", "maxLength": 32 },
+        "season": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "name", "ageGroup"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "Membership mapping athlete to team with position and jersey",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teamId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "jerseyNumber": { "type": "string", "maxLength": 8 },
+        "position": { "type": "string", "maxLength": 32 },
+        "isCaptain": { "type": "boolean" },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["teamId", "athleteId", "academyId"]
+    },
+    "TrainingSession": {
+      "title": "TrainingSession",
+      "description": "Scheduled training or match session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 128 },
+        "sessionType": { "type": "string", "enum": ["training", "match", "tactical", "fitness"] },
+        "status": { "type": "string", "enum": ["scheduled", "in_progress", "completed", "cancelled"] },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "location": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "coachId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "teamId", "title", "startTime", "endTime", "status"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Athlete attendance tracking record for a training session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "status": { "type": "string", "enum": ["present", "absent", "late", "excused"] },
+        "checkInTime": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 256 },
+        "method": { "type": "string", "enum": ["kiosk", "coach", "manual"] }
+      },
+      "required": ["sessionId", "athleteId", "academyId", "status"]
+    },
+    "TacticalPlan": {
+      "title": "TacticalPlan",
+      "description": "Interactive tactical board formations, movements, and phases",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "drillId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 128 },
+        "pitchType": { "type": "string", "enum": ["full", "half_attacking", "half_defending", "penalty_box", "futsal", "small_sided"] },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "authorId": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "pitchType"]
+    },
+    "SoccerDrillItem": {
+      "title": "SoccerDrillItem",
+      "description": "Drill library catalog item or custom academy drill",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 128 },
+        "ageGroup": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 64 },
+        "categoryLabel": { "type": "string", "maxLength": 64 },
+        "difficulty": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "durationMinutes": { "type": "number" },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "setup": { "type": "string", "maxLength": 1000 },
+        "isCustom": { "type": "boolean" },
+        "version": { "type": "string", "maxLength": 16 },
+        "createdByName": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "ageGroup", "category", "durationMinutes", "summary"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Billing invoice for academy fees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "invoiceNumber": { "type": "string", "maxLength": 32 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "status": { "type": "string", "enum": ["draft", "issued", "paid", "overdue", "cancelled"] },
+        "dueDate": { "type": "string" },
+        "issueDate": { "type": "string" },
+        "paidDate": { "type": "string" },
+        "description": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "athleteId", "amount", "currency", "status", "dueDate"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Academy noticeboard post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 3000 },
+        "category": { "type": "string", "enum": ["general", "match", "emergency", "schedule", "training"] },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string", "maxLength": 64 },
+        "publishedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "title", "content", "category"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Chat channel between coaches, athletes, or guardians",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["direct", "team", "broadcast"] },
+        "updatedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "type"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message in a conversation channel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string", "maxLength": 64 },
+        "senderRole": { "type": "string", "maxLength": 32 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["conversationId", "senderId", "text"]
+    },
+    "AcademyLiveSync": {
+      "title": "AcademyLiveSync",
+      "description": "Multi-device real-time sync document broadcasting academy state deltas across devices",
+      "type": "object",
+      "properties": {
+        "academyId": { "type": "string" },
+        "lastUpdated": { "type": "string" },
+        "deviceClient": { "type": "string" },
+        "payload": { "type": "string" }
+      },
+      "required": ["academyId", "payload"]
+    }
+  },
+  "firestore": {
+    "/academies/{academyId}": {
+      "schema": "Academy",
+      "description": "Academy entity configuration"
+    },
+    "/academies/{academyId}/live_state/{docId}": {
+      "schema": "AcademyLiveSync",
+      "description": "Real-time synchronization document between devices"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with role-based permissions"
+    },
+    "/athletes/{athleteId}": {
+      "schema": "Athlete",
+      "description": "Academy athletes registry"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Teams and squads"
+    },
+    "/teamMembers/{memberId}": {
+      "schema": "TeamMember",
+      "description": "Team roster memberships"
+    },
+    "/trainingSessions/{sessionId}": {
+      "schema": "TrainingSession",
+      "description": "Academy training sessions and matches"
+    },
+    "/attendanceRecords/{attendanceId}": {
+      "schema": "AttendanceRecord",
+      "description": "Training session attendance records"
+    },
+    "/tacticalPlans/{planId}": {
+      "schema": "TacticalPlan",
+      "description": "Interactive tactical plans and formations"
+    },
+    "/drills/{drillId}": {
+      "schema": "SoccerDrillItem",
+      "description": "Drill library items"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Academy fee invoices"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Academy announcements and broadcasts"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Messaging conversation channels"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages within conversation channel"
+    }
+  }
+}

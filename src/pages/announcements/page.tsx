@@ -137,7 +137,7 @@ export default function AnnouncementsPage() {
           {canPost && (
             <Button
               onClick={() => setCreateOpen(true)}
-              className="gap-1.5 font-semibold text-xs shadow-md"
+              className="h-10 sm:h-9 gap-1.5 font-semibold text-xs sm:text-sm shadow-md"
             >
               <Plus className="size-4" />
               Broadcast Notice
@@ -147,24 +147,24 @@ export default function AnnouncementsPage() {
 
         {/* Filter Toolbar */}
         <Card className="bg-card/40 backdrop-blur-sm border-border">
-          <CardContent className="p-4 flex flex-col gap-3">
+          <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative w-full sm:w-80">
-                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-2.5 sm:top-2.5 size-4 text-muted-foreground" />
                 <Input
                   placeholder="Search notices or coaches..."
-                  className="pl-8 h-9 text-xs"
+                  className="pl-8 h-10 sm:h-9 text-xs sm:text-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
 
               {/* Priority Filters */}
-              <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-0.5">
                 <Button
                   variant={priorityFilter === "all" ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-8 text-xs font-medium"
+                  className="h-9 sm:h-8 text-xs font-medium px-3 shrink-0"
                   onClick={() => setPriorityFilter("all")}
                 >
                   All Priorities
@@ -172,7 +172,7 @@ export default function AnnouncementsPage() {
                 <Button
                   variant={priorityFilter === "pinned" ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-8 text-xs font-medium gap-1 text-amber-500 hover:text-amber-500"
+                  className="h-9 sm:h-8 text-xs font-medium gap-1 text-amber-500 hover:text-amber-500 px-3 shrink-0"
                   onClick={() => setPriorityFilter("pinned")}
                 >
                   <Pin className="size-3" />
@@ -181,7 +181,7 @@ export default function AnnouncementsPage() {
                 <Button
                   variant={priorityFilter === "urgent" ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-8 text-xs font-medium gap-1 text-rose-500 hover:text-rose-500"
+                  className="h-9 sm:h-8 text-xs font-medium gap-1 text-rose-500 hover:text-rose-500 px-3 shrink-0"
                   onClick={() => setPriorityFilter("urgent")}
                 >
                   <Zap className="size-3" />
@@ -191,12 +191,12 @@ export default function AnnouncementsPage() {
             </div>
 
             {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t touch-pan-x no-scrollbar">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  className={`px-3 py-1.5 sm:py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
                     selectedCategory === cat.id
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -283,15 +283,15 @@ export default function AnnouncementsPage() {
                       </div>
 
                       {/* Right Action buttons */}
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-start">
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
                         {!ann.isRead && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2 text-xs gap-1 text-primary hover:bg-primary/10"
+                            className="h-9 sm:h-7 px-3 text-xs gap-1.5 text-primary hover:bg-primary/10 font-semibold"
                             onClick={() => handleMarkRead(ann._id)}
                           >
-                            <Check className="size-3" />
+                            <Check className="size-3.5" />
                             Acknowledge
                           </Button>
                         )}
@@ -302,9 +302,10 @@ export default function AnnouncementsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="size-7 p-0 text-muted-foreground hover:text-destructive"
+                                className="size-9 sm:size-7 p-0 text-muted-foreground hover:text-destructive"
+                                aria-label="Delete notice"
                               >
-                                <Trash2 className="size-3.5" />
+                                <Trash2 className="size-4 sm:size-3.5" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>

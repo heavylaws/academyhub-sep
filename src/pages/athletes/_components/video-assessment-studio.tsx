@@ -304,8 +304,22 @@ export default function VideoAssessmentStudio({
     toast.success(`Logged kinematics cue at ${formatSeconds(newCue.timeSeconds)}`);
   };
 
-  // Canvas drawing handlers
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Canvas drawing handlers with responsive coordinate scaling and touch support
+  const getCanvasCoords = (
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const handlePointerDown = (clientX: number, clientY: number) => {
     if (activeTool === "none") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -318,9 +332,7 @@ export default function VideoAssessmentStudio({
       setIsPlaying(false);
     }
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasCoords(clientX, clientY, canvas);
 
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -330,19 +342,39 @@ export default function VideoAssessmentStudio({
     setIsDrawing(true);
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (clientX: number, clientY: number) => {
     if (!isDrawing || activeTool === "none") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = getCanvasCoords(clientX, clientY, canvas);
 
     ctx.lineTo(x, y);
     ctx.stroke();
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handlePointerDown(e.clientX, e.clientY);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handlePointerMove(e.clientX, e.clientY);
+  };
+
+  const startTouchDrawing = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 0) {
+      const touch = e.touches[0];
+      handlePointerDown(touch.clientX, touch.clientY);
+    }
+  };
+
+  const touchDraw = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 0) {
+      const touch = e.touches[0];
+      handlePointerMove(touch.clientX, touch.clientY);
+    }
   };
 
   const stopDrawing = () => {
@@ -390,7 +422,7 @@ export default function VideoAssessmentStudio({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-6xl w-[95vw] h-[90vh] flex flex-col p-6 overflow-hidden bg-background/95 backdrop-blur-xl border-border">
+      <DialogContent className="sm:max-w-6xl w-[98vw] sm:w-[95vw] h-[95vh] sm:h-[90vh] flex flex-col p-3 sm:p-6 overflow-hidden bg-background/95 backdrop-blur-xl border-border">
         <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b">
           <div>
             <DialogTitle className="text-xl font-display font-bold flex items-center gap-2">
@@ -416,10 +448,10 @@ export default function VideoAssessmentStudio({
         </DialogHeader>
 
         {/* Main Work Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-y-auto py-2">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0 overflow-y-auto py-2">
           {/* Left / Center Video Viewer & Canvas */}
           <div className={`flex flex-col gap-3 ${isCompareMode ? "lg:col-span-8" : "lg:col-span-8"}`}>
-            <div className={`grid gap-3 relative ${isCompareMode ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className={`grid gap-3 relative ${isCompareMode ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
               {/* Primary Video Container */}
               <div className="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-border shadow-2xl">
                 {primaryAnalysis.videoUrl ? (
@@ -447,12 +479,18 @@ export default function VideoAssessmentStudio({
                   width={640}
                   height={360}
                   className={`absolute inset-0 w-full h-full ${
-                    activeTool !== "none" ? "cursor-crosshair z-20 pointer-events-auto" : "pointer-events-none z-10"
+                    activeTool !== "none"
+                      ? "cursor-crosshair z-20 pointer-events-auto touch-none"
+                      : "pointer-events-none z-10"
                   }`}
                   onMouseDown={startDrawing}
                   onMouseMove={draw}
                   onMouseUp={stopDrawing}
                   onMouseLeave={stopDrawing}
+                  onTouchStart={startTouchDrawing}
+                  onTouchMove={touchDraw}
+                  onTouchEnd={stopDrawing}
+                  onTouchCancel={stopDrawing}
                 />
 
                 <Badge className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-[10px] font-mono border-white/10 z-30">
@@ -489,7 +527,7 @@ export default function VideoAssessmentStudio({
             <div className="rounded-xl border bg-card p-3 flex flex-col gap-2.5 shadow-sm">
               {/* Timeline scrubber */}
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono font-medium text-primary">
+                <span className="text-xs font-mono font-medium text-primary shrink-0">
                   {formatSeconds(currentTime)}
                 </span>
                 <input
@@ -503,113 +541,112 @@ export default function VideoAssessmentStudio({
                     setCurrentTime(t);
                     if (videoRef.current) videoRef.current.currentTime = t;
                   }}
-                  className="flex-1 accent-primary h-1.5 bg-muted rounded-lg cursor-pointer"
+                  className="flex-1 accent-primary h-2 sm:h-1.5 bg-muted rounded-lg cursor-pointer py-1"
                 />
-                <span className="text-xs font-mono text-muted-foreground">
+                <span className="text-xs font-mono text-muted-foreground shrink-0">
                   {formatSeconds(duration || 10)}
                 </span>
               </div>
 
               {/* Action buttons */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t">
                 {/* Playback & Frame Stepping */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="size-8 p-0"
+                    className="size-9 sm:size-8 p-0 shrink-0"
                     onClick={() => stepFrame(-1)}
                     title="Previous frame (-0.04s)"
                   >
-                    <SkipBack className="size-3.5" />
+                    <SkipBack className="size-4 sm:size-3.5" />
                   </Button>
                   <Button
                     variant="default"
-                    size="sm"
-                    className="h-8 px-3 gap-1.5 font-semibold text-xs"
+                    className="h-9 sm:h-8 px-3.5 gap-1.5 font-semibold text-xs shrink-0"
                     onClick={togglePlay}
                   >
-                    {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-                    {isPlaying ? "Pause" : "Play"}
+                    {isPlaying ? <Pause className="size-4 sm:size-3.5" /> : <Play className="size-4 sm:size-3.5" />}
+                    <span>{isPlaying ? "Pause" : "Play"}</span>
                   </Button>
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="size-8 p-0"
+                    className="size-9 sm:size-8 p-0 shrink-0"
                     onClick={() => stepFrame(1)}
                     title="Next frame (+0.04s)"
                   >
-                    <SkipForward className="size-3.5" />
+                    <SkipForward className="size-4 sm:size-3.5" />
                   </Button>
 
                   {/* Playback rate presets */}
-                  <div className="flex items-center rounded-lg border bg-muted/30 p-0.5 ml-2">
+                  <div className="flex items-center rounded-xl border bg-muted/30 p-0.5 ml-1 sm:ml-2">
                     {[0.25, 0.5, 1.0].map((rate) => (
-                      <Button
+                      <button
                         key={rate}
-                        variant={playbackRate === rate ? "secondary" : "ghost"}
-                        size="sm"
-                        className="h-6 px-1.5 text-[11px] font-mono"
+                        type="button"
+                        className={`h-7 sm:h-6 px-2 text-[11px] font-mono rounded-lg transition-colors ${
+                          playbackRate === rate
+                            ? "bg-secondary text-secondary-foreground font-bold shadow-xs"
+                            : "text-muted-foreground hover:bg-muted/60"
+                        }`}
                         onClick={() => setSpeed(rate)}
                       >
                         {rate}x
-                      </Button>
+                      </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Biomechanics Markup Tools */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant={isPoseOverlayEnabled ? "default" : "secondary"}
-                    size="sm"
-                    className={`h-7 px-2.5 gap-1.5 text-xs font-semibold ${
+                    className={`h-9 sm:h-7 px-3 gap-1.5 text-xs font-semibold ${
                       isPoseOverlayEnabled
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white"
                         : ""
                     }`}
                     onClick={togglePoseOverlay}
                   >
-                    <Activity className="size-3" />
-                    AI Pose Skeleton
+                    <Activity className="size-3.5 sm:size-3" />
+                    <span>AI Pose Skeleton</span>
                   </Button>
 
-                  <span className="text-[11px] text-muted-foreground font-medium mx-1">|</span>
-                  <span className="text-[11px] text-muted-foreground font-medium mr-1">Markup:</span>
-                  <Button
-                    variant={activeTool === "draw" ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 px-2 gap-1 text-xs"
-                    onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
-                  >
-                    <PenTool className="size-3" />
-                    Pen
-                  </Button>
+                  <div className="flex items-center gap-1.5 bg-muted/30 rounded-xl p-1 border">
+                    <Button
+                      variant={activeTool === "draw" ? "default" : "ghost"}
+                      className="h-7 px-2.5 gap-1 text-xs"
+                      onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
+                    >
+                      <PenTool className="size-3" />
+                      <span>Draw</span>
+                    </Button>
 
-                  {/* Colors */}
-                  {["#fbbf24", "#10b981", "#38bdf8", "#f43f5e"].map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => {
-                        setStrokeColor(color);
-                        if (activeTool === "none") setActiveTool("draw");
-                      }}
-                      className={`size-4 rounded-full border transition-all ${
-                        strokeColor === color ? "scale-125 ring-2 ring-primary" : "opacity-70"
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
+                    {/* Colors */}
+                    {["#fbbf24", "#10b981", "#38bdf8", "#f43f5e"].map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => {
+                          setStrokeColor(color);
+                          if (activeTool === "none") setActiveTool("draw");
+                        }}
+                        className={`size-6 sm:size-4 rounded-full border transition-all ${
+                          strokeColor === color ? "scale-115 ring-2 ring-primary" : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={{ backgroundColor: color }}
+                        aria-label={`Color ${color}`}
+                      />
+                    ))}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    onClick={clearCanvas}
-                  >
-                    <Eraser className="size-3 mr-1" />
-                    Clear
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={clearCanvas}
+                    >
+                      <Eraser className="size-3 mr-0.5" />
+                      <span>Clear</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

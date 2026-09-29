@@ -243,7 +243,7 @@ function CreateInvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Invoice</DialogTitle>
           <DialogDescription>
@@ -268,7 +268,7 @@ function CreateInvoiceDialog({
                     onValueChange={field.onChange}
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-10 sm:h-9">
                         <SelectValue placeholder="General / Academy-wide" />
                       </SelectTrigger>
                     </FormControl>
@@ -296,6 +296,7 @@ function CreateInvoiceDialog({
                   <FormControl>
                     <Input
                       placeholder="e.g. Monthly training fees – October 2026"
+                      className="h-10 sm:h-9"
                       {...field}
                     />
                   </FormControl>
@@ -303,7 +304,7 @@ function CreateInvoiceDialog({
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField
                 control={form.control}
                 name="amount"
@@ -316,6 +317,7 @@ function CreateInvoiceDialog({
                         min="0"
                         step="0.01"
                         placeholder="0.00"
+                        className="h-10 sm:h-9"
                         {...field}
                         onChange={(e) => field.onChange(e.target.valueAsNumber)}
                       />
@@ -332,7 +334,7 @@ function CreateInvoiceDialog({
                     <FormLabel>Currency</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 sm:h-9">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -358,7 +360,7 @@ function CreateInvoiceDialog({
                 <FormItem>
                   <FormLabel>Due date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input type="date" className="h-10 sm:h-9" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -386,11 +388,11 @@ function CreateInvoiceDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={onClose}>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="ghost" onClick={onClose} className="h-10 sm:h-9">
                 Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting} className="h-10 sm:h-9">
                 {form.formState.isSubmitting ? <Spinner /> : "Create Invoice"}
               </Button>
             </DialogFooter>
@@ -541,14 +543,14 @@ export default function InvoicesPage() {
     <>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold">Invoices</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Create and manage invoices for your academy
             </p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
             <Plus className="size-4" />
             New Invoice
           </Button>
@@ -640,96 +642,188 @@ export default function InvoicesPage() {
                 </EmptyContent>
               </Empty>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice #</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Recipient</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allInvoices.map((inv) => (
-                      <TableRow key={inv._id}>
-                        <TableCell className="font-mono text-xs font-medium">
-                          {inv.invoiceNumber}
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {inv.description}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {inv.athleteName ?? "General"}
-                        </TableCell>
-                        <TableCell className="font-medium">
+              <>
+                {/* Mobile View: High-ergonomics cards */}
+                <div className="flex flex-col gap-3 p-3 sm:hidden">
+                  {allInvoices.map((inv) => (
+                    <div
+                      key={inv._id}
+                      className="rounded-xl border border-border/80 bg-background/60 p-3.5 space-y-2.5 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {inv.invoiceNumber}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              • {inv.athleteName ?? "General"}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground mt-1">
+                            {inv.description}
+                          </p>
+                        </div>
+                        <StatusBadge status={inv.status} />
+                      </div>
+
+                      <div className="flex items-baseline justify-between border-t border-border/40 pt-2 text-xs">
+                        <span className="text-muted-foreground">
+                          Due: <span className="font-medium text-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</span>
+                        </span>
+                        <span className="font-mono font-bold text-base text-foreground">
                           {inv.currency}{" "}
                           {inv.amount.toLocaleString("en-US", {
                             minimumFractionDigits: 2,
                           })}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {format(new Date(inv.dueDate), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={inv.status} />
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {(
-                                [
-                                  "draft",
-                                  "sent",
-                                  "paid",
-                                  "overdue",
-                                ] as InvoiceStatus[]
-                              )
-                                .filter((s) => s !== inv.status)
-                                .map((s) => {
-                                  const Icon = STATUS_CONFIG[s].icon;
-                                  return (
-                                    <DropdownMenuItem
-                                      key={s}
-                                      onClick={() =>
-                                        setMarkStatus({
-                                          id: inv._id,
-                                          status: s,
-                                        })
-                                      }
-                                    >
-                                      <Icon className="size-4" />
-                                      Mark as {STATUS_CONFIG[s].label}
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => setDeleteTarget(inv._id)}
-                              >
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-end border-t border-border/40 pt-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 px-3 text-xs gap-1.5 font-medium ml-auto"
+                            >
+                              <MoreHorizontal className="size-4" />
+                              <span>Actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {(
+                              [
+                                "draft",
+                                "sent",
+                                "paid",
+                                "overdue",
+                              ] as InvoiceStatus[]
+                            )
+                              .filter((s) => s !== inv.status)
+                              .map((s) => {
+                                const Icon = STATUS_CONFIG[s].icon;
+                                return (
+                                  <DropdownMenuItem
+                                    key={s}
+                                    onClick={() =>
+                                      setMarkStatus({
+                                        id: inv._id,
+                                        status: s,
+                                      })
+                                    }
+                                  >
+                                    <Icon className="size-4" />
+                                    Mark as {STATUS_CONFIG[s].label}
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteTarget(inv._id)}
+                            >
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tablet & Desktop View: Standard Table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice #</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Recipient</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Due Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-10" />
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {allInvoices.map((inv) => (
+                        <TableRow key={inv._id}>
+                          <TableCell className="font-mono text-xs font-medium">
+                            {inv.invoiceNumber}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">
+                            {inv.description}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {inv.athleteName ?? "General"}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {inv.currency}{" "}
+                            {inv.amount.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {format(new Date(inv.dueDate), "MMM d, yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={inv.status} />
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {(
+                                  [
+                                    "draft",
+                                    "sent",
+                                    "paid",
+                                    "overdue",
+                                  ] as InvoiceStatus[]
+                                )
+                                  .filter((s) => s !== inv.status)
+                                  .map((s) => {
+                                    const Icon = STATUS_CONFIG[s].icon;
+                                    return (
+                                      <DropdownMenuItem
+                                        key={s}
+                                        onClick={() =>
+                                          setMarkStatus({
+                                            id: inv._id,
+                                            status: s,
+                                          })
+                                        }
+                                      >
+                                        <Icon className="size-4" />
+                                        Mark as {STATUS_CONFIG[s].label}
+                                      </DropdownMenuItem>
+                                    );
+                                  })}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget(inv._id)}
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

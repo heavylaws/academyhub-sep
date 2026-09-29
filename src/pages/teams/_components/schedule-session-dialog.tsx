@@ -108,7 +108,7 @@ export default function ScheduleSessionDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Schedule training session</DialogTitle>
           <DialogDescription>
@@ -127,13 +127,17 @@ export default function ScheduleSessionDialog({
                 <FormItem>
                   <FormLabel>Session title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Speed and agility" {...field} />
+                    <Input
+                      placeholder="Speed and agility"
+                      className="h-11 sm:h-10 text-sm"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="startsAtLocal"
@@ -141,7 +145,11 @@ export default function ScheduleSessionDialog({
                   <FormItem>
                     <FormLabel>Start time</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input
+                        type="datetime-local"
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -154,7 +162,12 @@ export default function ScheduleSessionDialog({
                   <FormItem>
                     <FormLabel>Duration (minutes)</FormLabel>
                     <FormControl>
-                      <Input type="number" min={1} {...field} />
+                      <Input
+                        type="number"
+                        min={1}
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -168,7 +181,11 @@ export default function ScheduleSessionDialog({
                 <FormItem>
                   <FormLabel>Location (optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Main field" {...field} />
+                    <Input
+                      placeholder="Main field"
+                      className="h-11 sm:h-10 text-sm"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -183,6 +200,7 @@ export default function ScheduleSessionDialog({
                   <FormControl>
                     <Textarea
                       placeholder="Session plan or focus area..."
+                      className="min-h-[80px] text-sm"
                       {...field}
                     />
                   </FormControl>
@@ -191,7 +209,11 @@ export default function ScheduleSessionDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="h-10 sm:h-9 text-xs sm:text-sm font-semibold w-full sm:w-auto"
+              >
                 {submitting && <Spinner className="size-4" />}
                 Schedule session
               </Button>

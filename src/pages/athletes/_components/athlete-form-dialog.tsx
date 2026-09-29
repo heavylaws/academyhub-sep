@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
+import { Building2 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
+import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
@@ -35,8 +37,14 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { localMockStore } from "@/lib/local-mock-store.ts";
+import {
+  CredentialsSuccessDialog,
+  type GeneratedCredentials,
+} from "@/components/auth/credentials-success-dialog.tsx";
 
 const formSchema = z.object({
+  academyId: z.string().optional(),
   firstName: z.string().trim().min(1, "First name is required"),
   lastName: z.string().trim().min(1, "Last name is required"),
   dateOfBirth: z.string(),
@@ -55,6 +63,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const emptyValues: FormValues = {
+  academyId: "",
   firstName: "",
   lastName: "",
   dateOfBirth: "",
@@ -72,6 +81,7 @@ const emptyValues: FormValues = {
 
 function athleteToFormValues(athlete: Doc<"athletes">): FormValues {
   return {
+    academyId: athlete.academyId ?? "",
     firstName: athlete.firstName,
     lastName: athlete.lastName,
     dateOfBirth: athlete.dateOfBirth ?? "",
@@ -97,27 +107,41 @@ export default function AthleteFormDialog({
   onOpenChange: (open: boolean) => void;
   athlete?: Doc<"athletes">;
 }) {
+  const { user } = useCurrentUser();
+  const academies = useQuery(
+    api.academies.listAcademies,
+    user?.role === "platform_admin" ? {} : "skip",
+  );
   const createAthlete = useMutation(api.athletes.createAthlete);
   const updateAthlete = useMutation(api.athletes.updateAthlete);
   const [submitting, setSubmitting] = useState(false);
+  const [generatedCreds, setGeneratedCreds] = useState<GeneratedCredentials | null>(null);
   const isEditing = athlete !== undefined;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: athlete ? athleteToFormValues(athlete) : emptyValues,
+    defaultValues: athlete
+      ? athleteToFormValues(athlete)
+      : { ...emptyValues, academyId: user?.academyId ?? "" },
   });
 
   useEffect(() => {
     if (open) {
-      form.reset(athlete ? athleteToFormValues(athlete) : emptyValues);
+      form.reset(
+        athlete
+          ? athleteToFormValues(athlete)
+          : { ...emptyValues, academyId: user?.academyId ?? "" },
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, athlete]);
+  }, [open, athlete, user?.academyId]);
 
   const handleSubmit = async (values: FormValues) => {
     setSubmitting(true);
     try {
+      const targetAcademyId = (values.academyId || user?.academyId || undefined) as Id<"academies"> | undefined;
       const payload = {
+        academyId: targetAcademyId,
         firstName: values.firstName,
         lastName: values.lastName,
         dateOfBirth: values.dateOfBirth || undefined,
@@ -135,11 +159,27 @@ export default function AthleteFormDialog({
       if (isEditing) {
         await updateAthlete({ athleteId: athlete._id, ...payload });
         toast.success("Athlete updated");
+        onOpenChange(false);
       } else {
         await createAthlete(payload);
         toast.success("Athlete added");
+
+        if (values.email) {
+          const createdUser = localMockStore.getUserByEmail(values.email);
+          const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
+          if (createdUser?.password) {
+            setGeneratedCreds({
+              name: `${values.firstName} ${values.lastName}`,
+              email: values.email,
+              password: createdUser.password,
+              role: "athlete",
+              academyName: targetAcademyObj?.name,
+            });
+            return;
+          }
+        }
+        onOpenChange(false);
       }
-      onOpenChange(false);
     } catch (error) {
       toast.error(
         error instanceof ConvexError
@@ -152,7 +192,8 @@ export default function AthleteFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open && !generatedCreds} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
@@ -169,6 +210,42 @@ export default function AthleteFormDialog({
             onSubmit={form.handleSubmit(handleSubmit)}
             className="flex flex-col gap-4"
           >
+            {user?.role === "platform_admin" && academies && academies.length > 0 && (
+              <FormField
+                control={form.control}
+                name="academyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      <Building2 className="size-3.5 text-primary" />
+                      <span>Target Academy</span>
+                    </FormLabel>
+                    <Select
+                      value={field.value || user?.academyId || ""}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose academy" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {academies.map((a: Doc<"academies">) => (
+                          <SelectItem key={a._id} value={a._id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs">
+                      Choose which academy workspace this athlete belongs to.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -391,6 +468,21 @@ export default function AthleteFormDialog({
           </form>
         </Form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <CredentialsSuccessDialog
+        open={Boolean(generatedCreds)}
+        onOpenChange={(op) => {
+          if (!op) {
+            setGeneratedCreds(null);
+            onOpenChange(false);
+          }
+        }}
+        credentials={generatedCreds}
+        onDone={() => {
+          setGeneratedCreds(null);
+          onOpenChange(false);
+        }}
+      />
+    </>
   );
 }

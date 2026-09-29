@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
+import { Building2 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
+import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import {
@@ -19,6 +21,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -33,8 +36,15 @@ import {
 } from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { isLocalDev } from "@/lib/env.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
+import {
+  CredentialsSuccessDialog,
+  type GeneratedCredentials,
+} from "@/components/auth/credentials-success-dialog.tsx";
 
 const formSchema = z.object({
+  academyId: z.string().optional(),
   email: z.string().trim().email("Enter a valid email address"),
   role: z.enum(["academy_admin", "coach", "athlete", "accounting"]),
 });
@@ -47,28 +57,45 @@ export default function InviteStaffDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { user } = useCurrentUser();
+  const academies = useQuery(
+    api.academies.listAcademies,
+    user?.role === "platform_admin" ? {} : "skip",
+  );
   const createInvite = useMutation(api.invites.createInvite);
   const [submitting, setSubmitting] = useState(false);
+  const [generatedCreds, setGeneratedCreds] = useState<GeneratedCredentials | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: "", role: "coach" },
+    defaultValues: { academyId: user?.academyId ?? "", email: "", role: "coach" },
   });
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user?.academyId) return;
+    const targetAcademyId = (values.academyId || user?.academyId) as Id<"academies"> | undefined;
+    if (!targetAcademyId) {
+      toast.error("Please select an academy");
+      return;
+    }
     setSubmitting(true);
     try {
       await createInvite({
-        academyId: user.academyId,
+        academyId: targetAcademyId,
         email: values.email,
         role: values.role,
       });
-      toast.success("Invite sent", {
-        description: `An email has been sent to ${values.email} with a link to join.`,
+
+      const createdUser = localMockStore.getUserByEmail(values.email);
+      const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
+      const generatedPassword = createdUser?.password || "Coach2026!";
+
+      setGeneratedCreds({
+        email: values.email,
+        password: generatedPassword,
+        role: values.role,
+        academyName: targetAcademyObj?.name,
       });
-      form.reset({ email: "", role: "coach" });
-      onOpenChange(false);
+
+      form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
     } catch (error) {
       toast.error(
         error instanceof ConvexError
@@ -81,26 +108,63 @@ export default function InviteStaffDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) form.reset({ email: "", role: "coach" });
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite staff</DialogTitle>
-          <DialogDescription>
-            Invite a coach, athlete, or accountant to join your academy. They'll
-            receive an email with a sign-in link.
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="flex flex-col gap-4"
-          >
+    <>
+      <Dialog
+        open={open && !generatedCreds}
+        onOpenChange={(next) => {
+          if (!next) form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Invite staff / admin</DialogTitle>
+            <DialogDescription>
+              Invite an academy admin, coach, athlete, or accountant to join an academy workspace.
+              A secure login password will be generated automatically and displayed for easy sharing.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(handleSubmit)}
+              className="flex flex-col gap-4"
+            >
+            {user?.role === "platform_admin" && academies && academies.length > 0 && (
+              <FormField
+                control={form.control}
+                name="academyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      <Building2 className="size-3.5 text-primary" />
+                      <span>Target Academy</span>
+                    </FormLabel>
+                    <Select
+                      value={field.value || user?.academyId || ""}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose academy" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {academies.map((a: Doc<"academies">) => (
+                          <SelectItem key={a._id} value={a._id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs">
+                      Choose which academy workspace this staff or admin belongs to.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="email"
@@ -108,7 +172,7 @@ export default function InviteStaffDialog({
                 <FormItem>
                   <FormLabel>Email address</FormLabel>
                   <FormControl>
-                    <Input placeholder="coach@example.com" {...field} />
+                    <Input placeholder="coach@example.com" className="h-10 sm:h-9" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -122,7 +186,7 @@ export default function InviteStaffDialog({
                   <FormLabel>Role</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full h-10 sm:h-9">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                     </FormControl>
@@ -142,14 +206,30 @@ export default function InviteStaffDialog({
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={submitting}>
+              <Button type="submit" disabled={submitting} className="h-10 sm:h-9 w-full sm:w-auto">
                 {submitting && <Spinner className="size-4" />}
-                Send invite
+                Generate Credentials & Invite
               </Button>
             </DialogFooter>
           </form>
         </Form>
       </DialogContent>
     </Dialog>
+
+    <CredentialsSuccessDialog
+      open={Boolean(generatedCreds)}
+      onOpenChange={(op) => {
+        if (!op) {
+          setGeneratedCreds(null);
+          onOpenChange(false);
+        }
+      }}
+      credentials={generatedCreds}
+      onDone={() => {
+        setGeneratedCreds(null);
+        onOpenChange(false);
+      }}
+    />
+  </>
   );
 }

@@ -4,6 +4,7 @@ import { localMockStore } from "@/lib/local-mock-store.ts";
 describe("Session Attendance Kiosk & Athlete Self-Check-in Suite", () => {
   beforeEach(() => {
     localMockStore.resetToDefault();
+    localMockStore.seedTestFixtures();
     localMockStore.setPersona("usr_coach");
   });
 
