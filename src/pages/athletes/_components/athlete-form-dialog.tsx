@@ -165,13 +165,13 @@ export default function AthleteFormDialog({
         toast.success("Athlete added");
 
         if (values.email) {
-          const createdUser = localMockStore.getUserByEmail(values.email);
+          const provisionedPassword = localMockStore.takeProvisionedPassword(values.email);
           const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
-          if (createdUser?.password) {
+          if (provisionedPassword) {
             setGeneratedCreds({
               name: `${values.firstName} ${values.lastName}`,
               email: values.email,
-              password: createdUser.password,
+              password: provisionedPassword,
               role: "athlete",
               academyName: targetAcademyObj?.name,
             });

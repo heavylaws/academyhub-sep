@@ -24,7 +24,6 @@ import {
   Timer,
   User,
   DollarSign,
-  Crown,
   ArrowRight,
   Mail,
   Lock,
@@ -55,8 +54,8 @@ function LiveLandingScreen() {
 }
 
 function LandingScreen() {
-  const [email, setEmail] = useState("heavylaws");
-  const [password, setPassword] = useState("//A!t3r3g0");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -88,22 +87,6 @@ function LandingScreen() {
     }
   };
 
-  const handleQuickSuperAdmin = () => {
-    setEmail("heavylaws");
-    setPassword("//A!t3r3g0");
-    const res = localMockStore.authenticateWithPassword(
-      "heavylaws",
-      "//A!t3r3g0",
-    );
-    if (res.success) {
-      toast.success("Welcome, heavylaws! Signed in as Super Admin.");
-    } else {
-      toast.error(res.error || "Login failed");
-    }
-  };
-
-  const isSuperAdminEntry = email.trim().toLowerCase() === "heavylaws";
-
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-8 bg-background px-4 py-12">
       {/* Brand Header */}
@@ -121,32 +104,6 @@ function LandingScreen() {
 
       {/* Main Authentication Card */}
       <div className="w-full max-w-md rounded-2xl border border-border/80 bg-card p-6 shadow-xl">
-        {/* Quick Admin Button for Super Admin */}
-        <div className="mb-5 flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={handleQuickSuperAdmin}
-            className="flex w-full items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-left text-xs transition-all hover:bg-rose-500/20"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-rose-500 text-white shadow-sm">
-                <Crown className="size-3.5" />
-              </div>
-              <div>
-                <div className="font-semibold text-foreground">
-                  Login as heavylaws (Super Admin)
-                </div>
-                <div className="text-[11px] text-muted-foreground font-mono">
-                  heavylaws &bull; Password: //A!t3r3g0
-                </div>
-              </div>
-            </div>
-            <span className="shrink-0 font-medium text-rose-500 hover:underline">
-              Sign In &rarr;
-            </span>
-          </button>
-        </div>
-
         {/* Credentials Form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
@@ -157,7 +114,7 @@ function LandingScreen() {
               <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="name@academy.com or heavylaws"
+                placeholder="name@academy.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -171,11 +128,6 @@ function LandingScreen() {
               <label className="text-xs font-semibold text-foreground">
                 Password
               </label>
-              {isSuperAdminEntry && (
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  //A!t3r3g0
-                </span>
-              )}
             </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -207,7 +159,7 @@ function LandingScreen() {
             className="w-full h-10 gap-2 text-sm font-semibold mt-1"
           >
             <Sparkles className="size-4" />
-            {loading ? "Signing in..." : isSuperAdminEntry ? "Sign In as Super Admin" : "Sign In to Academy"}
+            {loading ? "Signing in..." : "Sign In to Academy"}
           </Button>
         </form>
       </div>

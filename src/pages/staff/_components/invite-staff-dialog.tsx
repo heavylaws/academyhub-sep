@@ -84,9 +84,15 @@ export default function InviteStaffDialog({
         role: values.role,
       });
 
-      const createdUser = localMockStore.getUserByEmail(values.email);
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
-      const generatedPassword = createdUser?.password || "Coach2026!";
+      const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
+      form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
+      if (!generatedPassword) {
+        // Live backend: the invitee sets their own password when signing up.
+        toast.success(`Invite sent to ${values.email}`);
+        onOpenChange(false);
+        return;
+      }
 
       setGeneratedCreds({
         email: values.email,
@@ -94,8 +100,6 @@ export default function InviteStaffDialog({
         role: values.role,
         academyName: targetAcademyObj?.name,
       });
-
-      form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
     } catch (error) {
       toast.error(
         error instanceof ConvexError
