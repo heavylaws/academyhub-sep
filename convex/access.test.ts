@@ -444,3 +444,96 @@ describe("platform admin full access inside an academy", () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe("academy membership management", () => {
+  async function seedMembers(t: T) {
+    const base = await seed(t);
+    const ids = await t.run(async (ctx) => {
+      const coachId = await ctx.db.insert("users", {
+        email: "coach@academy.test",
+        emailVerificationTime: 1,
+        role: "coach",
+        academyId: base.academyId,
+      });
+      const otherAdminId = await ctx.db.insert("users", {
+        email: "admin2@academy.test",
+        emailVerificationTime: 1,
+        role: "academy_admin",
+        academyId: base.academyId,
+      });
+      const ownerId = await ctx.db.insert("users", {
+        email: "owner@platform.test",
+        emailVerificationTime: 1,
+        role: "platform_admin",
+      });
+      return { coachId, otherAdminId, ownerId };
+    });
+    return { ...base, ...ids };
+  }
+
+  it("academy admins cannot promote members to academy admin", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, coachId } = await seedMembers(t);
+    await expect(
+      as(t, staffId).mutation(api.users.updateMemberRole, {
+        targetUserId: coachId,
+        newRole: "academy_admin",
+      }),
+    ).rejects.toThrow();
+    await as(t, staffId).mutation(api.users.updateMemberRole, {
+      targetUserId: coachId,
+      newRole: "accounting",
+    });
+    const coach = await t.run((ctx) => ctx.db.get("users", coachId));
+    expect(coach?.role).toBe("accounting");
+  });
+
+  it("academy admins cannot change or remove another academy admin", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, otherAdminId } = await seedMembers(t);
+    await expect(
+      as(t, staffId).mutation(api.users.updateMemberRole, {
+        targetUserId: otherAdminId,
+        newRole: "coach",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      as(t, staffId).mutation(api.users.removeAcademyMember, {
+        targetUserId: otherAdminId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("academy admins cannot demote or remove a platform admin working in their academy", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, ownerId, academyId } = await seedMembers(t);
+    await as(t, ownerId).mutation(api.academies.setActiveAcademy, { academyId });
+    await expect(
+      as(t, staffId).mutation(api.users.updateMemberRole, {
+        targetUserId: ownerId,
+        newRole: "athlete",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      as(t, staffId).mutation(api.users.removeAcademyMember, {
+        targetUserId: ownerId,
+      }),
+    ).rejects.toThrow();
+    const owner = await t.run((ctx) => ctx.db.get("users", ownerId));
+    expect(owner?.role).toBe("platform_admin");
+  });
+});
+
+describe("drills", () => {
+  it("cannot be listed without membership of the academy", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, academyId, otherAcademyId } = await seed(t);
+    await expect(
+      t.query(api.drills.listDrills, { academyId }),
+    ).rejects.toThrow();
+    await expect(
+      as(t, staffId).query(api.drills.listDrills, { academyId: otherAcademyId }),
+    ).rejects.toThrow();
+    expect(await as(t, staffId).query(api.drills.listDrills, { academyId })).toEqual([]);
+  });
+});

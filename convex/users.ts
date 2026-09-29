@@ -4,6 +4,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireRole, requireUser } from "./lib/auth.ts";
 import { onboardUser } from "./lib/onboarding.ts";
 import { userRoleValidator } from "./schema.ts";
+import type { Doc } from "./_generated/dataModel.d.ts";
 
 /**
  * Re-runs onboarding for the signed-in user (idempotent). Onboarding normally
@@ -81,6 +82,33 @@ export const listAllUsers = query({
 /**
  * Academy admin: update a staff member's role within their academy.
  */
+const ACADEMY_ADMIN_ASSIGNABLE_ROLES: Array<Doc<"users">["role"]> = [
+  "coach",
+  "accounting",
+  "athlete",
+  "guardian",
+];
+
+/**
+ * Platform admins can never be changed or removed through academy membership
+ * management (they join an academy just by switching to it), and academy
+ * admins cannot change or remove other academy admins.
+ */
+function assertCanManageMember(caller: Doc<"users">, target: Doc<"users">) {
+  if (target.role === "platform_admin") {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "Platform admins cannot be modified here",
+    });
+  }
+  if (caller.role !== "platform_admin" && target.role === "academy_admin") {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "Only a platform admin can change another academy admin",
+    });
+  }
+}
+
 export const updateMemberRole = mutation({
   args: {
     targetUserId: v.id("users"),
@@ -104,6 +132,20 @@ export const updateMemberRole = mutation({
       throw new ConvexError({
         code: "FORBIDDEN",
         message: "Cannot assign platform admin role",
+      });
+    }
+
+    assertCanManageMember(caller, targetUser);
+
+    // Same policy as invites: only platform admins create academy admins.
+    if (
+      caller.role !== "platform_admin" &&
+      !ACADEMY_ADMIN_ASSIGNABLE_ROLES.includes(args.newRole)
+    ) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message:
+          "Academy admins can only assign coach, accounting, athlete or guardian roles",
       });
     }
 
@@ -142,6 +184,8 @@ export const removeAcademyMember = mutation({
         message: "User not found in your academy",
       });
     }
+
+    assertCanManageMember(caller, targetUser);
 
     // Unlink any athletes linked to this user
     const linkedAthletes = await ctx.db
