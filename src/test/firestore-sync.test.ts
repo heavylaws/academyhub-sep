@@ -80,3 +80,45 @@ describe("Firebase Firestore Multi-Device Sync Engine", () => {
     expect(typeof unsub).toBe("function");
   });
 });
+
+describe("mergeRemoteData hardening", () => {
+  it("ignores user records from the network so roles and passwords cannot be injected", () => {
+    const before = localMockStore.getDb().users.length;
+    const changed = localMockStore.mergeRemoteData({
+      users: [
+        {
+          _id: "usr_injected",
+          name: "Injected",
+          email: "attacker@example.com",
+          password: "owned",
+          role: "platform_admin",
+          tokenIdentifier: "mock|injected",
+        },
+      ],
+    });
+    expect(changed).toBe(false);
+    expect(localMockStore.getDb().users.length).toBe(before);
+    expect(localMockStore.getDb().users.some((u) => u._id === "usr_injected")).toBe(false);
+  });
+
+  it("ignores records that belong to another academy", () => {
+    const id = `ath_other_${Date.now()}`;
+    const changed = localMockStore.mergeRemoteData(
+      {
+        athletes: [
+          {
+            _id: id,
+            academyId: "acad_other",
+            firstName: "Other",
+            lastName: "Academy",
+            status: "active" as const,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      "acad_hercules",
+    );
+    expect(changed).toBe(false);
+    expect(localMockStore.getDb().athletes.some((a) => a._id === id)).toBe(false);
+  });
+});

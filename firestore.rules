@@ -1,171 +1,76 @@
 rules_version = '2';
+
+// Security model
+// --------------
+// Default deny. The only data path the client uses is the per-academy sync
+// document at academies/{academyId}/live_state/{docId}. Access requires a
+// signed-in Firebase user with a verified email who is either:
+//   - a platform admin: a document exists at /admins/{uid}, or
+//   - a member of that academy: a document exists at
+//     /academies/{academyId}/members/{uid}
+// Both marker collections are writable only from the Firebase console / Admin
+// SDK (never from the client), so a user cannot grant themselves access.
+//
+// No emails are hard-coded here: add platform admins by creating
+// /admins/{uid} documents in the console.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net: Default-deny catch-all
+    // Global safety net: default-deny catch-all.
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Reusable Security Primitives
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function hasVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
     function isPlatformAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email.lower() == "heavylaws@gmail.com" ||
-        request.auth.token.email.lower() == "ah.baalbaki@gmail.com" ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return hasVerifiedEmail() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    function isValidText(text, maxLen) {
-      return text is string && text.size() <= maxLen;
+    function isAcademyMember(academyId) {
+      return hasVerifiedEmail() &&
+        exists(/databases/$(database)/documents/academies/$(academyId)/members/$(request.auth.uid));
     }
 
-    // Academies Collection
+    function canAccessAcademy(academyId) {
+      return isValidId(academyId) && (isPlatformAdmin() || isAcademyMember(academyId));
+    }
+
+    // Admin and membership markers: readable by their own user, never
+    // writable from the client.
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     match /academies/{academyId} {
-      allow read: if isValidId(academyId);
-      allow create: if isPlatformAdmin() && isValidId(academyId) &&
-        incoming().name is string && incoming().name.size() <= 128 &&
-        incoming().sport is string && incoming().sport.size() <= 64;
-      allow update: if (isPlatformAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)))) &&
-        isValidId(academyId) &&
-        incoming().name is string && incoming().name.size() <= 128;
-      allow delete: if isPlatformAdmin();
+      allow get: if canAccessAcademy(academyId);
+      allow list, write: if false;
 
-      match /live_state/{docId} {
-        allow read, write: if isValidId(academyId) && isValidId(docId);
+      match /members/{uid} {
+        allow read: if isSignedIn() && (request.auth.uid == uid || isPlatformAdmin());
+        allow write: if false;
       }
-    }
 
-    // Users Collection
-    match /users/{userId} {
-      allow read: if isSignedIn() && isValidId(userId);
-      allow create: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isPlatformAdmin()) &&
-        incoming().email is string && incoming().email.size() <= 128 &&
-        incoming().name is string && incoming().name.size() <= 128;
-      allow update: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isPlatformAdmin()) &&
-        incoming().name is string && incoming().name.size() <= 128;
-      allow delete: if isPlatformAdmin();
-    }
-
-    // Athletes Collection
-    match /athletes/{athleteId} {
-      allow read: if isSignedIn() && isValidId(athleteId);
-      allow create: if isSignedIn() && isValidId(athleteId) &&
-        incoming().firstName is string && incoming().firstName.size() <= 64 &&
-        incoming().lastName is string && incoming().lastName.size() <= 64 &&
-        incoming().academyId is string && incoming().academyId.size() <= 128;
-      allow update: if isSignedIn() && isValidId(athleteId) &&
-        incoming().firstName is string && incoming().firstName.size() <= 64 &&
-        incoming().lastName is string && incoming().lastName.size() <= 64;
-      allow delete: if isSignedIn() && (isPlatformAdmin() || exists(/databases/$(database)/documents/users/$(request.auth.uid)));
-    }
-
-    // Teams Collection
-    match /teams/{teamId} {
-      allow read: if isSignedIn() && isValidId(teamId);
-      allow create: if isSignedIn() && isValidId(teamId) &&
-        incoming().name is string && incoming().name.size() <= 128 &&
-        incoming().academyId is string && incoming().academyId.size() <= 128;
-      allow update: if isSignedIn() && isValidId(teamId) &&
-        incoming().name is string && incoming().name.size() <= 128;
-      allow delete: if isPlatformAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)));
-    }
-
-    // Team Members Collection
-    match /teamMembers/{memberId} {
-      allow read: if isSignedIn() && isValidId(memberId);
-      allow create, update: if isSignedIn() && isValidId(memberId) &&
-        incoming().teamId is string && incoming().athleteId is string;
-      allow delete: if isSignedIn();
-    }
-
-    // Training Sessions Collection
-    match /trainingSessions/{sessionId} {
-      allow read: if isSignedIn() && isValidId(sessionId);
-      allow create: if isSignedIn() && isValidId(sessionId) &&
-        incoming().title is string && incoming().title.size() <= 128 &&
-        incoming().startTime is string && incoming().endTime is string;
-      allow update: if isSignedIn() && isValidId(sessionId) &&
-        incoming().title is string && incoming().title.size() <= 128;
-      allow delete: if isSignedIn();
-    }
-
-    // Attendance Records Collection
-    match /attendanceRecords/{attendanceId} {
-      allow read: if isSignedIn() && isValidId(attendanceId);
-      allow create, update: if isSignedIn() && isValidId(attendanceId) &&
-        incoming().sessionId is string && incoming().athleteId is string &&
-        incoming().status is string;
-      allow delete: if isSignedIn();
-    }
-
-    // Tactical Plans Collection
-    match /tacticalPlans/{planId} {
-      allow read: if isSignedIn() && isValidId(planId);
-      allow create: if isSignedIn() && isValidId(planId) &&
-        incoming().title is string && incoming().title.size() <= 128 &&
-        incoming().pitchType is string;
-      allow update: if isSignedIn() && isValidId(planId) &&
-        incoming().title is string && incoming().title.size() <= 128;
-      allow delete: if isSignedIn();
-    }
-
-    // Drills Collection
-    match /drills/{drillId} {
-      allow read: if isSignedIn() && isValidId(drillId);
-      allow create, update: if isSignedIn() && isValidId(drillId) &&
-        incoming().title is string && incoming().title.size() <= 128;
-      allow delete: if isSignedIn();
-    }
-
-    // Invoices Collection
-    match /invoices/{invoiceId} {
-      allow read: if isSignedIn() && isValidId(invoiceId);
-      allow create, update: if isSignedIn() && isValidId(invoiceId) &&
-        incoming().amount is number && incoming().currency is string;
-      allow delete: if isPlatformAdmin();
-    }
-
-    // Announcements Collection
-    match /announcements/{announcementId} {
-      allow read: if isSignedIn() && isValidId(announcementId);
-      allow create: if isSignedIn() && isValidId(announcementId) &&
-        incoming().title is string && incoming().title.size() <= 128 &&
-        incoming().content is string && incoming().content.size() <= 3000;
-      allow update: if isSignedIn() && isValidId(announcementId) &&
-        incoming().title is string && incoming().title.size() <= 128;
-      allow delete: if isSignedIn();
-    }
-
-    // Conversations Collection
-    match /conversations/{conversationId} {
-      allow read: if isSignedIn() && isValidId(conversationId);
-      allow create, update: if isSignedIn() && isValidId(conversationId) &&
-        incoming().type is string;
-      allow delete: if isSignedIn();
-
-      match /messages/{messageId} {
-        allow read: if isSignedIn() && isValidId(messageId);
-        allow create: if isSignedIn() && isValidId(messageId) &&
-          incoming().text is string && incoming().text.size() <= 2000 &&
-          incoming().senderId is string;
-        allow update, delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      // Multi-device sync blob written by src/services/firestore-sync-service.ts.
+      match /live_state/{docId} {
+        allow read: if canAccessAcademy(academyId) && isValidId(docId);
+        allow create, update: if canAccessAcademy(academyId) && isValidId(docId) &&
+          request.resource.data.academyId == academyId &&
+          request.resource.data.payload is string &&
+          request.resource.data.payload.size() <= 900000;
+        allow delete: if isPlatformAdmin();
       }
     }
   }

@@ -5,10 +5,20 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "@/lib/firebase.ts";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 
+/**
+ * Cloud sync is opt-in. firestore.rules only admit signed-in Firebase users
+ * with a verified email who are registered as members of the academy, so
+ * without VITE_ENABLE_CLOUD_SYNC=true and a Firebase sign-in nothing is read
+ * from or written to Firestore.
+ */
+const cloudSyncEnabled = import.meta.env.VITE_ENABLE_CLOUD_SYNC === "true";
+
 export interface SyncStatus {
+  isEnabled: boolean;
   isConnected: boolean;
   isSyncing: boolean;
   lastSyncedAt: Date | null;
@@ -16,28 +26,30 @@ export interface SyncStatus {
 }
 
 class FirestoreSyncService {
-  private activeAcademyId: string = "acad_heavylaws";
+  private activeAcademyId: string | null = null;
   private unsubscribe: Unsubscribe | null = null;
   private isPushing = false;
   private pushDebounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
   private status: SyncStatus = {
+    isEnabled: cloudSyncEnabled,
     isConnected: false,
     isSyncing: false,
     lastSyncedAt: null,
-    error: null,
+    error: cloudSyncEnabled ? null : "Cloud sync is disabled",
   };
 
   constructor() {
-    this.init();
+    if (cloudSyncEnabled) {
+      this.init();
+    }
+  }
+
+  private canSync(): boolean {
+    return cloudSyncEnabled && auth.currentUser !== null && this.activeAcademyId !== null;
   }
 
   private init() {
-    const current = localMockStore.getCurrentUser();
-    if (current?.academyId) {
-      this.activeAcademyId = current.academyId;
-    }
-
     // Listen for store changes made locally on this device
     localMockStore.onChange(() => {
       const activeUser = localMockStore.getCurrentUser();
@@ -47,14 +59,27 @@ class FirestoreSyncService {
       this.schedulePush();
     });
 
-    // Start listening to the cloud database
-    this.startListening(this.activeAcademyId);
+    // Only talk to Firestore while a Firebase user is signed in.
+    onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser) {
+        this.cleanup();
+        this.updateStatus({ isConnected: false, error: "Sign in to enable cloud sync" });
+        return;
+      }
+      const current = localMockStore.getCurrentUser();
+      this.activeAcademyId = current?.academyId ?? null;
+      if (this.activeAcademyId) {
+        this.startListening(this.activeAcademyId);
+      }
+    });
   }
 
   public setAcademy(academyId: string) {
     if (this.activeAcademyId === academyId) return;
     this.activeAcademyId = academyId;
-    this.startListening(academyId);
+    if (this.canSync()) {
+      this.startListening(academyId);
+    }
   }
 
   public subscribeStatus(cb: (status: SyncStatus) => void): () => void {
@@ -83,6 +108,9 @@ class FirestoreSyncService {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    if (!cloudSyncEnabled || auth.currentUser === null) {
+      return;
+    }
 
     const syncDocPath = `academies/${academyId}/live_state/sync`;
     const docRef = doc(db, "academies", academyId, "live_state", "sync");
@@ -103,7 +131,7 @@ class FirestoreSyncService {
           if (data && data.payload) {
             try {
               const parsed = typeof data.payload === "string" ? JSON.parse(data.payload) : data.payload;
-              const hasChanged = localMockStore.mergeRemoteData(parsed);
+              const hasChanged = localMockStore.mergeRemoteData(parsed, academyId);
               if (hasChanged) {
                 this.updateStatus({ lastSyncedAt: new Date() });
               }
@@ -134,6 +162,9 @@ class FirestoreSyncService {
 
   public async pushToFirestore(): Promise<void> {
     const academyId = this.activeAcademyId;
+    if (!this.canSync() || academyId === null) {
+      return;
+    }
     const syncDocPath = `academies/${academyId}/live_state/sync`;
     const docRef = doc(db, "academies", academyId, "live_state", "sync");
 
@@ -147,7 +178,7 @@ class FirestoreSyncService {
 
       // Sync essential operational collections
       const syncPayload = {
-        academies: dbData.academies,
+        academies: dbData.academies.filter((a) => a._id === academyId),
         athletes: dbData.athletes.filter((a) => a.academyId === academyId),
         teams: dbData.teams.filter((t) => t.academyId === academyId),
         teamMembers: dbData.teamMembers.filter((tm) => academyTeams.has(tm.teamId)),
