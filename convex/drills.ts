@@ -10,6 +10,7 @@ export const listDrills = query({
   },
   handler: async (ctx, args) => {
     if (!args.academyId) return [];
+    await requireAcademyMember(ctx, args.academyId);
     const results = await ctx.db
       .query("drills")
       .withIndex("by_academy", (q) => q.eq("academyId", args.academyId!))

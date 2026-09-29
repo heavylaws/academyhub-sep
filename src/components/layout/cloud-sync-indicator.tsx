@@ -33,6 +33,18 @@ export function CloudSyncIndicator() {
 
   const isWorking = status.isSyncing || isManualSyncing;
 
+  if (!status.isEnabled) {
+    return (
+      <span
+        title="Cloud sync is disabled. Data is stored on this device only."
+        className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border border-border/40"
+      >
+        <Cloud className="size-3.5 text-muted-foreground" />
+        <span className="hidden sm:inline text-[11px] text-muted-foreground">Local only</span>
+      </span>
+    );
+  }
+
   return (
     <Popover>
       <PopoverTrigger asChild>

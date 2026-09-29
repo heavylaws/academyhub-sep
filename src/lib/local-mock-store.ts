@@ -75,6 +75,21 @@ export interface MockDatabase {
 }
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
+
+/** Collections that firestore-sync-service may overwrite with remote data. */
+const REMOTE_MERGE_COLLECTIONS = new Set<string>([
+  "academies",
+  "athletes",
+  "teams",
+  "teamMembers",
+  "trainingSessions",
+  "attendanceRecords",
+  "drills",
+  "invoices",
+  "announcements",
+  "conversations",
+  "messages",
+]);
 const PERSONA_KEY = "coachtactics_persona_id_v3";
 
 export function generateTemporaryPassword(role?: string): string {
@@ -87,10 +102,12 @@ export function generateTemporaryPassword(role?: string): string {
     platform_admin: "Super",
   };
   const prefix = (role && prefixMap[role]) || "Tactics";
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const specials = ["!", "#", "@", "$"];
-  const char = specials[Math.floor(Math.random() * specials.length)];
-  return `${prefix}${randomNum}${char}`;
+  // 10 random chars from an unambiguous alphabet (~58 bits of entropy).
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  const random = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+  return `${prefix}-${random}`;
 }
 
 function getInitialDb(): MockDatabase {
@@ -120,9 +137,11 @@ function getInitialDb(): MockDatabase {
 
 class LocalMockStore {
   private db: MockDatabase;
-  private currentUserId: string | null = "usr_heavylaws";
+  private currentUserId: string | null = null;
   private listeners: Set<() => void> = new Set();
   private authListeners: Set<() => void> = new Set();
+  /** Passwords generated for accounts created in this tab, handed out once. */
+  private provisionedPasswords = new Map<string, string>();
 
   constructor() {
     this.db = this.loadDb();
@@ -204,17 +223,34 @@ class LocalMockStore {
     return () => this.changeListeners.delete(cb);
   }
 
-  public mergeRemoteData(partial: Partial<MockDatabase>): boolean {
+  /**
+   * Merges records received from the cloud sync document. Only operational
+   * collections are accepted: users, invites and fee data never come from the
+   * network (they carry roles and credentials), and when `academyId` is given,
+   * records belonging to another academy are ignored.
+   */
+  public mergeRemoteData(
+    partial: Partial<MockDatabase>,
+    academyId?: string,
+  ): boolean {
     let changed = false;
     const dbRecord = this.db as unknown as Record<string, unknown[]>;
     for (const [key, items] of Object.entries(partial)) {
+      if (!REMOTE_MERGE_COLLECTIONS.has(key)) continue;
       if (!Array.isArray(items)) continue;
       const targetList = dbRecord[key];
       if (!Array.isArray(targetList)) continue;
 
       for (const item of items) {
         if (!item || typeof item !== "object" || !("_id" in item)) continue;
-        const itemId = (item as { _id: string })._id;
+        const itemId = (item as { _id: unknown })._id;
+        if (typeof itemId !== "string") continue;
+        const itemAcademyId = (item as { academyId?: unknown }).academyId;
+        if (academyId !== undefined) {
+          if (key === "academies" ? itemId !== academyId : itemAcademyId !== undefined && itemAcademyId !== academyId) {
+            continue;
+          }
+        }
         const existingIdx = targetList.findIndex(
           (t) => (t as { _id: string })?._id === itemId,
         );
@@ -515,6 +551,18 @@ class LocalMockStore {
     return this.db.invites.find((i) => i._id === inviteId);
   }
 
+  /**
+   * Returns the temporary password generated for an account that was just
+   * created for `email`, once. Existing accounts never have their password
+   * revealed here.
+   */
+  public takeProvisionedPassword(email: string): string | undefined {
+    const key = email.trim().toLowerCase();
+    const password = this.provisionedPasswords.get(key);
+    this.provisionedPasswords.delete(key);
+    return password;
+  }
+
   public getUserByEmail(email: string): MockUser | undefined {
     const norm = email.trim().toLowerCase();
     return this.db.users.find((u) => u.email?.toLowerCase() === norm);
@@ -533,7 +581,16 @@ class LocalMockStore {
       normalized === "heavylaws@coachtactics.com";
 
     if (isHeavyLaws) {
-      if (password !== "//A!t3r3g0") {
+      // Demo-only credential from the build environment. It is visible in the
+      // JS bundle, so it must never be a real password (see vite-env.d.ts).
+      const demoPassword = import.meta.env.VITE_DEMO_ADMIN_PASSWORD;
+      if (!demoPassword) {
+        return {
+          success: false,
+          error: "Super admin sign-in is disabled: VITE_DEMO_ADMIN_PASSWORD is not configured.",
+        };
+      }
+      if (password !== demoPassword) {
         return {
           success: false,
           error: "Incorrect password for heavylaws. Please enter valid credentials.",
@@ -568,13 +625,10 @@ class LocalMockStore {
 
     // Allow any created academy admin, coach, athlete, or guardian to sign in
     const matchingUser = this.db.users.find(
-      (u) =>
-        u.email?.toLowerCase() === normalized ||
-        u.name?.toLowerCase() === normalized ||
-        u._id === identifier,
+      (u) => u.email?.toLowerCase() === normalized,
     );
     if (matchingUser) {
-      if (matchingUser.password && password && matchingUser.password !== password) {
+      if (!matchingUser.password || matchingUser.password !== password) {
         return {
           success: false,
           error: "Incorrect password. Please verify the credentials provided by your academy administrator.",
@@ -1933,12 +1987,13 @@ class LocalMockStore {
               tokenIdentifier: `mock|ath_${Date.now()}`,
             };
             this.db.users.push(athUser);
-          } else {
-            athUser.password = athletePassword;
-            athUser.role = "athlete";
-            athUser.academyId = targetAcademyId;
+            this.provisionedPasswords.set(athleteEmail, athletePassword);
           }
-          newAthlete.userId = athUser._id;
+          // Never modify an existing account (role, academy or password):
+          // only link it when it is already an athlete of this academy.
+          if (athUser.role === "athlete" && athUser.academyId === targetAcademyId) {
+            newAthlete.userId = athUser._id;
+          }
         }
 
         // Auto-provision user account for parent / guardian if guardianEmail provided
@@ -1957,12 +2012,11 @@ class LocalMockStore {
               tokenIdentifier: `mock|guard_${Date.now()}`,
             };
             this.db.users.push(guardUser);
-          } else {
-            guardUser.password = guardianPassword;
-            guardUser.role = "guardian";
-            guardUser.academyId = targetAcademyId;
+            this.provisionedPasswords.set(guardianEmail, guardianPassword);
           }
-          newAthlete.guardianUserId = guardUser._id;
+          if (guardUser.role === "guardian" && guardUser.academyId === targetAcademyId) {
+            newAthlete.guardianUserId = guardUser._id;
+          }
           newAthlete.guardianEmail = guardianEmail;
         }
 
@@ -2625,6 +2679,11 @@ class LocalMockStore {
         if (!targetAcademyId) throw new Error("No academy specified");
         const email = (args.email as string).trim().toLowerCase();
         const role = args.role as MockInvite["role"];
+        // Inviting an existing account must not reset its password or change
+        // its role; that would let an inviter take it over.
+        if (this.db.users.some((u) => u.email.toLowerCase() === email)) {
+          throw new Error("An account with this email already exists");
+        }
         const password = (args.password as string) || generateTemporaryPassword(role);
         const newInvite: MockInvite = {
           _id: `inv_${Date.now()}`,
@@ -2640,29 +2699,20 @@ class LocalMockStore {
         this.db.invites.unshift(newInvite);
 
         // Auto-provision user account so they can immediately sign in with this password
-        let existingUser = this.db.users.find(
-          (u) => u.email.toLowerCase() === email,
-        );
-        if (!existingUser) {
-          const namePart = email
-            .split("@")[0]
-            .replace(/[._]/g, " ")
-            .replace(/\b\w/g, (c) => c.toUpperCase());
-          existingUser = {
-            _id: `usr_${Date.now()}`,
-            name: `${namePart}`,
-            email,
-            password,
-            role,
-            academyId: targetAcademyId,
-            tokenIdentifier: `mock|${Date.now()}`,
-          };
-          this.db.users.push(existingUser);
-        } else {
-          existingUser.role = role;
-          existingUser.academyId = targetAcademyId;
-          existingUser.password = password;
-        }
+        const namePart = email
+          .split("@")[0]
+          .replace(/[._]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        this.db.users.push({
+          _id: `usr_${Date.now()}`,
+          name: `${namePart}`,
+          email,
+          password,
+          role,
+          academyId: targetAcademyId,
+          tokenIdentifier: `mock|${Date.now()}`,
+        });
+        this.provisionedPasswords.set(email, password);
 
         this.saveDb();
         this.notifyAll();
