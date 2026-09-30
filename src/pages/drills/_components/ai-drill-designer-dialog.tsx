@@ -151,9 +151,13 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
 
       // Persist tactical plan to Firestore under academy
       if (result.tacticalPlan) {
-        academyFirestoreService
+        await academyFirestoreService
           .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
-          .catch((err) => console.warn("Could not save tactical plan to Firestore:", err));
+          .catch((err) => {
+            console.error("Could not save tactical plan to Firestore:", err);
+            toast.error("Cloud sync failed: tactical plan could not be saved to Firestore.");
+            throw err;
+          });
       }
 
       toast.success("Drill and Tactical Plan saved to academy playbook!");
@@ -171,7 +175,10 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
     if (result.tacticalPlan) {
       academyFirestoreService
         .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
-        .catch((err) => console.warn("Could not save tactical plan to Firestore:", err));
+        .catch((err) => {
+          console.error("Could not save tactical plan to Firestore:", err);
+          toast.error("Cloud sync failed: tactical plan could not be saved to Firestore.");
+        });
     }
     onOpenChange(false);
     navigate(`/tactical-board?drillTitle=${encodeURIComponent(result.drill.title)}`);

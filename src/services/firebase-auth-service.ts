@@ -17,6 +17,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   query,
   where,
 } from "firebase/firestore";
@@ -168,23 +169,27 @@ class FirebaseAuthService {
           const inviteId = inviteDoc.id;
 
           if (academyId) {
-            // Create the members/{uid} doc
-            await setDoc(doc(db, "academies", academyId, "members", user.uid), {
+            // Create member doc and mark invite accepted in ONE writeBatch
+            const batch = writeBatch(db);
+            const memberRef = doc(db, "academies", academyId, "members", user.uid);
+            batch.set(memberRef, {
               uid: user.uid,
               academyId,
-              email: user.email!,
+              email: user.email!.toLowerCase().trim(),
               name: user.displayName || user.email!.split("@")[0],
               role: inviteData.role,
               inviteId,
               createdAt: new Date().toISOString(),
             });
 
-            // Mark the invite accepted
-            await updateDoc(doc(db, "academies", academyId, "invites", inviteId), {
+            const inviteRef = doc(db, "academies", academyId, "invites", inviteId);
+            batch.update(inviteRef, {
               status: "accepted",
               acceptedAt: new Date().toISOString(),
               acceptedBy: user.uid,
             });
+
+            await batch.commit();
 
             return {
               status: "active",

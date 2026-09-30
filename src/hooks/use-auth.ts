@@ -43,27 +43,13 @@ export function useAuth() {
 
   void authTick;
 
-  const mockUser = localMockStore.getCurrentUser();
-  const mockIsAuth = localMockStore.isAuthenticated();
-
   const isEmailUnverified = Boolean(firebaseUser && !firebaseUser.emailVerified);
-  const isAuthenticated = Boolean(
-    (firebaseUser && firebaseUser.emailVerified) || (!firebaseUser && mockIsAuth && mockUser),
-  );
+  const isAuthenticated = Boolean(firebaseUser && firebaseUser.emailVerified);
 
   const signinWithPassword = useCallback(
     async (email: string, password: string) => {
-      try {
-        const u = await firebaseAuthService.signIn(email, password);
-        return u;
-      } catch (fbErr) {
-        // Fallback to local mock store if in offline test mode
-        const res = localMockStore.authenticateWithPassword(email, password);
-        if (res.success) {
-          return res.user;
-        }
-        throw fbErr;
-      }
+      const u = await firebaseAuthService.signIn(email, password);
+      return u;
     },
     [],
   );
@@ -74,19 +60,19 @@ export function useAuth() {
     } catch {
       // Ignored
     }
-    localMockStore.setPersona(null);
+    localMockStore.wipe();
   }, []);
 
-  const effectiveEmail = firebaseUser?.email || mockUser?.email;
-  const effectiveName = firebaseUser?.displayName || mockUser?.name || effectiveEmail?.split("@")[0];
-  const effectiveId = firebaseUser?.uid || mockUser?._id;
+  const effectiveEmail = firebaseUser?.email || undefined;
+  const effectiveName = firebaseUser?.displayName || effectiveEmail?.split("@")[0];
+  const effectiveId = firebaseUser?.uid;
 
   return {
     isAuthenticated,
     isEmailUnverified,
     isLoading,
     error: null as Error | null,
-    user: (firebaseUser || mockUser)
+    user: firebaseUser
       ? {
           profile: {
             sub: effectiveId,

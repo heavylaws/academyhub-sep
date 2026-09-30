@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { auth } from "@/lib/firebase.ts";
 import {
@@ -6,12 +6,14 @@ import {
   type MembershipResolution,
 } from "@/services/firebase-auth-service.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 import { AuthContext } from "./auth-context.ts";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isResolvingMembership, setIsResolvingMembership] = useState(false);
   const [membership, setMembership] = useState<MembershipResolution | null>(null);
+  const previousUidRef = useRef<string | null>(auth.currentUser?.uid ?? null);
 
   const resolveAndSync = useCallback(async (user: FirebaseUser | null) => {
     if (!user) {
@@ -39,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: user.displayName || user.email?.split("@")[0] || "User",
           email: user.email || "",
           role: res.role,
-          academyId: res.academyId || localMockStore.getActiveAcademyId() || "acad_heavylaws",
+          academyId: res.academyId || undefined,
         });
       } else if (res.status === "pending_access") {
         localMockStore.setCurrentUser({
@@ -59,6 +61,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
+      const currentUid = user?.uid ?? null;
+      if (currentUid !== previousUidRef.current) {
+        previousUidRef.current = currentUid;
+        // Wipe local store completely whenever Firebase uid changes before loading new user data
+        localMockStore.wipe();
+        academyFirestoreService.cleanup();
+      }
       setFirebaseUser(user);
       void resolveAndSync(user);
     });
@@ -75,10 +84,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [resolveAndSync]);
 
   const handleSignOut = useCallback(async () => {
-    await firebaseAuthService.signOut();
+    previousUidRef.current = null;
+    localMockStore.wipe();
+    academyFirestoreService.cleanup();
+    try {
+      await firebaseAuthService.signOut();
+    } catch {
+      // Ignored
+    }
     setFirebaseUser(null);
     setMembership(null);
-    localMockStore.setPersona(null);
   }, []);
 
   const isEmailUnverified = Boolean(firebaseUser && !firebaseUser.emailVerified);

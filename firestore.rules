@@ -75,14 +75,14 @@ service cloud.firestore {
     // CollectionGroup query permissions for user to locate their own invites and memberships
     match /{path=**}/invites/{inviteId} {
       allow read: if isSignedIn() && hasVerifiedEmail() && (
-        resource.data.email == request.auth.token.email ||
+        resource.data.email == request.auth.token.email.lower() ||
         isPlatformAdmin()
       );
     }
 
-    match /{path=**}/members/{uid} {
+    match /{path=**}/members/{memberDocId} {
       allow read: if isSignedIn() && hasVerifiedEmail() && (
-        request.auth.uid == uid ||
+        resource.data.uid == request.auth.uid ||
         isPlatformAdmin()
       );
     }
@@ -95,7 +95,12 @@ service cloud.firestore {
       );
       allow list: if isSignedIn() && hasVerifiedEmail() && isPlatformAdmin();
       allow create: if isPlatformAdmin() && isValidId(academyId);
-      allow update: if (isPlatformAdmin() || isAcademyAdmin(academyId)) && isValidId(academyId);
+      allow update: if isSignedIn() && hasVerifiedEmail() && isValidId(academyId) && (
+        isPlatformAdmin() || (
+          isAcademyAdmin(academyId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "logoUrl", "phone", "address"])
+        )
+      );
       allow delete: if isPlatformAdmin() && isValidId(academyId);
 
       // Members subcollection
@@ -107,16 +112,18 @@ service cloud.firestore {
         );
 
         // A member doc can only be created by its own user, only with the role in a pending invite
-        // whose email equals request.auth.token.email, and only when email_verified == true.
+        // whose email equals request.auth.token.email.lower(), and only when email_verified == true.
+        // Additionally require getAfter(<the invite path>).data.status == "accepted".
         allow create: if isSignedIn() &&
           hasVerifiedEmail() &&
           request.auth.uid == uid &&
-          request.resource.data.email == request.auth.token.email &&
+          request.resource.data.email == request.auth.token.email.lower() &&
           request.resource.data.inviteId is string &&
           exists(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)) &&
           get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.status == "pending" &&
-          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email &&
-          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.role == request.resource.data.role;
+          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email.lower() &&
+          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.role == request.resource.data.role &&
+          getAfter(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.status == "accepted";
 
         // Members cannot change their own role. Only academy_admin or platform admins can update or delete members,
         // and an academy_admin can never touch another academy_admin.
@@ -144,7 +151,7 @@ service cloud.firestore {
         allow read: if isSignedIn() && hasVerifiedEmail() && (
           isPlatformAdmin() ||
           isAcademyAdmin(academyId) ||
-          resource.data.email == request.auth.token.email
+          resource.data.email == request.auth.token.email.lower()
         );
 
         // A platform admin creates academies and invites an academy_admin.
@@ -158,31 +165,44 @@ service cloud.firestore {
         ) &&
         request.resource.data.status == "pending" &&
         request.resource.data.email is string &&
+        request.resource.data.email == request.resource.data.email.lower() &&
         request.resource.data.createdBy == request.auth.uid;
 
         // Accepting invite or managing by admin
+        // An academy admin may update an invite only if request.resource.data.role == resource.data.role and resource.data.role != "academy_admin".
+        // The invitee's accept path must also require existsAfter(/databases/$(database)/documents/academies/$(academyId)/members/$(request.auth.uid)).
         allow update: if isSignedIn() && hasVerifiedEmail() && (
           isPlatformAdmin() ||
-          isAcademyAdmin(academyId) ||
           (
-            resource.data.email == request.auth.token.email &&
+            isAcademyAdmin(academyId) &&
+            request.resource.data.role == resource.data.role &&
+            resource.data.role != "academy_admin"
+          ) ||
+          (
+            resource.data.email == request.auth.token.email.lower() &&
             resource.data.status == "pending" &&
             request.resource.data.status == "accepted" &&
             request.resource.data.email == resource.data.email &&
-            request.resource.data.role == resource.data.role
+            request.resource.data.role == resource.data.role &&
+            existsAfter(/databases/$(database)/documents/academies/$(academyId)/members/$(request.auth.uid))
           )
         );
 
         allow delete: if isSignedIn() && hasVerifiedEmail() && (
           isPlatformAdmin() ||
-          isAcademyAdmin(academyId)
+          (
+            isAcademyAdmin(academyId) &&
+            resource.data.role != "academy_admin"
+          )
         );
       }
 
       // Athletes subcollection
-      // Staff (academy_admin, coach) can read and write.
+      // Staff (academy_admin, coach) can read.
       // Athlete can read only the athlete doc whose userId == request.auth.uid.
       // Guardian can read only athletes whose guardianUids contains their uid.
+      // Write: only academy_admin (or platform admin) may set or change userId or guardianUids;
+      // coaches may write other fields only (affectedKeys check on update, absent check on create).
       match /athletes/{athleteId} {
         allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && (
           isAcademyStaff(academyId) || (
@@ -192,7 +212,27 @@ service cloud.firestore {
             )
           )
         );
-        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && isAcademyStaff(academyId);
+        allow create: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId) ||
+          (
+            isAcademyStaff(academyId) &&
+            !("userId" in request.resource.data) &&
+            !("guardianUids" in request.resource.data)
+          )
+        );
+        allow update: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId) ||
+          (
+            isAcademyStaff(academyId) &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(["userId", "guardianUids"])
+          )
+        );
+        allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId)
+        );
       }
 
       // Kiosk check-in PINs subcollection
@@ -203,13 +243,14 @@ service cloud.firestore {
 
       // Teams subcollection
       // Staff can read and write.
-      // Athletes can read their own teams.
+      // Athletes and guardians can read their own teams.
       match /teams/{teamId} {
         allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(teamId) && (
           isAcademyStaff(academyId) || (
             isAcademyMember(academyId) && (
               (resource.data.memberUserIds is list && request.auth.uid in resource.data.memberUserIds) ||
-              (resource.data.athleteUids is list && request.auth.uid in resource.data.athleteUids)
+              (resource.data.athleteUids is list && request.auth.uid in resource.data.athleteUids) ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
             )
           )
         );
@@ -233,13 +274,14 @@ service cloud.firestore {
 
       // Training Sessions subcollection
       // Staff can read and write.
-      // Athletes can read their own sessions.
+      // Athletes and guardians can read their own sessions.
       match /trainingSessions/{sessionId} {
         allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(sessionId) && (
           isAcademyStaff(academyId) || (
             isAcademyMember(academyId) && (
               (resource.data.memberUserIds is list && request.auth.uid in resource.data.memberUserIds) ||
-              (resource.data.athleteUserIds is list && request.auth.uid in resource.data.athleteUserIds)
+              (resource.data.athleteUserIds is list && request.auth.uid in resource.data.athleteUserIds) ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
             )
           )
         );
@@ -248,13 +290,14 @@ service cloud.firestore {
 
       // Attendance records subcollection
       // Staff can read and write.
-      // Athletes can read their own attendance records.
+      // Athletes and guardians can read their own attendance records.
       match /attendance/{attendanceId} {
         allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(attendanceId) && (
           isAcademyStaff(academyId) || (
             isAcademyMember(academyId) && (
               resource.data.userId == request.auth.uid ||
-              resource.data.athleteUserId == request.auth.uid
+              resource.data.athleteUserId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
             )
           )
         );

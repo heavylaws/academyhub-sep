@@ -1064,6 +1064,13 @@ class AcademyFirestoreService {
     const enrolledUserIds = dbData.athletes
       .filter((a) => athleteIds.includes(a._id) && a.userId)
       .map((a) => a.userId as string);
+    const enrolledGuardianUids = Array.from(
+      new Set(
+        dbData.athletes
+          .filter((a) => athleteIds.includes(a._id) && a.guardianUserId)
+          .map((a) => a.guardianUserId as string),
+      ),
+    );
 
     // Update team document
     const teamDocRef = doc(db, "academies", academyId, "teams", teamId);
@@ -1072,6 +1079,7 @@ class AcademyFirestoreService {
       {
         athleteIds,
         memberUserIds: enrolledUserIds,
+        guardianUids: enrolledGuardianUids,
       },
       { merge: true },
     );
@@ -1100,10 +1108,18 @@ class AcademyFirestoreService {
     const memberUserIds = dbData.athletes
       .filter((a) => athIds.has(a._id) && a.userId)
       .map((a) => a.userId as string);
+    const enrolledGuardianUids = Array.from(
+      new Set(
+        dbData.athletes
+          .filter((a) => athIds.has(a._id) && a.guardianUserId)
+          .map((a) => a.guardianUserId as string),
+      ),
+    );
 
     await setDoc(sessDocRef, {
       ...session,
       memberUserIds,
+      guardianUids: enrolledGuardianUids,
     });
   }
 
@@ -1139,6 +1155,7 @@ class AcademyFirestoreService {
       ...attendance,
       academyId,
       userId: ath?.userId || null,
+      guardianUids: ath?.guardianUserId ? [ath.guardianUserId] : [],
     });
   }
 

@@ -1,4 +1,4 @@
-// Clean mock seed data — Wiped previous data; single Super Admin account: heavylaws
+// Clean mock seed data — Platform admin comes only from /admins/{uid}
 
 export interface MockAcademy {
   _id: string;
@@ -268,7 +268,7 @@ export interface MockDrill {
 // Clean Initial Academies
 export const SEED_ACADEMIES: MockAcademy[] = [
   {
-    _id: "acad_heavylaws",
+    _id: "acad_hercules",
     name: "CoachTactics Academy",
     slug: "coachtactics",
     status: "active",
@@ -277,17 +277,8 @@ export const SEED_ACADEMIES: MockAcademy[] = [
   },
 ];
 
-// Single Super Admin account: heavylaws
-export const SEED_USERS: MockUser[] = [
-  {
-    _id: "usr_heavylaws",
-    name: "heavylaws",
-    email: "ah.baalbaki@gmail.com",
-    role: "platform_admin",
-    academyId: "acad_heavylaws",
-    tokenIdentifier: "mock|user_heavylaws",
-  },
-];
+// Platform admin comes only from /admins/{uid} in Firebase Firestore
+export const SEED_USERS: MockUser[] = [];
 
 // All other collections wiped clean for testing
 export const SEED_ATHLETES: MockAthlete[] = [];

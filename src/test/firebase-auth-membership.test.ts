@@ -28,7 +28,7 @@ describe("Firebase Auth & Academy Membership Flows", () => {
   it("recognizes platform admin when document exists in /admins/{uid}", async () => {
     const adminUser = {
       uid: "usr_platform_admin_1",
-      email: "ah.baalbaki@gmail.com",
+      email: "admin@example.com",
       emailVerified: true,
       displayName: "Platform Admin",
     } as FirebaseUser;

@@ -6,9 +6,9 @@ describe("Live Team Session Rapid Performance Recording Suite", () => {
     localMockStore.resetToDefault();
     localMockStore.setPersona("usr_coach");
     localMockStore.getDb().athletes.push(
-      { _id: "ath_marcus", academyId: "acad_heavylaws", firstName: "Marcus", lastName: "Vance", status: "active", createdAt: new Date().toISOString() },
-      { _id: "ath_sarah", academyId: "acad_heavylaws", firstName: "Sarah", lastName: "Miller", status: "active", createdAt: new Date().toISOString() },
-      { _id: "ath_alex", academyId: "acad_heavylaws", firstName: "Alex", lastName: "Thorne", status: "active", createdAt: new Date().toISOString() },
+      { _id: "ath_marcus", academyId: "acad_hercules", firstName: "Marcus", lastName: "Vance", status: "active", createdAt: new Date().toISOString() },
+      { _id: "ath_sarah", academyId: "acad_hercules", firstName: "Sarah", lastName: "Miller", status: "active", createdAt: new Date().toISOString() },
+      { _id: "ath_alex", academyId: "acad_hercules", firstName: "Alex", lastName: "Thorne", status: "active", createdAt: new Date().toISOString() },
     );
   });
 

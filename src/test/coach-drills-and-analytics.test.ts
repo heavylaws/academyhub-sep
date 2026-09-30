@@ -64,7 +64,7 @@ describe("Coach Specific Drills Creation & Athlete Analytics Suite", () => {
     });
 
     it("allows academy admin to create specific drills", async () => {
-      localMockStore.setPersona("usr_sara_awally");
+      localMockStore.setPersona("usr_admin");
       const user = localMockStore.getCurrentUser();
       expect(user?.role).toBe("academy_admin");
 

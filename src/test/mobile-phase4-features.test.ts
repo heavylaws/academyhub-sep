@@ -159,7 +159,7 @@ describe("Phase 4: Messages, Announcements, Finance, Invoices, Staff & Schedule 
 
   describe("3. Finance Fees & Invoices", () => {
     it("lists fees, tracks balances and handles payment recordings", async () => {
-      localMockStore.setPersona("usr_sara_awally"); // Admin
+      localMockStore.setPersona("usr_admin"); // Admin
       const athletes = (localMockStore.executeQuery(
         "athletes:listAthletes",
         {},
@@ -208,7 +208,7 @@ describe("Phase 4: Messages, Announcements, Finance, Invoices, Staff & Schedule 
     });
 
     it("creates academy invoices and updates status transitions", async () => {
-      localMockStore.setPersona("usr_sara_awally");
+      localMockStore.setPersona("usr_admin");
 
       const invoiceId = await localMockStore.executeMutation(
         "invoices:createInvoice",
@@ -252,7 +252,7 @@ describe("Phase 4: Messages, Announcements, Finance, Invoices, Staff & Schedule 
 
   describe("4. Staff Management & Invites", () => {
     it("allows administrators to list members and invite new staff", async () => {
-      localMockStore.setPersona("usr_sara_awally");
+      localMockStore.setPersona("usr_admin");
 
       const members = (localMockStore.executeQuery(
         "users:listAcademyMembers",

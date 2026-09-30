@@ -3,7 +3,6 @@ import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
-import { localMockStore } from "@/lib/local-mock-store.ts";
 
 export type UserRole =
   | "platform_admin"
@@ -55,35 +54,23 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
       };
     }
 
-    const mockUser = localMockStore.getCurrentUser();
-    const effectiveRole = (membership?.role || mockUser?.role) as UserRole | undefined;
-    const effectiveAcademyId = (membership?.academyId || mockUser?.academyId) as Id<"academies"> | undefined;
-
     return {
       user: {
         _id: firebaseUser.uid as Id<"users">,
-        name: firebaseUser.displayName || mockUser?.name || firebaseUser.email?.split("@")[0],
+        name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
         email: firebaseUser.email || undefined,
-        role: effectiveRole,
-        academyId: effectiveAcademyId,
+        role: membership?.role || undefined,
+        academyId: (membership?.academyId || undefined) as Id<"academies"> | undefined,
         emailVerified: true,
       },
       isLoading: false,
     };
   }
 
-  // Fallback to Convex / Mock store user (e.g. for vitest test runs or local testing)
+  // Fallback to Convex user if authenticated
   if (convexIsAuth && convexUser) {
     return {
       user: convexUser as unknown as CurrentUser,
-      isLoading: false,
-    };
-  }
-
-  const mock = localMockStore.getCurrentUser();
-  if (mock) {
-    return {
-      user: mock as unknown as CurrentUser,
       isLoading: false,
     };
   }

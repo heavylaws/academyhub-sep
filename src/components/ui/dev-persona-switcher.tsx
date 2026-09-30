@@ -29,22 +29,22 @@ interface PersonaOption {
 
 const PERSONAS: PersonaOption[] = [
   {
-    id: "usr_super_admin",
-    name: "Ahmad Baalbaki",
-    email: "ah.baalbaki@gmail.com",
-    role: "platform_admin",
-    label: "Super Admin (Ahmad Baalbaki)",
-    icon: Crown,
-    color: "bg-rose-500/15 text-rose-500 border-rose-500/30",
-  },
-  {
-    id: "usr_sara_awally",
-    name: "Sara Awally",
-    email: "sara.awally@sportzona.com",
+    id: "usr_admin",
+    name: "Alex Thorne",
+    email: "alex.admin@test.local",
     role: "academy_admin",
-    label: "SportZona Academy Admin",
+    label: "Academy Admin",
     icon: ShieldCheck,
     color: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+  },
+  {
+    id: "usr_coach",
+    name: "Dave Miller",
+    email: "dave.miller@test.local",
+    role: "coach",
+    label: "Head Coach",
+    icon: ShieldCheck,
+    color: "bg-blue-500/15 text-blue-500 border-blue-500/30",
   },
 ];
 
@@ -211,7 +211,7 @@ export function DevPersonaSwitcher() {
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => handleSelectPersona("usr_sara_awally")}
+                onClick={() => handleSelectPersona("usr_admin")}
                 className="h-8 text-xs gap-1.5"
               >
                 Sign In

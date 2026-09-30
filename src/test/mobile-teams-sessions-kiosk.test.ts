@@ -41,7 +41,7 @@ describe("Phase 3: Teams, Sessions & Kiosk Touch Ergonomics Suite", () => {
     });
 
     it("manages team rosters and updates member counts accurately", async () => {
-      localMockStore.setPersona("usr_sara_awally"); // Academy admin
+      localMockStore.setPersona("usr_admin"); // Academy admin
       const teams = localMockStore.executeQuery(
         "teams:listTeams",
         {},

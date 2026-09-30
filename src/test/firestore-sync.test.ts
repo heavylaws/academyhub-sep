@@ -74,7 +74,7 @@ describe("Firebase Firestore Multi-Device Sync Engine", () => {
     });
 
     // Execute any mutation
-    localMockStore.setPersona("usr_sara_awally");
+    localMockStore.setPersona("usr_admin");
     unsub();
 
     expect(typeof unsub).toBe("function");
