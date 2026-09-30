@@ -72,6 +72,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import InviteStaffDialog from "./_components/invite-staff-dialog.tsx";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -79,6 +80,7 @@ const ROLE_LABEL: Record<string, string> = {
   coach: "Coach",
   accounting: "Accounting",
   athlete: "Athlete",
+  guardian: "Parent / Guardian",
 };
 
 export default function Staff() {
@@ -97,13 +99,21 @@ export default function Staff() {
     null,
   );
   const [targetRole, setTargetRole] = useState<
-    "academy_admin" | "coach" | "accounting" | "athlete"
+    "academy_admin" | "coach" | "accounting" | "athlete" | "guardian"
   >("coach");
   const [editRoleOpen, setEditRoleOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const pendingInvites = invites?.filter((i) => i.status === "pending") ?? [];
+
+  // An academy_admin can never touch another academy_admin.
+  const canManageMember = (targetMember: Doc<"users">) => {
+    if (!isAdmin || targetMember._id === user?._id) return false;
+    if (user?.role === "platform_admin") return true;
+    if (user?.role === "academy_admin" && targetMember.role === "academy_admin") return false;
+    return true;
+  };
 
   const handleCancelInvite = async (inviteId: Id<"invites">) => {
     try {
@@ -124,8 +134,17 @@ export default function Staff() {
     try {
       await updateRole({
         targetUserId: selectedMember._id,
-        newRole: targetRole,
+        newRole: targetRole as "academy_admin" | "coach" | "accounting" | "athlete",
       });
+
+      if (user?.academyId && selectedMember._id) {
+        try {
+          await firebaseAuthService.updateMember(user.academyId, selectedMember._id, { role: targetRole });
+        } catch (fsErr) {
+          console.warn("Firestore member update notice:", fsErr);
+        }
+      }
+
       toast.success("Role updated successfully");
       setEditRoleOpen(false);
     } catch (error) {
@@ -144,6 +163,15 @@ export default function Staff() {
     setIsSubmitting(true);
     try {
       await removeMember({ targetUserId: selectedMember._id });
+
+      if (user?.academyId && selectedMember._id) {
+        try {
+          await firebaseAuthService.deleteMember(user.academyId, selectedMember._id);
+        } catch (fsErr) {
+          console.warn("Firestore member delete notice:", fsErr);
+        }
+      }
+
       toast.success("Member removed from academy");
       setRemoveOpen(false);
     } catch (error) {
@@ -251,7 +279,7 @@ export default function Staff() {
                       </div>
                     </div>
 
-                    {isAdmin && member._id !== user?._id && (
+                    {canManageMember(member) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -329,7 +357,7 @@ export default function Staff() {
                         </TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
-                            {member._id !== user?._id && (
+                            {canManageMember(member) && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -526,10 +554,13 @@ export default function Staff() {
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
+                {user?.role === "platform_admin" && (
+                  <SelectItem value="academy_admin">Academy Admin</SelectItem>
+                )}
                 <SelectItem value="coach">Coach</SelectItem>
                 <SelectItem value="accounting">Accounting</SelectItem>
-                <SelectItem value="academy_admin">Academy Admin</SelectItem>
                 <SelectItem value="athlete">Athlete</SelectItem>
+                <SelectItem value="guardian">Parent / Guardian</SelectItem>
               </SelectContent>
             </Select>
           </div>

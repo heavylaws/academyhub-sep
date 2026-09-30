@@ -15,6 +15,46 @@
       },
       "required": ["name", "sport", "status"]
     },
+    "PlatformAdmin": {
+      "title": "PlatformAdmin",
+      "description": "Marker document designating platform-wide administrative privileges (console created only)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "AcademyMember": {
+      "title": "AcademyMember",
+      "description": "Scoped membership within an academy with specific permission role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "academyId": { "type": "string" },
+        "role": { "type": "string", "enum": ["academy_admin", "coach", "accounting", "athlete", "guardian"] },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string", "maxLength": 128 },
+        "inviteId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "academyId", "role", "email", "name"]
+    },
+    "AcademyInvite": {
+      "title": "AcademyInvite",
+      "description": "Pending or accepted invitation for an academy role",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["academy_admin", "coach", "accounting", "athlete", "guardian"] },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "email", "role", "status", "createdBy"]
+    },
     "UserProfile": {
       "title": "UserProfile",
       "description": "User profile with role-based access information",
@@ -38,6 +78,8 @@
       "properties": {
         "id": { "type": "string" },
         "academyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
         "firstName": { "type": "string", "maxLength": 64 },
         "lastName": { "type": "string", "maxLength": 64 },
         "dateOfBirth": { "type": "string" },
@@ -52,6 +94,18 @@
         "createdAt": { "type": "string" }
       },
       "required": ["academyId", "firstName", "lastName", "status"]
+    },
+    "AthletePin": {
+      "title": "AthletePin",
+      "description": "Kiosk check-in PIN stored separately for staff access only",
+      "type": "object",
+      "properties": {
+        "athleteId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "pin": { "type": "string", "maxLength": 16 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["athleteId", "academyId", "pin"]
     },
     "Team": {
       "title": "Team",
@@ -160,6 +214,46 @@
       },
       "required": ["title", "ageGroup", "category", "durationMinutes", "summary"]
     },
+    "AthleteFee": {
+      "title": "AthleteFee",
+      "description": "Academy athlete fee assessment and dues",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "userId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
+        "label": { "type": "string", "maxLength": 128 },
+        "amountDue": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 8 },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid", "overdue", "pending", "partial"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "athleteId", "amountDue", "currency", "dueDate", "status"]
+    },
+    "FeePayment": {
+      "title": "FeePayment",
+      "description": "Recorded payment toward an athlete fee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "feeId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "userId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
+        "amountPaid": { "type": "number" },
+        "paidAt": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["cash", "card", "bank_transfer", "other"] },
+        "recordedBy": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["feeId", "amountPaid", "paidAt", "recordedBy"]
+    },
     "Invoice": {
       "title": "Invoice",
       "description": "Billing invoice for academy fees",
@@ -206,10 +300,19 @@
         "academyId": { "type": "string" },
         "title": { "type": "string", "maxLength": 128 },
         "type": { "type": "string", "enum": ["direct", "team", "broadcast"] },
+        "participantUids": { "type": "array", "items": { "type": "string" } },
+        "participantIds": { "type": "array", "items": { "type": "string" } },
+        "athleteId": { "type": "string" },
+        "contextType": { "type": "string" },
+        "contextId": { "type": "string" },
+        "contextTitle": { "type": "string" },
+        "lastMessageText": { "type": "string", "maxLength": 2000 },
+        "lastMessageAt": { "type": "string" },
+        "lastSenderId": { "type": "string" },
         "updatedAt": { "type": "string" },
         "createdAt": { "type": "string" }
       },
-      "required": ["academyId", "type"]
+      "required": ["academyId", "participantUids"]
     },
     "ChatMessage": {
       "title": "ChatMessage",
@@ -222,80 +325,168 @@
         "senderId": { "type": "string" },
         "senderName": { "type": "string", "maxLength": 64 },
         "senderRole": { "type": "string", "maxLength": 32 },
+        "content": { "type": "string", "maxLength": 2000 },
         "text": { "type": "string", "maxLength": 2000 },
+        "readBy": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string" }
       },
-      "required": ["conversationId", "senderId", "text"]
+      "required": ["conversationId", "senderId"]
     },
-    "AcademyLiveSync": {
-      "title": "AcademyLiveSync",
-      "description": "Multi-device real-time sync document broadcasting academy state deltas across devices",
+    "TrainingPlan": {
+      "title": "TrainingPlan",
+      "description": "Individualized training development plan for an athlete",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "academyId": { "type": "string" },
-        "lastUpdated": { "type": "string" },
-        "deviceClient": { "type": "string" },
-        "payload": { "type": "string" }
+        "athleteId": { "type": "string" },
+        "userId": { "type": "string" },
+        "athleteUserId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
+        "title": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "startDate": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "completed", "archived"] },
+        "assignedBy": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" }
       },
-      "required": ["academyId", "payload"]
+      "required": ["academyId", "athleteId", "title", "status"]
+    },
+    "PlanItem": {
+      "title": "PlanItem",
+      "description": "Specific exercise or drill target within an athlete training plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "planId": { "type": "string" },
+        "userId": { "type": "string" },
+        "athleteUserId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
+        "exercise": { "type": "string", "maxLength": 128 },
+        "target": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "order": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "result": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["planId", "exercise", "order"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "Performance metric evaluation record for an athlete",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academyId": { "type": "string" },
+        "athleteId": { "type": "string" },
+        "userId": { "type": "string" },
+        "athleteUserId": { "type": "string" },
+        "guardianUids": { "type": "array", "items": { "type": "string" } },
+        "sessionId": { "type": "string" },
+        "metric": { "type": "string", "maxLength": 64 },
+        "value": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 16 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "assessedOn": { "type": "string" },
+        "assessedBy": { "type": "string" },
+        "conductedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["academyId", "athleteId", "metric", "value", "unit"]
     }
   },
   "firestore": {
+    "/admins/{uid}": {
+      "schema": "PlatformAdmin",
+      "description": "Platform administrator marker documents (manual console creation only)"
+    },
     "/academies/{academyId}": {
       "schema": "Academy",
       "description": "Academy entity configuration"
     },
-    "/academies/{academyId}/live_state/{docId}": {
-      "schema": "AcademyLiveSync",
-      "description": "Real-time synchronization document between devices"
+    "/academies/{academyId}/members/{uid}": {
+      "schema": "AcademyMember",
+      "description": "Academy membership document mapping user to verified role"
+    },
+    "/academies/{academyId}/invites/{inviteId}": {
+      "schema": "AcademyInvite",
+      "description": "Academy invitation with role and pending/accepted status"
     },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile with role-based permissions"
     },
-    "/athletes/{athleteId}": {
+    "/academies/{academyId}/athletes/{athleteId}": {
       "schema": "Athlete",
-      "description": "Academy athletes registry"
+      "description": "Academy athletes registry scoped to academy"
     },
-    "/teams/{teamId}": {
+    "/academies/{academyId}/athletePins/{athleteId}": {
+      "schema": "AthletePin",
+      "description": "Kiosk check-in PIN stored separately for staff access only"
+    },
+    "/academies/{academyId}/teams/{teamId}": {
       "schema": "Team",
-      "description": "Teams and squads"
+      "description": "Teams and squads scoped to academy"
     },
-    "/teamMembers/{memberId}": {
+    "/academies/{academyId}/teamMembers/{memberId}": {
       "schema": "TeamMember",
-      "description": "Team roster memberships"
+      "description": "Team roster memberships scoped to academy"
     },
-    "/trainingSessions/{sessionId}": {
+    "/academies/{academyId}/trainingSessions/{sessionId}": {
       "schema": "TrainingSession",
-      "description": "Academy training sessions and matches"
+      "description": "Academy training sessions and matches scoped to academy"
     },
-    "/attendanceRecords/{attendanceId}": {
+    "/academies/{academyId}/attendance/{attendanceId}": {
       "schema": "AttendanceRecord",
-      "description": "Training session attendance records"
+      "description": "Training session attendance records scoped to academy"
     },
-    "/tacticalPlans/{planId}": {
-      "schema": "TacticalPlan",
-      "description": "Interactive tactical plans and formations"
+    "/academies/{academyId}/fees/{feeId}": {
+      "schema": "AthleteFee",
+      "description": "Academy athlete fee assessments and dues"
     },
-    "/drills/{drillId}": {
-      "schema": "SoccerDrillItem",
-      "description": "Drill library items"
+    "/academies/{academyId}/payments/{paymentId}": {
+      "schema": "FeePayment",
+      "description": "Recorded payments towards athlete fees"
     },
-    "/invoices/{invoiceId}": {
+    "/academies/{academyId}/invoices/{invoiceId}": {
       "schema": "Invoice",
       "description": "Academy fee invoices"
     },
-    "/announcements/{announcementId}": {
+    "/academies/{academyId}/announcements/{announcementId}": {
       "schema": "Announcement",
-      "description": "Academy announcements and broadcasts"
+      "description": "Academy noticeboard announcements readable by academy members and writable by staff"
     },
-    "/conversations/{conversationId}": {
+    "/academies/{academyId}/conversations/{conversationId}": {
       "schema": "Conversation",
-      "description": "Messaging conversation channels"
+      "description": "Messaging conversation channels restricted to listed participantUids"
     },
-    "/conversations/{conversationId}/messages/{messageId}": {
+    "/academies/{academyId}/conversations/{conversationId}/messages/{messageId}": {
       "schema": "ChatMessage",
-      "description": "Messages within conversation channel"
+      "description": "Messages within conversation channel authored by authenticated sender"
+    },
+    "/academies/{academyId}/drills/{drillId}": {
+      "schema": "SoccerDrillItem",
+      "description": "Academy drill library items with staff-write and member-read permissions"
+    },
+    "/academies/{academyId}/trainingPlans/{planId}": {
+      "schema": "TrainingPlan",
+      "description": "Academy athlete training plans with staff-write and member-read permissions (restricted to athlete/guardian)"
+    },
+    "/academies/{academyId}/planItems/{itemId}": {
+      "schema": "PlanItem",
+      "description": "Individual items and exercises of an athlete training plan"
+    },
+    "/academies/{academyId}/assessments/{assessmentId}": {
+      "schema": "Assessment",
+      "description": "Academy athlete performance assessments with staff-write and member-read permissions (restricted to athlete/guardian)"
+    },
+    "/academies/{academyId}/tacticalBoards/{boardId}": {
+      "schema": "TacticalPlan",
+      "description": "Academy interactive tactical boards with staff-write and member-read permissions"
     }
   }
 }

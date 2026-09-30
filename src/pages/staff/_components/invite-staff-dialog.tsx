@@ -38,6 +38,7 @@ import { Spinner } from "@/components/ui/spinner.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { isLocalDev } from "@/lib/env.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import {
   CredentialsSuccessDialog,
   type GeneratedCredentials,
@@ -46,7 +47,7 @@ import {
 const formSchema = z.object({
   academyId: z.string().optional(),
   email: z.string().trim().email("Enter a valid email address"),
-  role: z.enum(["academy_admin", "coach", "athlete", "accounting"]),
+  role: z.enum(["academy_admin", "coach", "athlete", "accounting", "guardian"]),
 });
 
 export default function InviteStaffDialog({
@@ -81,14 +82,19 @@ export default function InviteStaffDialog({
       await createInvite({
         academyId: targetAcademyId,
         email: values.email,
-        role: values.role,
+        role: values.role as "academy_admin" | "coach" | "athlete" | "accounting",
       });
+
+      try {
+        await firebaseAuthService.createInvite(targetAcademyId, values.email, values.role);
+      } catch (fsErr) {
+        console.warn("Firestore invite sync notice:", fsErr);
+      }
 
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
       const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
       form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
       if (!generatedPassword) {
-        // Live backend: the invitee sets their own password when signing up.
         toast.success(`Invite sent to ${values.email}`);
         onOpenChange(false);
         return;
@@ -203,6 +209,7 @@ export default function InviteStaffDialog({
                       <SelectItem value="coach">Coach</SelectItem>
                       <SelectItem value="athlete">Athlete</SelectItem>
                       <SelectItem value="accounting">Accounting</SelectItem>
+                      <SelectItem value="guardian">Parent / Guardian</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { Cloud, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
-import { firestoreSyncService, type SyncStatus } from "@/services/firestore-sync-service.ts";
+import {
+  academyFirestoreService,
+  type AcademyFirestoreSyncStatus,
+} from "@/services/academy-firestore-service.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
 import { Button } from "@/components/ui/button.tsx";
 import {
   Popover,
@@ -10,11 +14,16 @@ import {
 import { toast } from "sonner";
 
 export function CloudSyncIndicator() {
-  const [status, setStatus] = useState<SyncStatus>(firestoreSyncService.getStatus());
+  const [status, setStatus] = useState<AcademyFirestoreSyncStatus>({
+    isConnected: true,
+    isSyncing: false,
+    lastSyncedAt: null,
+    error: null,
+  });
   const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   useEffect(() => {
-    return firestoreSyncService.subscribeStatus((newStatus) => {
+    return academyFirestoreService.subscribeStatus((newStatus) => {
       setStatus(newStatus);
     });
   }, []);
@@ -22,8 +31,10 @@ export function CloudSyncIndicator() {
   const handleManualSync = async () => {
     setIsManualSyncing(true);
     try {
-      await firestoreSyncService.pushToFirestore();
-      toast.success("All data synced to cloud Firestore!");
+      const user = localMockStore.getCurrentUser();
+      const academyId = user?.academyId || "acad_hercules";
+      await academyFirestoreService.seedInitialDataToFirestore(academyId);
+      toast.success("Academy data synchronized with Cloud Firestore!");
     } catch {
       toast.error("Failed to sync data with cloud database.");
     } finally {
@@ -32,18 +43,6 @@ export function CloudSyncIndicator() {
   };
 
   const isWorking = status.isSyncing || isManualSyncing;
-
-  if (!status.isEnabled) {
-    return (
-      <span
-        title="Cloud sync is disabled. Data is stored on this device only."
-        className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border border-border/40"
-      >
-        <Cloud className="size-3.5 text-muted-foreground" />
-        <span className="hidden sm:inline text-[11px] text-muted-foreground">Local only</span>
-      </span>
-    );
-  }
 
   return (
     <Popover>

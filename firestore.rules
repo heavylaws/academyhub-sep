@@ -1,18 +1,13 @@
 rules_version = '2';
 
-// Security model
-// --------------
-// Default deny. The only data path the client uses is the per-academy sync
-// document at academies/{academyId}/live_state/{docId}. Access requires a
-// signed-in Firebase user with a verified email who is either:
-//   - a platform admin: a document exists at /admins/{uid}, or
-//   - a member of that academy: a document exists at
-//     /academies/{academyId}/members/{uid}
-// Both marker collections are writable only from the Firebase console / Admin
-// SDK (never from the client), so a user cannot grant themselves access.
-//
-// No emails are hard-coded here: add platform admins by creating
-// /admins/{uid} documents in the console.
+// CoachTactics Security Rules
+// ---------------------------
+// Strict default-deny architecture.
+// All access requires Firebase Authentication with email verification.
+// Role and membership markers:
+//   - Platform admins: document at /admins/{uid} (created via Firebase console/Admin SDK only)
+//   - Academy members: document at /academies/{academyId}/members/{uid}
+//   - Academy invites: document at /academies/{academyId}/invites/{inviteId}
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -43,34 +38,434 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/academies/$(academyId)/members/$(request.auth.uid));
     }
 
-    function canAccessAcademy(academyId) {
-      return isValidId(academyId) && (isPlatformAdmin() || isAcademyMember(academyId));
+    function getMember(academyId, uid) {
+      return get(/databases/$(database)/documents/academies/$(academyId)/members/$(uid));
     }
 
-    // Admin and membership markers: readable by their own user, never
-    // writable from the client.
+    function isAcademyAdmin(academyId) {
+      return isPlatformAdmin() || (
+        hasVerifiedEmail() &&
+        isAcademyMember(academyId) &&
+        getMember(academyId, request.auth.uid).data.role == "academy_admin"
+      );
+    }
+
+    function isAcademyStaff(academyId) {
+      return isPlatformAdmin() || (
+        hasVerifiedEmail() &&
+        isAcademyMember(academyId) &&
+        (getMember(academyId, request.auth.uid).data.role in ["academy_admin", "coach"])
+      );
+    }
+
+    function isAcademyAccounting(academyId) {
+      return isPlatformAdmin() || (
+        hasVerifiedEmail() &&
+        isAcademyMember(academyId) &&
+        (getMember(academyId, request.auth.uid).data.role in ["academy_admin", "accounting"])
+      );
+    }
+
+    // Platform admin marker: readable only by self or fellow platform admins. Never writable from client.
     match /admins/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isSignedIn() && (request.auth.uid == uid || isPlatformAdmin());
       allow write: if false;
     }
 
-    match /academies/{academyId} {
-      allow get: if canAccessAcademy(academyId);
-      allow list, write: if false;
+    // CollectionGroup query permissions for user to locate their own invites and memberships
+    match /{path=**}/invites/{inviteId} {
+      allow read: if isSignedIn() && hasVerifiedEmail() && (
+        resource.data.email == request.auth.token.email ||
+        isPlatformAdmin()
+      );
+    }
 
+    match /{path=**}/members/{uid} {
+      allow read: if isSignedIn() && hasVerifiedEmail() && (
+        request.auth.uid == uid ||
+        isPlatformAdmin()
+      );
+    }
+
+    // Academies and their scoped subcollections
+    match /academies/{academyId} {
+      allow get: if isSignedIn() && hasVerifiedEmail() && isValidId(academyId) && (
+        isPlatformAdmin() ||
+        isAcademyMember(academyId)
+      );
+      allow list: if isSignedIn() && hasVerifiedEmail() && isPlatformAdmin();
+      allow create: if isPlatformAdmin() && isValidId(academyId);
+      allow update: if (isPlatformAdmin() || isAcademyAdmin(academyId)) && isValidId(academyId);
+      allow delete: if isPlatformAdmin() && isValidId(academyId);
+
+      // Members subcollection
       match /members/{uid} {
-        allow read: if isSignedIn() && (request.auth.uid == uid || isPlatformAdmin());
-        allow write: if false;
+        allow read: if isSignedIn() && hasVerifiedEmail() && (
+          request.auth.uid == uid ||
+          isPlatformAdmin() ||
+          isAcademyMember(academyId)
+        );
+
+        // A member doc can only be created by its own user, only with the role in a pending invite
+        // whose email equals request.auth.token.email, and only when email_verified == true.
+        allow create: if isSignedIn() &&
+          hasVerifiedEmail() &&
+          request.auth.uid == uid &&
+          request.resource.data.email == request.auth.token.email &&
+          request.resource.data.inviteId is string &&
+          exists(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)) &&
+          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.status == "pending" &&
+          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email &&
+          get(/databases/$(database)/documents/academies/$(academyId)/invites/$(request.resource.data.inviteId)).data.role == request.resource.data.role;
+
+        // Members cannot change their own role. Only academy_admin or platform admins can update or delete members,
+        // and an academy_admin can never touch another academy_admin.
+        allow update: if hasVerifiedEmail() && (
+          (request.auth.uid == uid && request.resource.data.role == resource.data.role) ||
+          isPlatformAdmin() ||
+          (
+            isAcademyAdmin(academyId) &&
+            resource.data.role != "academy_admin" &&
+            request.resource.data.role != "academy_admin"
+          )
+        );
+
+        allow delete: if hasVerifiedEmail() && (
+          isPlatformAdmin() ||
+          (
+            isAcademyAdmin(academyId) &&
+            resource.data.role != "academy_admin"
+          )
+        );
       }
 
-      // Multi-device sync blob written by src/services/firestore-sync-service.ts.
-      match /live_state/{docId} {
-        allow read: if canAccessAcademy(academyId) && isValidId(docId);
-        allow create, update: if canAccessAcademy(academyId) && isValidId(docId) &&
-          request.resource.data.academyId == academyId &&
-          request.resource.data.payload is string &&
-          request.resource.data.payload.size() <= 900000;
-        allow delete: if isPlatformAdmin();
+      // Invites subcollection
+      match /invites/{inviteId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId) ||
+          resource.data.email == request.auth.token.email
+        );
+
+        // A platform admin creates academies and invites an academy_admin.
+        // An academy_admin invites coach, accounting, athlete, guardian (never academy_admin).
+        allow create: if isSignedIn() && hasVerifiedEmail() && isValidId(inviteId) && (
+          (isPlatformAdmin() && request.resource.data.role == "academy_admin") ||
+          (
+            isAcademyAdmin(academyId) &&
+            request.resource.data.role in ["coach", "accounting", "athlete", "guardian"]
+          )
+        ) &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.email is string &&
+        request.resource.data.createdBy == request.auth.uid;
+
+        // Accepting invite or managing by admin
+        allow update: if isSignedIn() && hasVerifiedEmail() && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId) ||
+          (
+            resource.data.email == request.auth.token.email &&
+            resource.data.status == "pending" &&
+            request.resource.data.status == "accepted" &&
+            request.resource.data.email == resource.data.email &&
+            request.resource.data.role == resource.data.role
+          )
+        );
+
+        allow delete: if isSignedIn() && hasVerifiedEmail() && (
+          isPlatformAdmin() ||
+          isAcademyAdmin(academyId)
+        );
+      }
+
+      // Athletes subcollection
+      // Staff (academy_admin, coach) can read and write.
+      // Athlete can read only the athlete doc whose userId == request.auth.uid.
+      // Guardian can read only athletes whose guardianUids contains their uid.
+      match /athletes/{athleteId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && (
+          isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && isAcademyStaff(academyId);
+      }
+
+      // Kiosk check-in PINs subcollection
+      // Stored in a separate collection that ONLY staff can read and write.
+      match /athletePins/{athleteId} {
+        allow read, write: if isSignedIn() && hasVerifiedEmail() && isValidId(athleteId) && isAcademyStaff(academyId);
+      }
+
+      // Teams subcollection
+      // Staff can read and write.
+      // Athletes can read their own teams.
+      match /teams/{teamId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(teamId) && (
+          isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              (resource.data.memberUserIds is list && request.auth.uid in resource.data.memberUserIds) ||
+              (resource.data.athleteUids is list && request.auth.uid in resource.data.athleteUids)
+            )
+          )
+        );
+        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(teamId) && isAcademyStaff(academyId);
+      }
+
+      // Team Members subcollection
+      // Staff can read and write.
+      // Athletes can read their own team membership records.
+      match /teamMembers/{memberId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(memberId) && (
+          isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.athleteUserId == request.auth.uid
+            )
+          )
+        );
+        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(memberId) && isAcademyStaff(academyId);
+      }
+
+      // Training Sessions subcollection
+      // Staff can read and write.
+      // Athletes can read their own sessions.
+      match /trainingSessions/{sessionId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(sessionId) && (
+          isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              (resource.data.memberUserIds is list && request.auth.uid in resource.data.memberUserIds) ||
+              (resource.data.athleteUserIds is list && request.auth.uid in resource.data.athleteUserIds)
+            )
+          )
+        );
+        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(sessionId) && isAcademyStaff(academyId);
+      }
+
+      // Attendance records subcollection
+      // Staff can read and write.
+      // Athletes can read their own attendance records.
+      match /attendance/{attendanceId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(attendanceId) && (
+          isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.athleteUserId == request.auth.uid
+            )
+          )
+        );
+        allow write: if isSignedIn() && hasVerifiedEmail() && isValidId(attendanceId) && isAcademyStaff(academyId);
+      }
+
+      // Fees subcollection
+      // Only academy_admin and accounting can create or update them.
+      // An athlete or guardian can read only fees for athletes they are linked to.
+      match /fees/{feeId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(feeId) && (
+          isAcademyAccounting(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update: if isSignedIn() && hasVerifiedEmail() && isValidId(feeId) && isAcademyAccounting(academyId);
+        allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(feeId) && isAcademyAccounting(academyId);
+      }
+
+      // Fee payments subcollection
+      // Only academy_admin and accounting can create or update them.
+      match /payments/{paymentId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(paymentId) && (
+          isAcademyAccounting(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update: if isSignedIn() && hasVerifiedEmail() && isValidId(paymentId) && isAcademyAccounting(academyId);
+        allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(paymentId) && isAcademyAccounting(academyId);
+      }
+
+      // Invoices subcollection
+      // Only academy_admin and accounting can create or update them.
+      match /invoices/{invoiceId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(invoiceId) && (
+          isAcademyAccounting(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update: if isSignedIn() && hasVerifiedEmail() && isValidId(invoiceId) && isAcademyAccounting(academyId);
+        allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(invoiceId) && isAcademyAccounting(academyId);
+      }
+
+      // Announcements subcollection
+      // Announcements: staff write, academy members read.
+      match /announcements/{announcementId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(announcementId) && (
+          isPlatformAdmin() || isAcademyMember(academyId)
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(announcementId) && isAcademyStaff(academyId);
+      }
+
+      // Conversations subcollection
+      // Conversations: only users listed in participantUids can read or write.
+      match /conversations/{conversationId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(conversationId) && (
+          isPlatformAdmin() || (
+            isAcademyMember(academyId) &&
+            resource.data.participantUids is list &&
+            request.auth.uid in resource.data.participantUids
+          )
+        );
+
+        allow create: if isSignedIn() && hasVerifiedEmail() && isValidId(conversationId) && (
+          isPlatformAdmin() || (
+            isAcademyMember(academyId) &&
+            request.resource.data.participantUids is list &&
+            request.auth.uid in request.resource.data.participantUids
+          )
+        );
+
+        allow update: if isSignedIn() && hasVerifiedEmail() && isValidId(conversationId) && (
+          isPlatformAdmin() || (
+            isAcademyMember(academyId) &&
+            resource.data.participantUids is list &&
+            request.auth.uid in resource.data.participantUids &&
+            request.resource.data.participantUids is list &&
+            request.auth.uid in request.resource.data.participantUids
+          )
+        );
+
+        allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(conversationId) && (
+          isPlatformAdmin() || (
+            isAcademyMember(academyId) &&
+            resource.data.participantUids is list &&
+            request.auth.uid in resource.data.participantUids
+          )
+        );
+
+        // Messages subcollection under a conversation
+        // A message's senderId must equal request.auth.uid and participantUids check.
+        match /messages/{messageId} {
+          allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(messageId) && (
+            isPlatformAdmin() || (
+              isAcademyMember(academyId) &&
+              get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids is list &&
+              request.auth.uid in get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids
+            )
+          );
+
+          allow create: if isSignedIn() && hasVerifiedEmail() && isValidId(messageId) && (
+            isPlatformAdmin() || (
+              isAcademyMember(academyId) &&
+              request.resource.data.senderId == request.auth.uid &&
+              get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids is list &&
+              request.auth.uid in get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids
+            )
+          );
+
+          allow update: if isSignedIn() && hasVerifiedEmail() && isValidId(messageId) && (
+            isPlatformAdmin() || (
+              isAcademyMember(academyId) &&
+              resource.data.senderId == request.auth.uid &&
+              request.resource.data.senderId == request.auth.uid &&
+              get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids is list &&
+              request.auth.uid in get(/databases/$(database)/documents/academies/$(academyId)/conversations/$(conversationId)).data.participantUids
+            )
+          );
+
+          allow delete: if isSignedIn() && hasVerifiedEmail() && isValidId(messageId) && (
+            isPlatformAdmin() || (
+              isAcademyMember(academyId) &&
+              resource.data.senderId == request.auth.uid
+            )
+          );
+        }
+      }
+
+      // Drills subcollection
+      // Drills: staff write, academy members read.
+      match /drills/{drillId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(drillId) && (
+          isPlatformAdmin() || isAcademyMember(academyId)
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(drillId) && isAcademyStaff(academyId);
+      }
+
+      // Training plans subcollection
+      // Staff write, member read (athletes and guardians see only their own athlete's plans).
+      match /trainingPlans/{planId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(planId) && (
+          isPlatformAdmin() || isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.athleteUserId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(planId) && isAcademyStaff(academyId);
+
+        match /items/{itemId} {
+          allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(itemId) && (
+            isPlatformAdmin() || isAcademyStaff(academyId) || (
+              isAcademyMember(academyId) && (
+                get(/databases/$(database)/documents/academies/$(academyId)/trainingPlans/$(planId)).data.userId == request.auth.uid ||
+                get(/databases/$(database)/documents/academies/$(academyId)/trainingPlans/$(planId)).data.athleteUserId == request.auth.uid ||
+                (get(/databases/$(database)/documents/academies/$(academyId)/trainingPlans/$(planId)).data.guardianUids is list &&
+                 request.auth.uid in get(/databases/$(database)/documents/academies/$(academyId)/trainingPlans/$(planId)).data.guardianUids)
+              )
+            )
+          );
+          allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(itemId) && isAcademyStaff(academyId);
+        }
+      }
+
+      // Plan items subcollection
+      match /planItems/{itemId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(itemId) && (
+          isPlatformAdmin() || isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.athleteUserId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(itemId) && isAcademyStaff(academyId);
+      }
+
+      // Assessments subcollection
+      // Staff write, member read (athletes and guardians see only their own athlete's assessments).
+      match /assessments/{assessmentId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(assessmentId) && (
+          isPlatformAdmin() || isAcademyStaff(academyId) || (
+            isAcademyMember(academyId) && (
+              resource.data.userId == request.auth.uid ||
+              resource.data.athleteUserId == request.auth.uid ||
+              (resource.data.guardianUids is list && request.auth.uid in resource.data.guardianUids)
+            )
+          )
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(assessmentId) && isAcademyStaff(academyId);
+      }
+
+      // Tactical boards subcollection
+      // Tactical board: staff write, academy members read.
+      match /tacticalBoards/{boardId} {
+        allow read: if isSignedIn() && hasVerifiedEmail() && isValidId(boardId) && (
+          isPlatformAdmin() || isAcademyMember(academyId)
+        );
+        allow create, update, delete: if isSignedIn() && hasVerifiedEmail() && isValidId(boardId) && isAcademyStaff(academyId);
       }
     }
   }

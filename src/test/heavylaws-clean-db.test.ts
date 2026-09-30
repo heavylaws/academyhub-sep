@@ -56,11 +56,15 @@ describe("Clean Database & Heavylaws Superadmin Authentication", () => {
       expect(localMockStore.getCurrentUser()?._id).toBe("usr_heavylaws");
     });
 
-    it("accepts heavylaws@gmail.com with the configured demo password", () => {
+    it("accepts heavylaws@gmail.com and ah.baalbaki@gmail.com with the configured demo password", () => {
       vi.stubEnv("VITE_DEMO_ADMIN_PASSWORD", DEMO_PASSWORD);
       const validEmailAttempt = localMockStore.authenticateWithPassword("heavylaws@gmail.com", DEMO_PASSWORD);
       expect(validEmailAttempt.success).toBe(true);
       expect(validEmailAttempt.user?.role).toBe("platform_admin");
+
+      const validPersonalEmailAttempt = localMockStore.authenticateWithPassword("ah.baalbaki@gmail.com", DEMO_PASSWORD);
+      expect(validPersonalEmailAttempt.success).toBe(true);
+      expect(validPersonalEmailAttempt.user?.role).toBe("platform_admin");
     });
   });
 

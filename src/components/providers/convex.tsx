@@ -5,8 +5,28 @@ import { localMockConvexClient } from "@/lib/local-mock-convex-client.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { isLocalDev } from "@/lib/env.ts";
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL ?? "http://localhost:3000";
-const liveConvex = new ConvexReactClient(convexUrl);
+const rawConvexUrl = import.meta.env.VITE_CONVEX_URL?.trim();
+
+function getValidConvexUrl(url?: string): string {
+  if (!url) return "https://placeholder.convex.cloud";
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return url;
+    }
+  } catch {
+    // invalid URL format fallback
+  }
+  return "https://placeholder.convex.cloud";
+}
+
+let liveConvex: ConvexReactClient | null = null;
+function getLiveConvexClient(): ConvexReactClient {
+  if (!liveConvex) {
+    liveConvex = new ConvexReactClient(getValidConvexUrl(rawConvexUrl));
+  }
+  return liveConvex;
+}
 
 function LocalConvexProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -31,7 +51,7 @@ function LocalConvexProvider({ children }: { children: React.ReactNode }) {
 
 function LiveConvexProvider({ children }: { children: React.ReactNode }) {
   return (
-    <ConvexAuthProvider client={liveConvex}>{children}</ConvexAuthProvider>
+    <ConvexAuthProvider client={getLiveConvexClient()}>{children}</ConvexAuthProvider>
   );
 }
 

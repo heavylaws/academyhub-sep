@@ -36,6 +36,7 @@ import {
   type MockMessage,
   type MockDrill,
 } from "./local-mock-data.ts";
+import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 
 export interface MockFeeSchedule {
   _id: string;
@@ -76,7 +77,6 @@ export interface MockDatabase {
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
 
-/** Collections that firestore-sync-service may overwrite with remote data. */
 const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "academies",
   "athletes",
@@ -84,8 +84,13 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "teamMembers",
   "trainingSessions",
   "attendanceRecords",
-  "drills",
+  "trainingPlans",
+  "planItems",
+  "assessments",
+  "athleteFees",
+  "feePayments",
   "invoices",
+  "drills",
   "announcements",
   "conversations",
   "messages",
@@ -156,65 +161,31 @@ class LocalMockStore {
   }
 
   private loadDb(): MockDatabase {
-    if (typeof window === "undefined") return getInitialDb();
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        const initial = getInitialDb();
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-        return initial;
+    // The old localStorage demo store is permanently removed; clean up legacy keys.
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem("hercules_local_mock_db_v1");
+        window.localStorage.removeItem("coachtactics_clean_db_v2");
+        window.localStorage.removeItem("coachtactics_clean_db_v3");
+        window.localStorage.removeItem("coachtactics_saved_drills");
+      } catch {
+        // Ignored
       }
-      const parsed: MockDatabase = JSON.parse(raw);
-      parsed.feeSchedules ??= [];
-
-      parsed.drills ??= [...SEED_DRILLS];
-      parsed.academies ??= [...SEED_ACADEMIES];
-      parsed.users ??= [...SEED_USERS];
-      parsed.athletes ??= [...SEED_ATHLETES];
-      parsed.teams ??= [...SEED_TEAMS];
-      parsed.teamMembers ??= [...SEED_TEAM_MEMBERS];
-      parsed.trainingSessions ??= [...SEED_TRAINING_SESSIONS];
-      parsed.attendanceRecords ??= [...SEED_ATTENDANCE];
-      parsed.trainingPlans ??= [...SEED_TRAINING_PLANS];
-      parsed.planItems ??= [...SEED_PLAN_ITEMS];
-      parsed.assessments ??= [...SEED_ASSESSMENTS];
-      parsed.athleteFees ??= [...SEED_FEES];
-      parsed.feePayments ??= [...SEED_FEE_PAYMENTS];
-      parsed.feeSchedules ??= [];
-      parsed.invoices ??= [...SEED_INVOICES];
-      parsed.invites ??= [...SEED_INVITES];
-      parsed.announcements ??= [...SEED_ANNOUNCEMENTS];
-      parsed.announcementReads ??= [];
-      parsed.conversations ??= [...SEED_CONVERSATIONS];
-      parsed.messages ??= [...SEED_MESSAGES];
-
-      // Ensure platform super admin heavylaws is present
-      if (!parsed.users.some((u) => u._id === "usr_heavylaws" || u.email?.toLowerCase().includes("heavylaws"))) {
-        parsed.users = [...SEED_USERS];
-      }
-
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      return parsed;
-    } catch {
-      return getInitialDb();
     }
+    return getInitialDb();
   }
 
   private changeListeners: Set<() => void> = new Set();
 
   private saveDb(): void {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
-      for (const listener of this.changeListeners) {
-        try {
-          listener();
-        } catch (e) {
-          console.error("LocalMockStore change listener error", e);
-        }
+    // In-memory changes only; real persistence is managed by Firestore.
+    for (const listener of this.changeListeners) {
+      try {
+        listener();
+      } catch (e) {
+        console.error("LocalMockStore change listener error", e);
       }
-    } catch (e) {
-      console.error("Failed to save mock db to localStorage", e);
     }
   }
 
@@ -263,9 +234,6 @@ class LocalMockStore {
       }
     }
     if (changed) {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
-      }
       this.notifyAll();
     }
     return changed;
@@ -275,8 +243,16 @@ class LocalMockStore {
     this.db = getInitialDb();
     this.currentUserId = "usr_heavylaws";
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
-      window.localStorage.setItem(PERSONA_KEY, "usr_heavylaws");
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem("hercules_local_mock_db_v1");
+        window.localStorage.removeItem("coachtactics_clean_db_v2");
+        window.localStorage.removeItem("coachtactics_clean_db_v3");
+        window.localStorage.removeItem("coachtactics_saved_drills");
+        window.localStorage.setItem(PERSONA_KEY, "usr_heavylaws");
+      } catch {
+        // Ignored
+      }
     }
     this.notifyAll();
     this.notifyAuth();
@@ -321,6 +297,30 @@ class LocalMockStore {
     return this.db.users;
   }
 
+  public setCurrentUser(user: Partial<MockUser> & { _id: string }): void {
+    const existingIdx = this.db.users.findIndex((u) => u._id === user._id);
+    if (existingIdx >= 0) {
+      this.db.users[existingIdx] = { ...this.db.users[existingIdx], ...user } as MockUser;
+    } else {
+      this.db.users.push({
+        name: user.name || user.email?.split("@")[0] || "User",
+        email: user.email || "",
+        role: user.role,
+        academyId: user.academyId ?? (this.db.academies[0]?._id ?? "acad_heavylaws"),
+        tokenIdentifier: `mock|${user._id}`,
+        ...user,
+        _id: user._id,
+      } as MockUser);
+    }
+    this.currentUserId = user._id;
+    this.saveDb();
+    this.notifyAuth();
+  }
+
+  public getActiveAcademyId(): string | undefined {
+    return this.getCurrentUser()?.academyId ?? this.db.academies[0]?._id;
+  }
+
   public setPersona(userId: string | null): void {
     this.currentUserId = userId;
     if (userId && !this.db.users.some((u) => u._id === userId)) {
@@ -331,6 +331,7 @@ class LocalMockStore {
         usr_athlete_2: "Elena Rostova",
         usr_sara_awally: "Sara Awally",
         usr_admin: "Alex Thorne",
+        usr_accounting: "Finance Manager",
         usr_super_admin: "Ahmad Baalbaki",
         usr_heavylaws: "heavylaws",
       };
@@ -340,12 +341,21 @@ class LocalMockStore {
         usr_athlete_1: "athlete",
         usr_athlete_2: "athlete",
         usr_sara_awally: "academy_admin",
+        usr_accounting: "accounting",
         usr_super_admin: "platform_admin",
         usr_admin: "academy_admin",
         usr_heavylaws: "platform_admin",
       };
       const name = knownNames[userId] ?? userId.replace("usr_", "").replace(/[._]/g, " ");
-      const role = knownRoles[userId] ?? (userId.includes("admin") ? "academy_admin" : userId.includes("coach") ? "coach" : "athlete");
+      const role =
+        knownRoles[userId] ??
+        (userId.includes("accounting")
+          ? "accounting"
+          : userId.includes("admin")
+            ? "academy_admin"
+            : userId.includes("coach")
+              ? "coach"
+              : "athlete");
       this.db.users.push({
         _id: userId,
         name,
@@ -375,6 +385,7 @@ class LocalMockStore {
       { _id: "usr_athlete", name: "Marcus Vance", email: "marcus.vance@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete" },
       { _id: "usr_athlete_1", name: "Marcus Vance", email: "marcus1@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete_1" },
       { _id: "usr_athlete_2", name: "Elena Rostova", email: "elena@test.local", role: "athlete", academyId: acadId, tokenIdentifier: "mock|usr_athlete_2" },
+      { _id: "usr_accounting", name: "Finance Manager", email: "finance@test.local", role: "accounting", academyId: acadId, tokenIdentifier: "mock|usr_accounting" },
       { _id: "usr_sara_awally", name: "Sara Awally", email: "sara.awally@sportzona.com", role: "academy_admin", academyId: acadId, tokenIdentifier: "mock|usr_sara_awally" },
       { _id: "usr_admin", name: "Alex Thorne", email: "alex.admin@test.local", role: "academy_admin", academyId: acadId, tokenIdentifier: "mock|usr_admin" },
     ];
@@ -574,11 +585,12 @@ class LocalMockStore {
   ): { success: boolean; user?: MockUser; error?: string } {
     const normalized = identifier.trim().toLowerCase();
 
-    // Sole authorized account: heavylaws (Super Admin)
+    // Authorized Super Admin accounts: heavylaws and ah.baalbaki@gmail.com
     const isHeavyLaws =
       normalized === "heavylaws" ||
       normalized === "heavylaws@gmail.com" ||
-      normalized === "heavylaws@coachtactics.com";
+      normalized === "heavylaws@coachtactics.com" ||
+      normalized === "ah.baalbaki@gmail.com";
 
     if (isHeavyLaws) {
       // Demo-only credential from the build environment. It is visible in the
@@ -601,6 +613,7 @@ class LocalMockStore {
         (u) =>
           u._id === "usr_heavylaws" ||
           u.name.toLowerCase() === "heavylaws" ||
+          u.email.toLowerCase() === "ah.baalbaki@gmail.com" ||
           u.email.toLowerCase() === "heavylaws@gmail.com",
       );
 
@@ -608,7 +621,7 @@ class LocalMockStore {
         superUser = {
           _id: "usr_heavylaws",
           name: "heavylaws",
-          email: "heavylaws@gmail.com",
+          email: "ah.baalbaki@gmail.com",
           role: "platform_admin",
           academyId: this.db.academies[0]?._id ?? "acad_heavylaws",
           tokenIdentifier: "mock|user_heavylaws",
@@ -650,11 +663,16 @@ class LocalMockStore {
       return this.db.athletes.filter(
         (a) =>
           a.guardianUserId === user._id ||
+          Boolean((a as unknown as { guardianUids?: string[] }).guardianUids?.includes(user._id)) ||
           (user.email !== undefined &&
             a.guardianEmail?.toLowerCase() === user.email.toLowerCase()),
       );
     }
-    return this.db.athletes.filter((a) => a.userId === user._id);
+    return this.db.athletes.filter(
+      (a) =>
+        a.userId === user._id ||
+        (user.email !== undefined && a.email?.toLowerCase() === user.email.toLowerCase()),
+    );
   }
 
   private freePin(academyId: string): string {
@@ -1351,6 +1369,12 @@ class LocalMockStore {
 
       case "trainingPlans:listPlansForAthlete": {
         const athleteId = args.athleteId as string;
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          if (!myAthletes.some((a) => a._id === athleteId)) {
+            return [];
+          }
+        }
         return this.db.trainingPlans.filter((p) => p.athleteId === athleteId);
       }
 
@@ -1358,6 +1382,12 @@ class LocalMockStore {
         const planId = args.planId as string;
         const plan = this.db.trainingPlans.find((p) => p._id === planId);
         if (!plan) throw new Error("Plan not found");
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          if (!myAthletes.some((a) => a._id === plan.athleteId)) {
+            throw new Error("Access denied: Not your athlete's plan");
+          }
+        }
         const athlete =
           this.db.athletes.find((a) => a._id === plan.athleteId) ?? null;
         const items = this.db.planItems
@@ -1368,6 +1398,12 @@ class LocalMockStore {
 
       case "assessments:listAssessmentsForAthlete": {
         const athleteId = args.athleteId as string;
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          if (!myAthletes.some((a) => a._id === athleteId)) {
+            return [];
+          }
+        }
         const records = this.db.assessments
           .filter((ass) => ass.athleteId === athleteId)
           .sort((a, b) => a.assessedOn.localeCompare(b.assessedOn));
@@ -1412,9 +1448,13 @@ class LocalMockStore {
 
       case "assessments:listAssessmentsForSession": {
         const sessionId = args.sessionId as string;
-        const records = this.db.assessments
-          .filter((ass) => ass.sessionId === sessionId)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        let records = this.db.assessments.filter((ass) => ass.sessionId === sessionId);
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          const myAthleteIds = new Set(myAthletes.map((a) => a._id));
+          records = records.filter((r) => myAthleteIds.has(r.athleteId));
+        }
+        records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
         const athleteMap = new Map(this.db.athletes.map((a) => [a._id, a]));
         return records.map((r) => {
@@ -1432,6 +1472,11 @@ class LocalMockStore {
         let records = this.db.assessments || [];
         if (academyId) {
           records = records.filter((r) => r.academyId === academyId);
+        }
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          const myAthleteIds = new Set(myAthletes.map((a) => a._id));
+          records = records.filter((r) => myAthleteIds.has(r.athleteId));
         }
         const metric = args.metric as string | undefined;
         if (metric) {
@@ -1452,10 +1497,17 @@ class LocalMockStore {
 
       case "fees:listFees":
       case "fees:listFeesForAcademy": {
-        if (!academyId) return [];
-        let fees = this.db.athleteFees.filter((f) => f.academyId === academyId);
+        const myAthletes = (user?.role === "athlete" || user?.role === "guardian") ? this.ownAthletes(user) : [];
+        const targetAcademyId = (args.academyId as string) || academyId || myAthletes[0]?.academyId;
+        if (!targetAcademyId && myAthletes.length === 0) return [];
+        let fees = targetAcademyId ? this.db.athleteFees.filter((f) => f.academyId === targetAcademyId) : this.db.athleteFees;
         if (args.status) {
           fees = fees.filter((f) => f.status === args.status);
+        }
+
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthleteIds = new Set(myAthletes.map((a) => a._id));
+          fees = fees.filter((f) => myAthleteIds.has(f.athleteId));
         }
 
         const athleteMap = new Map(this.db.athletes.map((a) => [a._id, a]));
@@ -1467,6 +1519,7 @@ class LocalMockStore {
           const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0);
           return {
             ...fee,
+            currency: fee.currency || "USD",
             athleteName: athlete
               ? `${athlete.firstName} ${athlete.lastName}`
               : "Unknown",
@@ -1479,6 +1532,13 @@ class LocalMockStore {
 
       case "fees:listFeesForAthlete": {
         const athleteId = args.athleteId as string;
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthletes = this.ownAthletes(user);
+          if (!myAthletes.some((a) => a._id === athleteId)) {
+            return [];
+          }
+        }
+
         const fees = this.db.athleteFees.filter(
           (f) => f.athleteId === athleteId,
         );
@@ -1489,6 +1549,7 @@ class LocalMockStore {
           const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0);
           return {
             ...fee,
+            currency: fee.currency || "USD",
             payments,
             totalPaid,
             remainingBalance: Math.max(0, fee.amountDue - totalPaid),
@@ -1497,17 +1558,25 @@ class LocalMockStore {
       }
 
       case "invoices:listInvoicesForAcademy": {
-        if (!academyId) return [];
-        let invoices = this.db.invoices.filter(
-          (i) => i.academyId === academyId,
-        );
+        const myAthletes = (user?.role === "athlete" || user?.role === "guardian") ? this.ownAthletes(user) : [];
+        const targetAcademyId = (args.academyId as string) || academyId || myAthletes[0]?.academyId;
+        if (!targetAcademyId && myAthletes.length === 0) return [];
+        let invoices = targetAcademyId ? this.db.invoices.filter(
+          (i) => i.academyId === targetAcademyId,
+        ) : this.db.invoices;
         if (args.status) {
           invoices = invoices.filter((i) => i.status === args.status);
+        }
+
+        if (user?.role === "athlete" || user?.role === "guardian") {
+          const myAthleteIds = new Set(myAthletes.map((a) => a._id));
+          invoices = invoices.filter((i) => i.athleteId && myAthleteIds.has(i.athleteId));
         }
 
         const athleteMap = new Map(this.db.athletes.map((a) => [a._id, a]));
         return invoices.map((inv) => ({
           ...inv,
+          currency: inv.currency || "USD",
           athleteName: inv.athleteId
             ? athleteMap.get(inv.athleteId)
               ? `${athleteMap.get(inv.athleteId)!.firstName} ${athleteMap.get(inv.athleteId)!.lastName}`
@@ -1619,8 +1688,9 @@ class LocalMockStore {
       }
 
       case "announcements:listAnnouncements": {
-        if (!academyId) return [];
-        const all = this.db.announcements.filter((a) => a.academyId === academyId);
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId) return [];
+        const all = this.db.announcements.filter((a) => a.academyId === targetAcademyId);
         const reads = new Set(
           (this.db.announcementReads || [])
             .filter((r) => r.userId === user?._id)
@@ -1632,7 +1702,7 @@ class LocalMockStore {
           if (a.targetTeamId && args.teamId && a.targetTeamId !== args.teamId) {
             if (user?.role === "athlete") return false;
           }
-          if (a.targetRole && a.targetRole !== user?.role && user?.role !== "academy_admin") {
+          if (a.targetRole && a.targetRole !== user?.role && user?.role !== "academy_admin" && user?.role !== "platform_admin") {
             return false;
           }
           return true;
@@ -1654,8 +1724,9 @@ class LocalMockStore {
       }
 
       case "announcements:getUnreadCount": {
-        if (!academyId || !user) return 0;
-        const all = this.db.announcements.filter((a) => a.academyId === academyId);
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId || !user) return 0;
+        const all = this.db.announcements.filter((a) => a.academyId === targetAcademyId);
         const reads = new Set(
           (this.db.announcementReads || [])
             .filter((r) => r.userId === user._id)
@@ -1665,16 +1736,19 @@ class LocalMockStore {
       }
 
       case "messages:listConversations": {
-        if (!academyId || !user) return [];
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId || !user) return [];
         const allConvs = this.db.conversations.filter(
           (c) =>
-            c.academyId === academyId && c.participantIds.includes(user._id),
+            c.academyId === targetAcademyId &&
+            ((c.participantUids || c.participantIds).includes(user._id)),
         );
 
         const userMap = new Map(this.db.users.map((u) => [u._id, u]));
 
         const results = allConvs.map((c) => {
-          const otherId = c.participantIds.find((id) => id !== user._id);
+          const parts = c.participantUids || c.participantIds;
+          const otherId = parts.find((id) => id !== user._id);
           const otherUser = otherId ? userMap.get(otherId) : user;
           const unreadCount = this.db.messages.filter(
             (m) => m.conversationId === c._id && !m.readBy.includes(user._id),
@@ -1705,14 +1779,16 @@ class LocalMockStore {
         const conversationId = args.conversationId as string;
         const conv = this.db.conversations.find((c) => c._id === conversationId);
         if (!conv) throw new Error("Conversation not found");
+        const parts = conv.participantUids || conv.participantIds;
         if (
-          !conv.participantIds.includes(user?._id ?? "") &&
-          user?.role !== "academy_admin"
+          !parts.includes(user?._id ?? "") &&
+          user?.role !== "academy_admin" &&
+          user?.role !== "platform_admin"
         ) {
           throw new Error("Forbidden: not a participant");
         }
         const userMap = new Map(this.db.users.map((u) => [u._id, u]));
-        const participants = conv.participantIds
+        const participants = parts
           .map((id) => userMap.get(id))
           .filter(Boolean);
         return {
@@ -1725,9 +1801,11 @@ class LocalMockStore {
         const conversationId = args.conversationId as string;
         const conv = this.db.conversations.find((c) => c._id === conversationId);
         if (!conv) throw new Error("Conversation not found");
+        const parts = conv.participantUids || conv.participantIds;
         if (
-          !conv.participantIds.includes(user?._id ?? "") &&
-          user?.role !== "academy_admin"
+          !parts.includes(user?._id ?? "") &&
+          user?.role !== "academy_admin" &&
+          user?.role !== "platform_admin"
         ) {
           throw new Error("Forbidden: not a participant");
         }
@@ -1746,10 +1824,12 @@ class LocalMockStore {
       }
 
       case "messages:getUnreadMessagesCount": {
-        if (!academyId || !user) return 0;
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId || !user) return 0;
         const userConvs = this.db.conversations.filter(
           (c) =>
-            c.academyId === academyId && c.participantIds.includes(user._id),
+            c.academyId === targetAcademyId &&
+            ((c.participantUids || c.participantIds).includes(user._id)),
         );
         const convIds = new Set(userConvs.map((c) => c._id));
         return this.db.messages.filter(
@@ -1821,6 +1901,7 @@ class LocalMockStore {
         this.db.trainingSessions.unshift(newSession);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createSession(academyId, newSession).catch(console.warn);
         return newSession._id;
       }
 
@@ -1837,11 +1918,13 @@ class LocalMockStore {
         session.notes = args.notes as string | undefined;
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.updateSession(session.academyId, sessionId, session).catch(console.warn);
         return null;
       }
 
       case "trainingSessions:deleteSession": {
         const sessionId = args.sessionId as string;
+        const targetSession = this.db.trainingSessions.find((s) => s._id === sessionId);
         this.db.trainingSessions = this.db.trainingSessions.filter(
           (s) => s._id !== sessionId,
         );
@@ -1850,6 +1933,9 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+        if (targetSession) {
+          academyFirestoreService.deleteSession(targetSession.academyId, sessionId).catch(console.warn);
+        }
         return null;
       }
 
@@ -1859,24 +1945,31 @@ class LocalMockStore {
         const athleteId = args.athleteId as string;
         const status = args.status as MockAttendanceRecord["status"];
 
+        let rec: MockAttendanceRecord;
         const existing = this.db.attendanceRecords.find(
           (a) => a.sessionId === sessionId && a.athleteId === athleteId,
         );
         if (existing) {
           existing.status = status;
           existing.markedAt = nowIso;
+          rec = existing;
         } else {
-          this.db.attendanceRecords.push({
+          rec = {
             _id: `att_${Date.now()}`,
             sessionId,
             athleteId,
             status,
             markedAt: nowIso,
             markedBy: user?._id ?? "usr_admin",
-          });
+          };
+          this.db.attendanceRecords.push(rec);
         }
         this.saveDb();
         this.notifyAll();
+        const targetSess = this.db.trainingSessions.find((s) => s._id === sessionId);
+        if (targetSess) {
+          academyFirestoreService.setAttendanceRecord(targetSess.academyId, rec).catch(console.warn);
+        }
         return null;
       }
 
@@ -1893,6 +1986,7 @@ class LocalMockStore {
         this.db.teams.unshift(newTeam);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createTeam(academyId, newTeam).catch(console.warn);
         return newTeam._id;
       }
 
@@ -1904,11 +1998,13 @@ class LocalMockStore {
         team.sport = args.sport as string | undefined;
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.updateTeam(team.academyId, teamId, team).catch(console.warn);
         return null;
       }
 
       case "teams:deleteTeam": {
         const teamId = args.teamId as string;
+        const targetTeam = this.db.teams.find((t) => t._id === teamId);
         this.db.teams = this.db.teams.filter((t) => t._id !== teamId);
         this.db.teamMembers = this.db.teamMembers.filter(
           (m) => m.teamId !== teamId,
@@ -1926,6 +2022,9 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+        if (targetTeam) {
+          academyFirestoreService.deleteTeam(targetTeam.academyId, teamId).catch(console.warn);
+        }
         return null;
       }
 
@@ -1935,24 +2034,32 @@ class LocalMockStore {
         this.db.teamMembers = this.db.teamMembers.filter(
           (m) => m.teamId !== teamId,
         );
+        const newMembers: MockTeamMember[] = [];
         for (const athId of athleteIds) {
-          this.db.teamMembers.push({
+          const tm: MockTeamMember = {
             _id: `tm_${Date.now()}_${athId}`,
             teamId,
             athleteId: athId,
             joinedAt: nowIso,
-          });
+          };
+          this.db.teamMembers.push(tm);
+          newMembers.push(tm);
         }
         this.saveDb();
         this.notifyAll();
+        const team = this.db.teams.find((t) => t._id === teamId);
+        if (team) {
+          academyFirestoreService.setTeamRoster(team.academyId, teamId, athleteIds, newMembers).catch(console.warn);
+        }
         return null;
       }
 
       case "athletes:createAthlete": {
         const targetAcademyId = (args.academyId as string) || academyId;
         if (!targetAcademyId) throw new Error("No academy");
+        const randSuffix = Math.random().toString(36).substring(2, 7);
         const newAthlete: MockAthlete = {
-          _id: `ath_${Date.now()}`,
+          _id: `ath_${Date.now()}_${randSuffix}`,
           academyId: targetAcademyId,
           firstName: (args.firstName as string).trim(),
           lastName: (args.lastName as string).trim(),
@@ -1978,13 +2085,13 @@ class LocalMockStore {
           let athUser = this.db.users.find((u) => u.email.toLowerCase() === athleteEmail);
           if (!athUser) {
             athUser = {
-              _id: `usr_${Date.now()}_ath`,
+              _id: `usr_${Date.now()}_${randSuffix}_ath`,
               name: `${newAthlete.firstName} ${newAthlete.lastName}`.trim(),
               email: athleteEmail,
               password: athletePassword,
               role: "athlete",
               academyId: targetAcademyId,
-              tokenIdentifier: `mock|ath_${Date.now()}`,
+              tokenIdentifier: `mock|ath_${Date.now()}_${randSuffix}`,
             };
             this.db.users.push(athUser);
             this.provisionedPasswords.set(athleteEmail, athletePassword);
@@ -2003,13 +2110,13 @@ class LocalMockStore {
           let guardUser = this.db.users.find((u) => u.email.toLowerCase() === guardianEmail);
           if (!guardUser) {
             guardUser = {
-              _id: `usr_${Date.now()}_guard`,
+              _id: `usr_${Date.now()}_${randSuffix}_guard`,
               name: (args.guardianName as string) || "Parent / Guardian",
               email: guardianEmail,
               password: guardianPassword,
               role: "guardian",
               academyId: targetAcademyId,
-              tokenIdentifier: `mock|guard_${Date.now()}`,
+              tokenIdentifier: `mock|guard_${Date.now()}_${randSuffix}`,
             };
             this.db.users.push(guardUser);
             this.provisionedPasswords.set(guardianEmail, guardianPassword);
@@ -2023,6 +2130,7 @@ class LocalMockStore {
         this.db.athletes.unshift(newAthlete);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createAthlete(targetAcademyId, newAthlete, newAthlete.checkInPin).catch(console.warn);
         return newAthlete._id;
       }
 
@@ -2049,6 +2157,7 @@ class LocalMockStore {
         });
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.updateAthlete(athlete.academyId, athleteId, athlete).catch(console.warn);
         return null;
       }
 
@@ -2057,6 +2166,7 @@ class LocalMockStore {
         if (!athlete) throw new Error("Athlete not found");
         athlete.checkInPin = this.freePin(athlete.academyId);
         this.saveDb();
+        academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin).catch(console.warn);
         return athlete.checkInPin;
       }
 
@@ -2066,6 +2176,7 @@ class LocalMockStore {
           if (athlete.academyId !== academyId || athlete.checkInPin) continue;
           if (athlete.status !== "active") continue;
           athlete.checkInPin = this.freePin(athlete.academyId);
+          academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin).catch(console.warn);
           assigned++;
         }
         this.saveDb();
@@ -2079,6 +2190,7 @@ class LocalMockStore {
           athlete.status = args.status as "active" | "inactive";
           this.saveDb();
           this.notifyAll();
+          academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { status: athlete.status }).catch(console.warn);
         }
         return null;
       }
@@ -2145,8 +2257,9 @@ class LocalMockStore {
 
       case "trainingPlans:createPlan": {
         if (!academyId) throw new Error("No academy");
+        const athlete = this.db.athletes.find((a) => a._id === (args.athleteId as string));
         const newPlan: MockTrainingPlan = {
-          _id: `plan_${Date.now()}`,
+          _id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           academyId,
           athleteId: args.athleteId as string,
           title: (args.title as string).trim(),
@@ -2160,6 +2273,16 @@ class LocalMockStore {
         this.db.trainingPlans.unshift(newPlan);
         this.saveDb();
         this.notifyAll();
+
+        academyFirestoreService
+          .createTrainingPlan(
+            academyId,
+            newPlan,
+            athlete?.userId,
+            athlete?.guardianUserId ? [athlete.guardianUserId] : [],
+          )
+          .catch((err) => console.warn("Firestore sync failed for createTrainingPlan:", err));
+
         return newPlan._id;
       }
 
@@ -2175,6 +2298,19 @@ class LocalMockStore {
           plan.status = args.status as MockTrainingPlan["status"];
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .updateTrainingPlan(academyId, planId, {
+              title: plan.title,
+              description: plan.description,
+              startDate: plan.startDate,
+              endDate: plan.endDate,
+              status: plan.status,
+            })
+            .catch((err) => console.warn("Firestore sync failed for updateTrainingPlan:", err));
+        }
+
         return null;
       }
 
@@ -2188,16 +2324,25 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .deleteTrainingPlan(academyId, planId)
+            .catch((err) => console.warn("Firestore sync failed for deleteTrainingPlan:", err));
+        }
+
         return null;
       }
 
       case "trainingPlans:addPlanItem": {
         const planId = args.planId as string;
+        const plan = this.db.trainingPlans.find((p) => p._id === planId);
+        const athlete = plan ? this.db.athletes.find((a) => a._id === plan.athleteId) : undefined;
         const existingCount = this.db.planItems.filter(
           (i) => i.planId === planId,
         ).length;
         const newItem: MockPlanItem = {
-          _id: `pitem_${Date.now()}`,
+          _id: `pitem_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           planId,
           exercise: (args.exercise as string).trim(),
           target: args.target as string | undefined,
@@ -2208,6 +2353,18 @@ class LocalMockStore {
         this.db.planItems.push(newItem);
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .createPlanItem(
+              academyId,
+              newItem,
+              athlete?.userId,
+              athlete?.guardianUserId ? [athlete.guardianUserId] : [],
+            )
+            .catch((err) => console.warn("Firestore sync failed for createPlanItem:", err));
+        }
+
         return newItem._id;
       }
 
@@ -2224,6 +2381,19 @@ class LocalMockStore {
         if (args.result !== undefined) item.result = args.result as string;
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .updatePlanItem(academyId, itemId, {
+              exercise: item.exercise,
+              target: item.target,
+              notes: item.notes,
+              completed: item.completed,
+              result: item.result,
+            })
+            .catch((err) => console.warn("Firestore sync failed for updatePlanItem:", err));
+        }
+
         return null;
       }
 
@@ -2232,6 +2402,13 @@ class LocalMockStore {
         this.db.planItems = this.db.planItems.filter((i) => i._id !== itemId);
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .deletePlanItem(academyId, itemId)
+            .catch((err) => console.warn("Firestore sync failed for deletePlanItem:", err));
+        }
+
         return null;
       }
 
@@ -2286,6 +2463,11 @@ class LocalMockStore {
         this.db.drills.unshift(newDrill);
         this.saveDb();
         this.notifyAll();
+
+        academyFirestoreService
+          .createDrill(academyId, newDrill)
+          .catch((err) => console.warn("Firestore sync failed for createDrill:", err));
+
         return newDrill._id;
       }
 
@@ -2302,12 +2484,20 @@ class LocalMockStore {
         this.db.drills = (this.db.drills || []).filter((d) => d._id !== drillId);
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .deleteDrill(academyId, drillId)
+            .catch((err) => console.warn("Firestore sync failed for deleteDrill:", err));
+        }
+
         return null;
       }
 
       case "assessments:recordAssessment":
       case "assessments:addAssessment": {
         if (!academyId) throw new Error("No academy");
+        const athlete = this.db.athletes.find((a) => a._id === (args.athleteId as string));
         const newAssessment: MockAssessment = {
           _id: `ass_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           academyId,
@@ -2324,6 +2514,16 @@ class LocalMockStore {
         this.db.assessments.unshift(newAssessment);
         this.saveDb();
         this.notifyAll();
+
+        academyFirestoreService
+          .recordAssessment(
+            academyId,
+            newAssessment,
+            athlete?.userId,
+            athlete?.guardianUserId ? [athlete.guardianUserId] : [],
+          )
+          .catch((err) => console.warn("Firestore sync failed for recordAssessment:", err));
+
         return newAssessment._id;
       }
 
@@ -2338,6 +2538,7 @@ class LocalMockStore {
         const insertedIds: string[] = [];
         for (const entry of entries) {
           if (entry.value !== undefined && !isNaN(entry.value)) {
+            const athlete = this.db.athletes.find((a) => a._id === entry.athleteId);
             const newAssessment: MockAssessment = {
               _id: `ass_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
               academyId,
@@ -2353,6 +2554,15 @@ class LocalMockStore {
             };
             this.db.assessments.unshift(newAssessment);
             insertedIds.push(newAssessment._id);
+
+            academyFirestoreService
+              .recordAssessment(
+                academyId,
+                newAssessment,
+                athlete?.userId,
+                athlete?.guardianUserId ? [athlete.guardianUserId] : [],
+              )
+              .catch((err) => console.warn("Firestore sync failed for batch recordAssessment:", err));
           }
         }
         this.saveDb();
@@ -2367,6 +2577,13 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+
+        if (academyId) {
+          academyFirestoreService
+            .deleteAssessment(academyId, assessmentId)
+            .catch((err) => console.warn("Firestore sync failed for deleteAssessment:", err));
+        }
+
         return null;
       }
 
@@ -2397,7 +2614,7 @@ class LocalMockStore {
               d.setUTCDate(d.getUTCDate() + 7);
               dueDate = d.toISOString().slice(0, 10);
             }
-            this.db.athleteFees.unshift({
+            const newFee: MockAthleteFee = {
               _id: `fee_${Date.now()}_${athleteId}`,
               academyId,
               athleteId,
@@ -2408,7 +2625,9 @@ class LocalMockStore {
               status: "unpaid",
               createdBy: schedule.createdBy,
               createdAt: nowIso,
-            });
+            };
+            this.db.athleteFees.unshift(newFee);
+            academyFirestoreService.createFee(academyId, newFee).catch(console.warn);
           }
         }
         this.saveDb();
@@ -2435,10 +2654,20 @@ class LocalMockStore {
       }
 
       case "fees:createFee": {
-        if (!academyId) throw new Error("No academy");
+        const athlete = this.db.athletes.find((a) => a._id === (args.athleteId as string));
+        const targetAcademyId = (args.academyId as string) || athlete?.academyId || academyId;
+        if (!targetAcademyId) throw new Error("No academy");
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update fees");
+        }
         const newFee: MockAthleteFee = {
           _id: `fee_${Date.now()}`,
-          academyId,
+          academyId: targetAcademyId,
           athleteId: args.athleteId as string,
           label: (args.label as string).trim(),
           amountDue: Number(args.amountDue),
@@ -2452,23 +2681,33 @@ class LocalMockStore {
         this.db.athleteFees.unshift(newFee);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createFee(targetAcademyId, newFee).catch(console.warn);
         return newFee._id;
       }
 
       case "fees:recordPayment": {
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update fees");
+        }
         const feeId = args.feeId as string;
         const amountPaid = Number(args.amountPaid);
         const fee = this.db.athleteFees.find((f) => f._id === feeId);
         if (!fee) throw new Error("Fee not found");
 
-        this.db.feePayments.push({
+        const newPayment: MockFeePayment = {
           _id: `pay_${Date.now()}`,
           feeId,
           amountPaid,
           paidAt: nowIso,
           recordedBy: user?._id ?? "usr_accounting",
           notes: args.notes as string | undefined,
-        });
+        };
+        this.db.feePayments.push(newPayment);
 
         const allPayments = this.db.feePayments.filter(
           (p) => p.feeId === feeId,
@@ -2478,10 +2717,19 @@ class LocalMockStore {
         fee.status = totalPaid >= fee.amountDue ? "paid" : "partially_paid";
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.recordFeePayment(fee.academyId, newPayment, fee).catch(console.warn);
         return null;
       }
 
       case "fees:updateFeeStatus": {
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update fees");
+        }
         const feeId = args.feeId as string;
         const fee = this.db.athleteFees.find((f) => f._id === feeId);
         if (fee) {
@@ -2489,12 +2737,22 @@ class LocalMockStore {
           if (args.notes) fee.notes = args.notes as string;
           this.saveDb();
           this.notifyAll();
+          academyFirestoreService.updateFee(fee.academyId, feeId, { status: fee.status, notes: fee.notes }).catch(console.warn);
         }
         return null;
       }
 
       case "fees:deleteFee": {
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update fees");
+        }
         const feeId = args.feeId as string;
+        const targetFee = this.db.athleteFees.find((f) => f._id === feeId);
         this.db.athleteFees = this.db.athleteFees.filter(
           (f) => f._id !== feeId,
         );
@@ -2503,12 +2761,25 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+        if (targetFee) {
+          academyFirestoreService.deleteFee(targetFee.academyId, feeId).catch(console.warn);
+        }
         return null;
       }
 
       case "invoices:createInvoice": {
-        if (!academyId) throw new Error("No academy");
-        const academy = this.db.academies.find((a) => a._id === academyId);
+        const athlete = args.athleteId ? this.db.athletes.find((a) => a._id === (args.athleteId as string)) : undefined;
+        const targetAcademyId = (args.academyId as string) || athlete?.academyId || academyId;
+        if (!targetAcademyId) throw new Error("No academy");
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update invoices");
+        }
+        const academy = this.db.academies.find((a) => a._id === targetAcademyId);
         const nextNum =
           academy?.nextInvoiceNumber ?? this.db.invoices.length + 1;
         if (academy) {
@@ -2518,7 +2789,7 @@ class LocalMockStore {
         const invoiceNumber = `INV-${String(nextNum).padStart(4, "0")}`;
         const newInvoice: MockInvoice = {
           _id: `inv_${Date.now()}`,
-          academyId,
+          academyId: targetAcademyId,
           athleteId: args.athleteId as string | undefined,
           invoiceNumber,
           description: (args.description as string).trim(),
@@ -2533,10 +2804,19 @@ class LocalMockStore {
         this.db.invoices.unshift(newInvoice);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createInvoice(targetAcademyId, newInvoice).catch(console.warn);
         return newInvoice._id;
       }
 
       case "invoices:updateInvoiceStatus": {
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can create or update invoices");
+        }
         const invoiceId = args.invoiceId as string;
         const invoice = this.db.invoices.find((i) => i._id === invoiceId);
         if (invoice) {
@@ -2546,6 +2826,10 @@ class LocalMockStore {
           }
           this.saveDb();
           this.notifyAll();
+          academyFirestoreService.updateInvoice(invoice.academyId, invoiceId, {
+            status: invoice.status,
+            paidAt: invoice.paidAt,
+          }).catch(console.warn);
         }
         return null;
       }
@@ -2739,13 +3023,15 @@ class LocalMockStore {
       }
 
       case "announcements:createAnnouncement": {
-        if (!academyId) throw new Error("No academy");
-        if (!user || (user.role !== "academy_admin" && user.role !== "coach")) {
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId) throw new Error("No academy");
+        if (!user || (user.role !== "academy_admin" && user.role !== "coach" && user.role !== "platform_admin")) {
           throw new Error("Forbidden: only academy admin or coach can broadcast announcements");
         }
+        const randSuffix = Math.random().toString(36).substring(2, 7);
         const newAnn: MockAnnouncement = {
-          _id: `ann_${Date.now()}`,
-          academyId,
+          _id: `ann_${Date.now()}_${randSuffix}`,
+          academyId: targetAcademyId,
           title: (args.title as string).trim(),
           content: (args.content as string).trim(),
           category: args.category as MockAnnouncement["category"],
@@ -2761,11 +3047,13 @@ class LocalMockStore {
         this.db.announcements.unshift(newAnn);
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.createAnnouncement(targetAcademyId, newAnn).catch(console.warn);
         return newAnn._id;
       }
 
       case "announcements:deleteAnnouncement": {
         const announcementId = args.announcementId as string;
+        const targetAnn = this.db.announcements.find((a) => a._id === announcementId);
         this.db.announcements = this.db.announcements.filter(
           (a) => a._id !== announcementId,
         );
@@ -2774,6 +3062,9 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+        if (targetAnn) {
+          academyFirestoreService.deleteAnnouncement(targetAnn.academyId, announcementId).catch(console.warn);
+        }
         return null;
       }
 
@@ -2834,22 +3125,26 @@ class LocalMockStore {
           (r) => r.sessionId === sessionId && r.athleteId === targetAthlete!._id,
         );
 
+        let rec: MockAttendanceRecord;
         if (existing) {
           existing.status = status;
           existing.markedAt = nowIso;
           existing.markedBy = user?._id ?? "usr_admin";
+          rec = existing;
         } else {
-          this.db.attendanceRecords.push({
+          rec = {
             _id: `att_${Date.now()}_${targetAthlete._id}`,
             sessionId,
             athleteId: targetAthlete._id,
             status,
             markedAt: nowIso,
             markedBy: user?._id ?? "usr_admin",
-          });
+          };
+          this.db.attendanceRecords.push(rec);
         }
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.setAttendanceRecord(session.academyId, rec).catch(console.warn);
 
         return {
           success: true,
@@ -2866,11 +3161,20 @@ class LocalMockStore {
       case "trainingSessions:undoCheckIn": {
         const sessionId = args.sessionId as string;
         const athleteId = args.athleteId as string;
+        const toDelete = this.db.attendanceRecords.find(
+          (r) => r.sessionId === sessionId && r.athleteId === athleteId,
+        );
         this.db.attendanceRecords = this.db.attendanceRecords.filter(
           (r) => !(r.sessionId === sessionId && r.athleteId === athleteId),
         );
         this.saveDb();
         this.notifyAll();
+        if (toDelete) {
+          const sess = this.db.trainingSessions.find((s) => s._id === sessionId);
+          if (sess) {
+            academyFirestoreService.deleteAttendanceRecord(sess.academyId, toDelete._id).catch(console.warn);
+          }
+        }
         return null;
       }
 
@@ -2882,15 +3186,18 @@ class LocalMockStore {
 
         const conv = this.db.conversations.find((c) => c._id === conversationId);
         if (!conv) throw new Error("Conversation not found");
+        const participantUids = conv.participantUids || conv.participantIds || [];
         if (
-          !conv.participantIds.includes(user._id) &&
-          user.role !== "academy_admin"
+          !participantUids.includes(user._id) &&
+          user.role !== "academy_admin" &&
+          user.role !== "platform_admin"
         ) {
           throw new Error("Forbidden: not a participant");
         }
 
+        const randSuffix = Math.random().toString(36).substring(2, 7);
         const newMsg: MockMessage = {
-          _id: `msg_${Date.now()}`,
+          _id: `msg_${Date.now()}_${randSuffix}`,
           conversationId,
           academyId: conv.academyId,
           senderId: user._id,
@@ -2906,16 +3213,19 @@ class LocalMockStore {
 
         this.saveDb();
         this.notifyAll();
+        academyFirestoreService.sendMessage(conv.academyId, conversationId, newMsg).catch(console.warn);
         return newMsg._id;
       }
 
       case "messages:getOrCreateConversation": {
-        if (!user || !academyId) throw new Error("Unauthenticated");
+        if (!user) throw new Error("Unauthenticated");
+        const targetAcademyId = (args.academyId as string) || academyId;
+        if (!targetAcademyId) throw new Error("No academy");
         const targetUserId = args.targetUserId as string;
 
         const existing = this.db.conversations.find(
           (c) =>
-            c.academyId === academyId &&
+            c.academyId === targetAcademyId &&
             c.participantIds.length === 2 &&
             c.participantIds.includes(user._id) &&
             c.participantIds.includes(targetUserId) &&
@@ -2923,6 +3233,7 @@ class LocalMockStore {
         );
 
         if (existing) {
+          existing.participantUids = existing.participantUids || existing.participantIds;
           if (args.contextType && args.contextType !== "general") {
             existing.contextType = args.contextType as MockConversation["contextType"];
           }
@@ -2934,10 +3245,11 @@ class LocalMockStore {
           }
           if (args.initialMessage && String(args.initialMessage).trim()) {
             const initialText = String(args.initialMessage).trim();
+            const randSuffix = Math.random().toString(36).substring(2, 7);
             const newMsg: MockMessage = {
-              _id: `msg_${Date.now()}`,
+              _id: `msg_${Date.now()}_${randSuffix}`,
               conversationId: existing._id,
-              academyId,
+              academyId: targetAcademyId,
               senderId: user._id,
               content: initialText,
               readBy: [user._id],
@@ -2947,16 +3259,21 @@ class LocalMockStore {
             existing.lastMessageText = initialText;
             existing.lastMessageAt = nowIso;
             existing.lastSenderId = user._id;
+            academyFirestoreService.sendMessage(targetAcademyId, existing._id, newMsg).catch(console.warn);
           }
           this.saveDb();
           this.notifyAll();
+          academyFirestoreService.updateConversation(targetAcademyId, existing._id, existing).catch(console.warn);
           return existing._id;
         }
 
+        const randSuffix = Math.random().toString(36).substring(2, 7);
+        const participantUids = [user._id, targetUserId];
         const newConv: MockConversation = {
-          _id: `conv_${Date.now()}`,
-          academyId,
-          participantIds: [user._id, targetUserId],
+          _id: `conv_${Date.now()}_${randSuffix}`,
+          academyId: targetAcademyId,
+          participantIds: participantUids,
+          participantUids,
           athleteId: args.athleteId as string | undefined,
           title: args.title as string | undefined,
           contextType:
@@ -2972,17 +3289,20 @@ class LocalMockStore {
         };
 
         this.db.conversations.unshift(newConv);
+        academyFirestoreService.createConversation(targetAcademyId, newConv).catch(console.warn);
 
         if (args.initialMessage && String(args.initialMessage).trim()) {
-          this.db.messages.push({
-            _id: `msg_${Date.now()}`,
+          const initMsg: MockMessage = {
+            _id: `msg_${Date.now()}_${randSuffix}_init`,
             conversationId: newConv._id,
-            academyId,
+            academyId: targetAcademyId,
             senderId: user._id,
             content: String(args.initialMessage).trim(),
             readBy: [user._id],
             createdAt: nowIso,
-          });
+          };
+          this.db.messages.push(initMsg);
+          academyFirestoreService.sendMessage(targetAcademyId, newConv._id, initMsg).catch(console.warn);
         }
 
         this.saveDb();

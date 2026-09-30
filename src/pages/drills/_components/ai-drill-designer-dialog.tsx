@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 
 interface AiDrillDesignerDialogProps {
   open: boolean;
@@ -148,14 +149,11 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
         });
       }
 
-      // Also persist tactical plan to local storage for instant retrieval
-      try {
-        localStorage.setItem(
-          `coachtactics_plan_${result.tacticalPlan.id}`,
-          JSON.stringify(result.tacticalPlan),
-        );
-      } catch {
-        // Ignored
+      // Persist tactical plan to Firestore under academy
+      if (result.tacticalPlan) {
+        academyFirestoreService
+          .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
+          .catch((err) => console.warn("Could not save tactical plan to Firestore:", err));
       }
 
       toast.success("Drill and Tactical Plan saved to academy playbook!");
@@ -170,11 +168,10 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
 
   const handleOpenInTacticalBoard = () => {
     if (!result) return;
-    // Save to local storage for page handoff
-    try {
-      localStorage.setItem("coachtactics_active_plan", JSON.stringify(result.tacticalPlan));
-    } catch {
-      // Ignored
+    if (result.tacticalPlan) {
+      academyFirestoreService
+        .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
+        .catch((err) => console.warn("Could not save tactical plan to Firestore:", err));
     }
     onOpenChange(false);
     navigate(`/tactical-board?drillTitle=${encodeURIComponent(result.drill.title)}`);

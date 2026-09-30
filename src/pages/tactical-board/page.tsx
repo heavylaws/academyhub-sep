@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { toast } from "sonner";
+import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
 
 const TACTICAL_PRESETS: Array<{ id: string; title: string; category: string; plan: TacticalPlan }> = [
   {
@@ -163,22 +165,61 @@ export default function TacticalBoardPage() {
   });
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>(TACTICAL_PRESETS[0].id);
+  const [savedBoards, setSavedBoards] = useState<Array<{ id: string; title: string; plan: TacticalPlan }>>([]);
+
+  useEffect(() => {
+    const user = localMockStore.getCurrentUser();
+    const academyId = user?.academyId || "acad_hercules";
+    academyFirestoreService.listTacticalBoards(academyId).then((boards) => {
+      if (boards && boards.length > 0) {
+        setSavedBoards(
+          boards.map((b) => ({
+            id: (b.id || b._id || `board_${Math.random().toString(36).substring(2, 7)}`) as string,
+            title: b.title || "Custom Tactical Board",
+            plan: b as unknown as TacticalPlan,
+          })),
+        );
+      }
+    }).catch((err) => {
+      console.warn("Could not list tactical boards from Firestore:", err);
+    });
+  }, []);
 
   const handleSelectPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
-    const found = TACTICAL_PRESETS.find((p) => p.id === presetId);
-    if (found) {
-      setActivePlan(found.plan);
-      toast.success(`Loaded preset: ${found.title}`);
+    const foundPreset = TACTICAL_PRESETS.find((p) => p.id === presetId);
+    if (foundPreset) {
+      setActivePlan(foundPreset.plan);
+      toast.success(`Loaded preset: ${foundPreset.title}`);
+      return;
+    }
+    const foundSaved = savedBoards.find((b) => b.id === presetId);
+    if (foundSaved) {
+      setActivePlan(foundSaved.plan);
+      toast.success(`Loaded saved board: ${foundSaved.title}`);
     }
   };
 
-  const handleSavePlan = (plan: TacticalPlan) => {
+  const handleSavePlan = async (plan: TacticalPlan) => {
     setActivePlan(plan);
+    const user = localMockStore.getCurrentUser();
+    const academyId = user?.academyId || "acad_hercules";
     try {
-      localStorage.setItem(`coachtactics_plan_${plan.id}`, JSON.stringify(plan));
-    } catch {
-      // Ignored
+      await academyFirestoreService.saveTacticalBoard(academyId, plan);
+      setSavedBoards((prev) => {
+        const existing = prev.findIndex((b) => b.id === plan.id);
+        const item = { id: plan.id, title: plan.title || "Tactical Board", plan };
+        if (existing >= 0) {
+          const next = [...prev];
+          next[existing] = item;
+          return next;
+        }
+        return [item, ...prev];
+      });
+      toast.success("Tactical board saved to academy Firestore!");
+    } catch (err) {
+      console.warn("Could not save tactical board to Firestore:", err);
+      toast.error("Could not save tactical board");
     }
   };
 
@@ -219,6 +260,21 @@ export default function TacticalBoardPage() {
                   <SelectValue placeholder="Select tactical preset" />
                 </SelectTrigger>
                 <SelectContent>
+                  {savedBoards.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase">
+                        Academy Saved Boards
+                      </div>
+                      {savedBoards.map((b) => (
+                        <SelectItem key={b.id} value={b.id} className="text-xs">
+                          {b.title}
+                        </SelectItem>
+                      ))}
+                      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase border-t mt-1">
+                        Tactical Presets
+                      </div>
+                    </>
+                  )}
                   {TACTICAL_PRESETS.map((preset) => (
                     <SelectItem key={preset.id} value={preset.id} className="text-xs">
                       {preset.title}

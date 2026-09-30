@@ -8,7 +8,7 @@ describe("Firebase Firestore Multi-Device Sync Engine", () => {
       handleFirestoreError(
         new Error("Missing or insufficient permissions."),
         OperationType.WRITE,
-        "academies/acad_hercules/live_state/sync",
+        "academies/acad_hercules/drills/drill_test",
       );
     }).toThrowError();
 

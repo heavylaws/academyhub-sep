@@ -204,6 +204,7 @@ export interface MockConversation {
   _id: string;
   academyId: string;
   participantIds: string[];
+  participantUids?: string[];
   athleteId?: string;
   title?: string;
   contextType?: "session" | "video" | "general";
@@ -281,7 +282,7 @@ export const SEED_USERS: MockUser[] = [
   {
     _id: "usr_heavylaws",
     name: "heavylaws",
-    email: "heavylaws@gmail.com",
+    email: "ah.baalbaki@gmail.com",
     role: "platform_admin",
     academyId: "acad_heavylaws",
     tokenIdentifier: "mock|user_heavylaws",

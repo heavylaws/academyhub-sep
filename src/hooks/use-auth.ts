@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { auth } from "@/lib/firebase.ts";
+import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
-import { isLocalDev } from "@/lib/env.ts";
 
 export interface LocalAuthUser {
   id?: string;
@@ -11,6 +10,7 @@ export interface LocalAuthUser {
   email?: string;
   avatar?: string;
   isAuthenticated: boolean;
+  isEmailUnverified?: boolean;
   isLoading: boolean;
   error: Error | null;
   profile?: {
@@ -20,149 +20,100 @@ export interface LocalAuthUser {
   };
 }
 
-function useLocalAuth() {
+export function useAuth() {
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [isLoading, setIsLoading] = useState(true);
   const [authTick, setAuthTick] = useState(0);
 
   useEffect(() => {
-    return localMockStore.subscribeAuth(() => {
+    const unsubFirebase = onAuthStateChanged(auth, (u) => {
+      setFirebaseUser(u);
+      setIsLoading(false);
+    });
+
+    const unsubMock = localMockStore.subscribeAuth(() => {
       setAuthTick((t) => t + 1);
     });
+
+    return () => {
+      unsubFirebase();
+      unsubMock();
+    };
   }, []);
 
   void authTick;
 
-  const currentUser = localMockStore.getCurrentUser();
-  const isAuthenticated = localMockStore.isAuthenticated();
+  const mockUser = localMockStore.getCurrentUser();
+  const mockIsAuth = localMockStore.isAuthenticated();
 
-  const signin = useCallback(async () => {
-    // Default to Super Admin Ahmad Baalbaki
-    localMockStore.setPersona("usr_super_admin");
-  }, []);
+  const isEmailUnverified = Boolean(firebaseUser && !firebaseUser.emailVerified);
+  const isAuthenticated = Boolean(
+    (firebaseUser && firebaseUser.emailVerified) || (!firebaseUser && mockIsAuth && mockUser),
+  );
 
   const signinWithPassword = useCallback(
     async (email: string, password: string) => {
-      const res = localMockStore.authenticateWithPassword(email, password);
-      if (!res.success) {
-        throw new Error(res.error || "Authentication failed");
+      try {
+        const u = await firebaseAuthService.signIn(email, password);
+        return u;
+      } catch (fbErr) {
+        // Fallback to local mock store if in offline test mode
+        const res = localMockStore.authenticateWithPassword(email, password);
+        if (res.success) {
+          return res.user;
+        }
+        throw fbErr;
       }
-      return res.user;
     },
     [],
   );
 
   const signout = useCallback(async () => {
+    try {
+      await firebaseAuthService.signOut();
+    } catch {
+      // Ignored
+    }
     localMockStore.setPersona(null);
   }, []);
 
+  const effectiveEmail = firebaseUser?.email || mockUser?.email;
+  const effectiveName = firebaseUser?.displayName || mockUser?.name || effectiveEmail?.split("@")[0];
+  const effectiveId = firebaseUser?.uid || mockUser?._id;
+
   return {
     isAuthenticated,
-    isLoading: false,
+    isEmailUnverified,
+    isLoading,
     error: null as Error | null,
-    user: currentUser
+    user: (firebaseUser || mockUser)
       ? {
           profile: {
-            sub: currentUser.tokenIdentifier,
-            name: currentUser.name,
-            email: currentUser.email,
+            sub: effectiveId,
+            name: effectiveName,
+            email: effectiveEmail,
           },
         }
       : null,
-    signin,
+    signin: async () => {},
     signinWithPassword,
     signout,
-    signinRedirect: signin,
+    signinRedirect: async () => {},
     signoutRedirect: signout,
     removeUser: signout,
   };
 }
 
-function useLiveAuth() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const { signOut } = useAuthActions();
-  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
-
-  // Sign-in happens on the landing page's email/password form.
-  const signin = useCallback(async () => {
-    window.location.assign("/");
-  }, []);
-
-  return {
-    isAuthenticated,
-    isLoading,
-    error: null,
-    user: user
-      ? { profile: { sub: user._id, name: user.name, email: user.email } }
-      : null,
-    signin,
-    signout: signOut,
-    signinRedirect: signin,
-    signoutRedirect: signOut,
-    removeUser: signOut,
-  };
-}
-
-export function useAuth() {
-  if (isLocalDev) {
-    // isLocalDev is constant for the lifetime of the process, satisfying rules of hooks
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useLocalAuth();
-  }
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useLiveAuth();
-}
-
-function useLocalUser(): LocalAuthUser {
-  const [authTick, setAuthTick] = useState(0);
-
-  useEffect(() => {
-    return localMockStore.subscribeAuth(() => {
-      setAuthTick((t) => t + 1);
-    });
-  }, []);
-
-  void authTick;
-
-  const currentUser = localMockStore.getCurrentUser();
-  const isAuthenticated = localMockStore.isAuthenticated();
-
-  return {
-    id: currentUser?._id,
-    name: currentUser?.name,
-    email: currentUser?.email,
-    isAuthenticated,
-    isLoading: false,
-    error: null,
-    profile: currentUser
-      ? {
-          sub: currentUser.tokenIdentifier,
-          name: currentUser.name,
-          email: currentUser.email,
-        }
-      : undefined,
-  };
-}
-
-function useLiveUser(): LocalAuthUser {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
-  return {
-    id: user?._id,
-    name: user?.name,
-    email: user?.email,
-    isAuthenticated,
-    isLoading: isLoading || (isAuthenticated && user === undefined),
-    error: null,
-    profile: user
-      ? { sub: user._id, name: user.name, email: user.email }
-      : undefined,
-  };
-}
-
 export function useUser(): LocalAuthUser {
-  if (isLocalDev) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useLocalUser();
-  }
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useLiveUser();
+  const { user, isAuthenticated, isEmailUnverified, isLoading, error } = useAuth();
+  return {
+    id: user?.profile?.sub,
+    name: user?.profile?.name,
+    email: user?.profile?.email,
+    isAuthenticated,
+    isEmailUnverified,
+    isLoading,
+    error,
+    profile: user?.profile,
+  };
 }

@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/protected-route.tsx";
 import { isLocalDev } from "@/lib/env.ts";
 import { validateFirestoreConnection } from "@/lib/firebase.ts";
+import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 
 // Code-split pages for high-performance lazy loading
 const Academies = lazy(() => import("./pages/admin/academies/page.tsx"));
@@ -53,6 +54,7 @@ export default function App() {
     validateFirestoreConnection().catch((err) => {
       console.warn("Firestore initialization notice:", err);
     });
+    academyFirestoreService.init();
   }, []);
 
   return (
