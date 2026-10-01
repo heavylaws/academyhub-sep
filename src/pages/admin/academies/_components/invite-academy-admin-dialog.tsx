@@ -70,6 +70,9 @@ export default function InviteAcademyAdminDialog({
       }
 
       const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
+      if (generatedPassword) {
+        await firebaseAuthService.provisionUserAccount(values.email, generatedPassword);
+      }
       form.reset();
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

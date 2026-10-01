@@ -3,8 +3,11 @@ import App from "./App.tsx";
 
 if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // SW registration failed silently
+    navigator.serviceWorker.register("/_service-worker.js", { scope: "/" }).catch(() => {
+      // Fallback to /sw.js if needed
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+        // SW registration failed silently
+      });
     });
   });
 }

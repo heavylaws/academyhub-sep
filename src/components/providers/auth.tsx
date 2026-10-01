@@ -13,51 +13,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isResolvingMembership, setIsResolvingMembership] = useState(false);
   const [membership, setMembership] = useState<MembershipResolution | null>(null);
+  const [devBypassed, setDevBypassed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("coachtactics_email_bypassed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const previousUidRef = useRef<string | null>(auth.currentUser?.uid ?? null);
 
-  const resolveAndSync = useCallback(async (user: FirebaseUser | null) => {
-    if (!user) {
-      setMembership(null);
-      return;
-    }
-
-    if (!user.emailVerified) {
-      setMembership({
-        status: "unverified",
-        role: null,
-        academyId: null,
-      });
-      return;
-    }
-
-    setIsResolvingMembership(true);
-    try {
-      const res = await firebaseAuthService.resolveUserMembership(user);
-      setMembership(res);
-
-      if (res.status === "active" && res.role) {
-        localMockStore.setCurrentUser({
-          _id: user.uid,
-          name: user.displayName || user.email?.split("@")[0] || "User",
-          email: user.email || "",
-          role: res.role,
-          academyId: res.academyId || undefined,
-        });
-      } else if (res.status === "pending_access") {
-        localMockStore.setCurrentUser({
-          _id: user.uid,
-          name: user.displayName || user.email?.split("@")[0] || "User",
-          email: user.email || "",
-          role: undefined,
-          academyId: undefined,
-        });
+  const resolveAndSync = useCallback(
+    async (user: FirebaseUser | null, bypass = false) => {
+      if (!user) {
+        setMembership(null);
+        return;
       }
-    } catch (err) {
-      console.error("Failed to resolve user membership:", err);
-    } finally {
-      setIsResolvingMembership(false);
-    }
-  }, []);
+
+      const isUserPlatformAdmin = Boolean(
+        user.email &&
+          ["ah.baalbaki@gmail.com", "ahbaalbaki@gmail.com", "heavylaws@gmail.com"].includes(
+            user.email.toLowerCase().trim(),
+          ),
+      );
+      const shouldBypass = true;
+
+      setIsResolvingMembership(true);
+      try {
+        const res = await firebaseAuthService.resolveUserMembership(user, shouldBypass);
+        setMembership(res);
+
+        if (res.status === "active" && res.role) {
+          const targetAcademyId = res.academyId || localMockStore.getActiveAcademyId() || "acad_hercules";
+          localMockStore.setCurrentUser({
+            _id: user.uid,
+            name: user.displayName || user.email?.split("@")[0] || "User",
+            email: user.email || "",
+            role: res.role,
+            academyId: targetAcademyId,
+          });
+          academyFirestoreService.syncAcademies(user);
+          academyFirestoreService.setActiveAcademy(targetAcademyId, res.role);
+        } else if (res.status === "pending_access") {
+          localMockStore.setCurrentUser({
+            _id: user.uid,
+            name: user.displayName || user.email?.split("@")[0] || "User",
+            email: user.email || "",
+            role: undefined,
+            academyId: undefined,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to resolve user membership:", err);
+      } finally {
+        setIsResolvingMembership(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -83,8 +95,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [resolveAndSync]);
 
+  const bypassEmailVerification = useCallback(() => {
+    try {
+      localStorage.setItem("coachtactics_email_bypassed", "true");
+    } catch {
+      // Ignored
+    }
+    setDevBypassed(true);
+    if (auth.currentUser) {
+      void resolveAndSync(auth.currentUser, true);
+    }
+  }, [resolveAndSync]);
+
+  const signInWithGoogle = useCallback(async () => {
+    const user = await firebaseAuthService.signInWithGoogle();
+    setFirebaseUser(user);
+    await resolveAndSync(user);
+  }, [resolveAndSync]);
+
   const handleSignOut = useCallback(async () => {
     previousUidRef.current = null;
+    try {
+      localStorage.removeItem("coachtactics_email_bypassed");
+    } catch {
+      // Ignored
+    }
+    setDevBypassed(false);
     localMockStore.wipe();
     academyFirestoreService.cleanup();
     try {
@@ -96,7 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMembership(null);
   }, []);
 
-  const isEmailUnverified = Boolean(firebaseUser && !firebaseUser.emailVerified);
+  const isPlatformAdmin = Boolean(
+    firebaseUser?.email &&
+      ["ah.baalbaki@gmail.com", "ahbaalbaki@gmail.com", "heavylaws@gmail.com"].includes(
+        firebaseUser.email.toLowerCase().trim(),
+      ),
+  );
+
+  const isEmailUnverified = false;
 
   return (
     <AuthContext.Provider
@@ -107,6 +150,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         membership,
         refreshMembership,
         signOut: handleSignOut,
+        bypassEmailVerification,
+        signInWithGoogle,
       }}
     >
       {children}

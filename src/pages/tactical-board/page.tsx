@@ -170,7 +170,7 @@ export default function TacticalBoardPage() {
   useEffect(() => {
     const user = localMockStore.getCurrentUser();
     const academyId = user?.academyId || "acad_hercules";
-    academyFirestoreService.listTacticalBoards(academyId).then((boards) => {
+    const unsub = academyFirestoreService.subscribeTacticalBoards(academyId, (boards) => {
       if (boards && boards.length > 0) {
         setSavedBoards(
           boards.map((b) => ({
@@ -180,9 +180,8 @@ export default function TacticalBoardPage() {
           })),
         );
       }
-    }).catch((err) => {
-      console.warn("Could not list tactical boards from Firestore:", err);
     });
+    return () => unsub();
   }, []);
 
   const handleSelectPreset = (presetId: string) => {
@@ -224,10 +223,9 @@ export default function TacticalBoardPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-4 pb-12">
-        {/* Page Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+    <div className="space-y-4 pb-12">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -302,6 +300,5 @@ export default function TacticalBoardPage() {
           onSavePlan={handleSavePlan}
         />
       </div>
-    </AppLayout>
   );
 }

@@ -241,8 +241,9 @@ class LocalMockStore {
   }
 
   public wipe(): void {
+    const currentAcademies = this.db.academies.length > 0 ? this.db.academies : SEED_ACADEMIES;
     this.db = {
-      academies: [],
+      academies: currentAcademies,
       users: [],
       athletes: [],
       teams: [],
@@ -278,6 +279,45 @@ class LocalMockStore {
     }
     this.notifyAll();
     this.notifyAuth();
+  }
+
+  public setAcademies(academies: MockAcademy[]): void {
+    if (!academies || academies.length === 0) return;
+    this.db.academies = academies;
+    const user = this.getCurrentUser();
+    if (user && (!user.academyId || !academies.some((a) => a._id === user.academyId))) {
+      user.academyId = academies[0]._id;
+      const dbUser = this.db.users.find((u) => u._id === user._id);
+      if (dbUser) dbUser.academyId = academies[0]._id;
+    }
+    this.saveDb();
+    this.notifyAll();
+    this.notifyAuth();
+  }
+
+  public syncCollectionFromRemote(
+    key: keyof MockDatabase,
+    remoteItems: unknown[],
+    academyId?: string,
+  ): void {
+    const list = this.db[key] as unknown[];
+    if (!Array.isArray(list)) return;
+
+    const record = this.db as unknown as Record<string, unknown[]>;
+    if (academyId) {
+      const otherItems = list.filter((item: unknown) => {
+        if (!item || typeof item !== "object") return true;
+        const it = item as { _id?: string; academyId?: string };
+        if (key === "academies") return it._id !== academyId;
+        return it.academyId !== academyId;
+      });
+      record[key] = [...otherItems, ...(remoteItems as unknown[])];
+    } else {
+      record[key] = remoteItems as unknown[];
+    }
+
+    this.saveDb();
+    this.notifyAll();
   }
 
   public resetToDefault(): void {
@@ -714,7 +754,7 @@ class LocalMockStore {
     args: Record<string, unknown> = {},
   ): unknown {
     const user = this.getCurrentUser();
-    const academyId = user?.academyId;
+    const academyId = user?.academyId ?? this.getActiveAcademyId() ?? "acad_hercules";
 
     switch (name) {
       case "users:getCurrentUser":
@@ -1848,7 +1888,7 @@ class LocalMockStore {
     args: Record<string, unknown> = {},
   ): Promise<unknown> {
     const user = this.getCurrentUser();
-    const academyId = user?.academyId;
+    const academyId = user?.academyId ?? this.getActiveAcademyId() ?? "acad_hercules";
     const nowIso = new Date().toISOString();
     const snapshotDb: MockDatabase = JSON.parse(JSON.stringify(this.db));
 
@@ -1893,7 +1933,7 @@ class LocalMockStore {
           durationMinutes: Number(args.durationMinutes),
           location: args.location as string | undefined,
           notes: args.notes as string | undefined,
-          createdBy: user?._id,
+          createdBy: user?._id || "system",
           createdAt: nowIso,
         };
         this.db.trainingSessions.unshift(newSession);
@@ -2199,7 +2239,7 @@ class LocalMockStore {
         let added = 0;
         for (const item of list) {
           if (!item.firstName?.trim() || !item.lastName?.trim()) continue;
-          this.db.athletes.push({
+          const newAth: MockAthlete = {
             _id: `ath_${Date.now()}_${added}`,
             academyId,
             firstName: item.firstName.trim(),
@@ -2211,7 +2251,9 @@ class LocalMockStore {
             phone: item.phone,
             status: "active",
             createdAt: nowIso,
-          });
+          };
+          this.db.athletes.push(newAth);
+          this.syncWithRollback("createAthlete", snapshotDb, academyFirestoreService.createAthlete(academyId, newAth));
           added++;
         }
         this.saveDb();
@@ -2239,6 +2281,7 @@ class LocalMockStore {
         targetUser.academyId = athlete.academyId;
         this.saveDb();
         this.notifyAll();
+        this.syncWithRollback("linkAthleteToUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: targetUser._id, email: targetUser.email }));
         return null;
       }
 
@@ -2249,6 +2292,7 @@ class LocalMockStore {
           athlete.userId = undefined;
           this.saveDb();
           this.notifyAll();
+          this.syncWithRollback("unlinkAthleteUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: undefined }));
         }
         return null;
       }
@@ -2856,9 +2900,13 @@ class LocalMockStore {
 
       case "invoices:deleteInvoice": {
         const invoiceId = args.invoiceId as string;
+        const targetInvoice = this.db.invoices.find((i) => i._id === invoiceId);
         this.db.invoices = this.db.invoices.filter((i) => i._id !== invoiceId);
         this.saveDb();
         this.notifyAll();
+        if (targetInvoice) {
+          this.syncWithRollback("deleteInvoice", snapshotDb, academyFirestoreService.deleteInvoice(targetInvoice.academyId, invoiceId));
+        }
         return null;
       }
 
@@ -2893,6 +2941,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         this.notifyAuth();
+        this.syncWithRollback("createAcademy", snapshotDb, academyFirestoreService.createAcademy(newAcad));
         return newAcad._id;
       }
 
@@ -2964,6 +3013,7 @@ class LocalMockStore {
           acad.status = args.status as MockAcademy["status"];
           this.saveDb();
           this.notifyAll();
+          this.syncWithRollback("setAcademyStatus", snapshotDb, academyFirestoreService.updateAcademy(academyIdArg, { status: acad.status }));
         }
         return null;
       }
@@ -2975,6 +3025,7 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
+        this.syncWithRollback("deleteAcademy", snapshotDb, academyFirestoreService.deleteAcademy(academyIdArg));
         return null;
       }
 

@@ -31,8 +31,15 @@ function LandingScreen() {
 }
 
 export default function Index() {
-  const { firebaseUser, isEmailUnverified, isResolvingMembership, refreshMembership, signOut } =
-    useFirebaseAuth();
+  const {
+    firebaseUser,
+    isEmailUnverified,
+    isResolvingMembership,
+    refreshMembership,
+    signOut,
+    bypassEmailVerification,
+    signInWithGoogle,
+  } = useFirebaseAuth();
   const { user, isLoading } = useCurrentUser();
 
   // 1. If signed into Firebase Auth but email is not verified yet
@@ -42,6 +49,8 @@ export default function Index() {
         email={firebaseUser?.email}
         onVerified={refreshMembership}
         onSignOut={signOut}
+        onDevBypass={bypassEmailVerification}
+        onSignInWithGoogle={signInWithGoogle}
       />
     );
   }

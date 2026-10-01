@@ -3,6 +3,7 @@ import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
 
 export type UserRole =
   | "platform_admin"
@@ -24,7 +25,8 @@ export interface CurrentUser {
 
 /** Current signed-in user's profile and academy role. */
 export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoading: boolean } {
-  const { firebaseUser, isResolvingMembership, membership } = useFirebaseAuth();
+  const { firebaseUser, isEmailUnverified, isResolvingMembership, membership } =
+    useFirebaseAuth();
   const { isAuthenticated: convexIsAuth } = useConvexAuth();
   const convexUser = useQuery(
     api.users.getCurrentUser,
@@ -33,7 +35,7 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
 
   // If Firebase user is present
   if (firebaseUser) {
-    if (!firebaseUser.emailVerified) {
+    if (isEmailUnverified) {
       return {
         user: {
           _id: firebaseUser.uid as Id<"users">,
@@ -54,15 +56,30 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
       };
     }
 
+    const localUser = localMockStore.getCurrentUser();
+    const effectiveRole = localUser?.role || membership?.role || undefined;
+    const effectiveAcademyId = localUser?.academyId || membership?.academyId || undefined;
+    const effectiveName = localUser?.name || firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User";
+    const effectiveEmail = localUser?.email || firebaseUser.email || undefined;
+
     return {
       user: {
-        _id: firebaseUser.uid as Id<"users">,
-        name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
-        email: firebaseUser.email || undefined,
-        role: membership?.role || undefined,
-        academyId: (membership?.academyId || undefined) as Id<"academies"> | undefined,
+        _id: (localUser?._id || firebaseUser.uid) as Id<"users">,
+        name: effectiveName,
+        email: effectiveEmail,
+        role: effectiveRole,
+        academyId: effectiveAcademyId as Id<"academies"> | undefined,
         emailVerified: true,
       },
+      isLoading: false,
+    };
+  }
+
+  // Fallback to localMockStore user if authenticated locally
+  const localUser = localMockStore.getCurrentUser();
+  if (localUser) {
+    return {
+      user: localUser as unknown as CurrentUser,
       isLoading: false,
     };
   }

@@ -33,7 +33,7 @@ export function CloudSyncIndicator() {
     try {
       const user = localMockStore.getCurrentUser();
       const academyId = user?.academyId || "acad_hercules";
-      await academyFirestoreService.seedInitialDataToFirestore(academyId);
+      await academyFirestoreService.forceSync(academyId);
       toast.success("Academy data synchronized with Cloud Firestore!");
     } catch {
       toast.error("Failed to sync data with cloud database.");

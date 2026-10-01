@@ -1,12 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import AppLayout from "@/components/layout/app-layout.tsx";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
-
-function SignInScreen() {
-  return <Navigate to="/" replace />;
-}
+import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
 
 function LoadingScreen() {
   return (
@@ -24,35 +20,22 @@ export default function ProtectedRoute({
   children: React.ReactNode;
   allow: UserRole[];
 }) {
-  return (
-    <>
-      <Unauthenticated>
-        <SignInScreen />
-      </Unauthenticated>
-      <AuthLoading>
-        <LoadingScreen />
-      </AuthLoading>
-      <Authenticated>
-        <RoleGate allow={allow}>{children}</RoleGate>
-      </Authenticated>
-    </>
-  );
-}
-
-function RoleGate({
-  children,
-  allow,
-}: {
-  children: React.ReactNode;
-  allow: UserRole[];
-}) {
+  const { firebaseUser, isResolvingMembership } = useFirebaseAuth();
   const { user, isLoading } = useCurrentUser();
 
-  if (isLoading || user === undefined) {
+  if (isLoading || isResolvingMembership || (firebaseUser && user === undefined)) {
     return <LoadingScreen />;
   }
-  if (!user || !user.role || !allow.includes(user.role)) {
+
+  if (!firebaseUser && !user) {
     return <Navigate to="/" replace />;
   }
-  return <AppLayout>{children}</AppLayout>;
+
+  // Platform admin has universal access to all management modules
+  if (user?.role === "platform_admin" || (user?.role && allow.includes(user.role))) {
+    return <AppLayout>{children}</AppLayout>;
+  }
+
+  return <Navigate to="/" replace />;
 }
+

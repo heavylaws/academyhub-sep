@@ -7,6 +7,9 @@ export interface MockAcademy {
   status: "active" | "suspended";
   nextInvoiceNumber?: number;
   createdAt: string;
+  logoUrl?: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface MockUser {

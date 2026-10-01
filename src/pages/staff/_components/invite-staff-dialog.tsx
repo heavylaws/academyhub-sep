@@ -93,6 +93,9 @@ export default function InviteStaffDialog({
 
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
       const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
+      if (generatedPassword) {
+        await firebaseAuthService.provisionUserAccount(values.email, generatedPassword);
+      }
       form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

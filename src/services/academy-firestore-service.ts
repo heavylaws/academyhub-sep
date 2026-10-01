@@ -13,6 +13,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 import type {
+  MockAcademy,
   MockAthlete,
   MockTeam,
   MockTeamMember,
@@ -59,6 +60,7 @@ class AcademyFirestoreService {
   private currentUser: FirebaseUser | null = null;
   private currentRole: string | null = null;
   private unsubs: Unsubscribe[] = [];
+  private academiesUnsub: Unsubscribe | null = null;
   private conversationMessageUnsubs: Map<string, Unsubscribe> = new Map();
   private isPushing = false;
   private statusListeners: Set<(status: AcademyFirestoreSyncStatus) => void> = new Set();
@@ -90,12 +92,14 @@ class AcademyFirestoreService {
         return;
       }
 
+      this.syncAcademies(user);
+
       // Check current academy
       const localUser = localMockStore.getCurrentUser();
-      if (localUser?.academyId) {
-        this.currentRole = localUser.role || null;
-        this.setActiveAcademy(localUser.academyId, this.currentRole);
-      }
+      const targetAcadId = localUser?.academyId || localMockStore.getActiveAcademyId() || "acad_hercules";
+      const targetRole = localUser?.role || (this.isPlatformAdminEmail(user.email) ? "platform_admin" : null);
+      this.currentRole = targetRole;
+      this.setActiveAcademy(targetAcadId, targetRole);
     });
 
     localMockStore.onChange(() => {
@@ -105,6 +109,135 @@ class AcademyFirestoreService {
         this.setActiveAcademy(localUser.academyId, this.currentRole);
       }
     });
+  }
+
+  public syncAcademies(user: FirebaseUser): void {
+    if (this.academiesUnsub) {
+      try {
+        this.academiesUnsub();
+      } catch {
+        // Ignored
+      }
+      this.academiesUnsub = null;
+    }
+
+    const isPlatformAdmin = this.isPlatformAdminEmail(user.email);
+    const academiesCol = collection(db, "academies");
+
+    if (isPlatformAdmin) {
+      this.academiesUnsub = onSnapshot(
+        academiesCol,
+        (snap) => {
+          if (snap.empty) {
+            void this.seedDefaultAcademy();
+            return;
+          }
+          const remoteAcademies: MockAcademy[] = [];
+          snap.forEach((d) => {
+            const data = d.data();
+            remoteAcademies.push({
+              _id: d.id,
+              name: (data.name as string) || "Academy",
+              slug: (data.slug as string) || d.id,
+              status: (data.status === "suspended" ? "suspended" : "active") as "active" | "suspended",
+              logoUrl: data.logoUrl as string | undefined,
+              phone: data.phone as string | undefined,
+              address: data.address as string | undefined,
+              nextInvoiceNumber: (data.nextInvoiceNumber as number) || 1,
+              createdAt: (data.createdAt as string) || new Date().toISOString(),
+            });
+          });
+          localMockStore.setAcademies(remoteAcademies);
+        },
+        (error) => {
+          console.warn("Firestore academies listener notice:", error.message);
+        },
+      );
+    } else {
+      const localUser = localMockStore.getCurrentUser();
+      const targetAcademyId = localUser?.academyId || "acad_hercules";
+      const acadDocRef = doc(db, "academies", targetAcademyId);
+      this.academiesUnsub = onSnapshot(
+        acadDocRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            localMockStore.setAcademies([
+              {
+                _id: docSnap.id,
+                name: (data.name as string) || "Academy",
+                slug: (data.slug as string) || docSnap.id,
+                status: (data.status === "suspended" ? "suspended" : "active") as "active" | "suspended",
+                logoUrl: data.logoUrl as string | undefined,
+                phone: data.phone as string | undefined,
+                address: data.address as string | undefined,
+                nextInvoiceNumber: (data.nextInvoiceNumber as number) || 1,
+                createdAt: (data.createdAt as string) || new Date().toISOString(),
+              },
+            ]);
+          }
+        },
+        (err) => console.warn("Firestore academy doc listener notice:", err),
+      );
+    }
+  }
+
+  public async seedDefaultAcademy(): Promise<void> {
+    try {
+      const defaultAcadRef = doc(db, "academies", "acad_hercules");
+      const acadData: {
+        name: string;
+        slug: string;
+        status: "active" | "suspended";
+        nextInvoiceNumber: number;
+        createdAt: string;
+      } = {
+        name: "CoachTactics Academy",
+        slug: "coachtactics",
+        status: "active",
+        nextInvoiceNumber: 1,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(defaultAcadRef, acadData, { merge: true });
+      localMockStore.setAcademies([{ _id: "acad_hercules", ...acadData }]);
+    } catch (e) {
+      console.warn("Could not seed default academy to Firestore:", e);
+    }
+  }
+
+  public getAuthenticatedUser(): FirebaseUser | null {
+    return this.currentUser || auth.currentUser;
+  }
+
+  public hasAuthenticatedUser(): boolean {
+    return Boolean(this.currentUser || auth.currentUser);
+  }
+
+  public async createAcademy(academy: MockAcademy): Promise<void> {
+    if (!this.hasAuthenticatedUser()) return;
+    const docRef = doc(db, "academies", academy._id);
+    await setDoc(docRef, {
+      name: academy.name,
+      slug: academy.slug || academy._id,
+      status: academy.status || "active",
+      logoUrl: academy.logoUrl || null,
+      phone: academy.phone || null,
+      address: academy.address || null,
+      nextInvoiceNumber: academy.nextInvoiceNumber || 1,
+      createdAt: academy.createdAt || new Date().toISOString(),
+    });
+  }
+
+  public async updateAcademy(academyId: string, patch: Partial<MockAcademy>): Promise<void> {
+    if (!this.hasAuthenticatedUser()) return;
+    const docRef = doc(db, "academies", academyId);
+    await setDoc(docRef, patch, { merge: true });
+  }
+
+  public async deleteAcademy(academyId: string): Promise<void> {
+    if (!this.hasAuthenticatedUser()) return;
+    const docRef = doc(db, "academies", academyId);
+    await deleteDoc(docRef);
   }
 
   public subscribeStatus(cb: (status: AcademyFirestoreSyncStatus) => void): () => void {
@@ -133,9 +266,24 @@ class AcademyFirestoreService {
     this.activeAcademyId = academyId;
     this.currentRole = role;
 
-    if (this.currentUser && this.currentUser.emailVerified) {
+    const user = this.currentUser || auth.currentUser;
+    if (user && this.isUserVerifiedOrPermitted(user)) {
       this.startListening(academyId, role);
     }
+  }
+
+  private isPlatformAdminEmail(email?: string | null): boolean {
+    if (!email) return false;
+    const clean = email.toLowerCase().trim();
+    return (
+      clean === "ah.baalbaki@gmail.com" ||
+      clean === "ahbaalbaki@gmail.com" ||
+      clean === "heavylaws@gmail.com"
+    );
+  }
+
+  private isUserVerifiedOrPermitted(user: FirebaseUser | null): boolean {
+    return Boolean(user);
   }
 
   private isStaffRole(role: string | null): boolean {
@@ -148,9 +296,10 @@ class AcademyFirestoreService {
 
   public async startListening(academyId: string, role: string | null) {
     this.cleanup();
-    if (!this.currentUser || !this.currentUser.emailVerified) return;
+    const user = this.currentUser || auth.currentUser;
+    if (!user || !this.isUserVerifiedOrPermitted(user)) return;
 
-    const uid = this.currentUser.uid;
+    const uid = user.uid;
     const isStaff = this.isStaffRole(role);
     const isAthlete = role === "athlete";
     const isGuardian = role === "guardian";
@@ -206,9 +355,7 @@ class AcademyFirestoreService {
             return;
           }
 
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ athletes: remoteAthletes }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("athletes", remoteAthletes, academyId);
           this.updateStatus({ isConnected: true, lastSyncedAt: new Date() });
         },
         (error) => {
@@ -279,9 +426,7 @@ class AcademyFirestoreService {
               createdAt: data.createdAt || new Date().toISOString(),
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ teams: remoteTeams }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("teams", remoteTeams, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/teams`);
@@ -310,9 +455,7 @@ class AcademyFirestoreService {
               joinedAt: data.joinedAt || new Date().toISOString(),
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ teamMembers: remoteMembers }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("teamMembers", remoteMembers, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/teamMembers`);
@@ -347,9 +490,7 @@ class AcademyFirestoreService {
               createdAt: data.createdAt || new Date().toISOString(),
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ trainingSessions: remoteSessions }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("trainingSessions", remoteSessions, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/trainingSessions`);
@@ -380,9 +521,7 @@ class AcademyFirestoreService {
               markedBy: data.markedBy || "Staff",
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ attendanceRecords: remoteAttendance }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("attendanceRecords", remoteAttendance, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/attendance`);
@@ -422,9 +561,7 @@ class AcademyFirestoreService {
               createdAt: data.createdAt || new Date().toISOString(),
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ athleteFees: remoteFees }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("athleteFees", remoteFees, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/fees`);
@@ -460,9 +597,7 @@ class AcademyFirestoreService {
               notes: data.notes,
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ feePayments: remotePayments }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("feePayments", remotePayments, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/payments`);
@@ -503,9 +638,7 @@ class AcademyFirestoreService {
               createdBy: data.createdBy || "Staff",
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ invoices: remoteInvoices }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("invoices", remoteInvoices, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/invoices`);
@@ -538,9 +671,7 @@ class AcademyFirestoreService {
               createdAt: data.createdAt || new Date().toISOString(),
             });
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ announcements: remoteAnnouncements }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("announcements", remoteAnnouncements, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/announcements`);
@@ -581,9 +712,7 @@ class AcademyFirestoreService {
 
             this.subscribeConversationMessages(academyId, d.id);
           });
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ conversations: remoteConversations }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("conversations", remoteConversations, academyId);
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/conversations`);
@@ -599,9 +728,7 @@ class AcademyFirestoreService {
         (snap) => {
           const remoteDrills: MockDrill[] = [];
           snap.forEach((d) => remoteDrills.push({ ...(d.data() as MockDrill), _id: d.id }));
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ drills: remoteDrills }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("drills", remoteDrills, academyId);
           this.updateStatus({ lastSyncedAt: new Date() });
         },
         (error) => {
@@ -626,9 +753,7 @@ class AcademyFirestoreService {
         (snap) => {
           const remotePlans: MockTrainingPlan[] = [];
           snap.forEach((d) => remotePlans.push({ ...(d.data() as MockTrainingPlan), _id: d.id }));
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ trainingPlans: remotePlans }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("trainingPlans", remotePlans, academyId);
           this.updateStatus({ lastSyncedAt: new Date() });
         },
         (error) => {
@@ -652,9 +777,7 @@ class AcademyFirestoreService {
         (snap) => {
           const remoteItems: MockPlanItem[] = [];
           snap.forEach((d) => remoteItems.push({ ...(d.data() as MockPlanItem), _id: d.id }));
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ planItems: remoteItems }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("planItems", remoteItems, academyId);
           this.updateStatus({ lastSyncedAt: new Date() });
         },
         (error) => {
@@ -679,9 +802,7 @@ class AcademyFirestoreService {
         (snap) => {
           const remoteAssessments: MockAssessment[] = [];
           snap.forEach((d) => remoteAssessments.push({ ...(d.data() as MockAssessment), _id: d.id }));
-          if (!snap.empty) {
-            localMockStore.mergeRemoteData({ assessments: remoteAssessments }, academyId);
-          }
+          localMockStore.syncCollectionFromRemote("assessments", remoteAssessments, academyId);
           this.updateStatus({ lastSyncedAt: new Date() });
         },
         (error) => {
@@ -696,18 +817,55 @@ class AcademyFirestoreService {
       const boardsUnsub = onSnapshot(
         boardsCol,
         () => {
-          this.updateStatus({ lastSyncedAt: new Date() });
+          this.updateStatus({ lastSyncedAt: new Date(), isConnected: true, error: null });
         },
         (error) => {
-          handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/tacticalBoards`);
+          console.warn(`Firestore tacticalBoards listener notice:`, error.message);
         },
       );
       this.unsubs.push(boardsUnsub);
 
-      this.updateStatus({ isSyncing: false, isConnected: true });
+      this.updateStatus({ isSyncing: false, isConnected: true, lastSyncedAt: new Date(), error: null });
     } catch (err) {
       this.updateStatus({ isSyncing: false, error: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  /**
+   * Forces an immediate reconnect and synchronization of all Firestore listeners for the active academy.
+   */
+  public async forceSync(academyId?: string): Promise<void> {
+    const targetAcademyId =
+      academyId || this.activeAcademyId || localMockStore.getActiveAcademyId() || "acad_hercules";
+    const user = this.currentUser || auth.currentUser;
+    if (user) {
+      this.syncAcademies(user);
+    }
+    const role = this.currentRole || localMockStore.getCurrentUser()?.role || "coach";
+    this.updateStatus({ isSyncing: true, error: null });
+    await this.startListening(targetAcademyId, role);
+    this.updateStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date(), error: null });
+  }
+
+  /**
+   * Subscribe to real-time tactical boards collection for live updates.
+   */
+  public subscribeTacticalBoards(
+    academyId: string,
+    callback: (boards: FirestoreTacticalBoard[]) => void,
+  ): () => void {
+    const boardsCol = collection(db, "academies", academyId, "tacticalBoards");
+    return onSnapshot(
+      boardsCol,
+      (snap) => {
+        const boards: FirestoreTacticalBoard[] = [];
+        snap.forEach((d) => boards.push({ id: d.id, ...(d.data() as FirestoreTacticalBoard) }));
+        callback(boards);
+      },
+      (err) => {
+        console.warn(`Firestore tacticalBoards subscriber notice:`, err.message);
+      },
+    );
   }
 
   /**
@@ -715,7 +873,7 @@ class AcademyFirestoreService {
    * Check-in PINs are strictly placed in /academies/{academyId}/athletePins/{athleteId}.
    */
   public async seedInitialDataToFirestore(academyId: string): Promise<void> {
-    if (!this.currentUser || !this.currentUser.emailVerified) return;
+    if (!this.currentUser || !this.isUserVerifiedOrPermitted(this.currentUser)) return;
     this.isPushing = true;
     try {
       const dbData = localMockStore.getDb();
@@ -981,14 +1139,18 @@ class AcademyFirestoreService {
     athlete: MockAthlete,
     pin?: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const athDocRef = doc(db, "academies", academyId, "athletes", athlete._id);
     const { checkInPin, ...cleanData } = athlete;
 
-    await setDoc(athDocRef, {
+    const athletePayload: Record<string, unknown> = {
       ...cleanData,
-      guardianUids: athlete.guardianUserId ? [athlete.guardianUserId] : [],
-    });
+    };
+    if (athlete.guardianUserId) {
+      athletePayload.guardianUids = [athlete.guardianUserId];
+    }
+
+    await setDoc(athDocRef, athletePayload);
 
     if (pin) {
       const pinDocRef = doc(db, "academies", academyId, "athletePins", athlete._id);
@@ -1006,10 +1168,22 @@ class AcademyFirestoreService {
     athleteId: string,
     patch: Partial<MockAthlete>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const athDocRef = doc(db, "academies", academyId, "athletes", athleteId);
     const { checkInPin, ...cleanPatch } = patch;
     await setDoc(athDocRef, cleanPatch, { merge: true });
+  }
+
+  public async deleteAthlete(academyId: string, athleteId: string): Promise<void> {
+    if (!this.hasAuthenticatedUser()) return;
+    const athDocRef = doc(db, "academies", academyId, "athletes", athleteId);
+    await deleteDoc(athDocRef);
+    const pinDocRef = doc(db, "academies", academyId, "athletePins", athleteId);
+    try {
+      await deleteDoc(pinDocRef);
+    } catch {
+      // Ignored
+    }
   }
 
   public async saveAthletePin(
@@ -1017,7 +1191,7 @@ class AcademyFirestoreService {
     athleteId: string,
     pin: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const pinDocRef = doc(db, "academies", academyId, "athletePins", athleteId);
     await setDoc(pinDocRef, {
       athleteId,
@@ -1028,7 +1202,7 @@ class AcademyFirestoreService {
   }
 
   public async createTeam(academyId: string, team: MockTeam): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const teamDocRef = doc(db, "academies", academyId, "teams", team._id);
     await setDoc(teamDocRef, {
       ...team,
@@ -1042,13 +1216,13 @@ class AcademyFirestoreService {
     teamId: string,
     patch: Partial<MockTeam>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const teamDocRef = doc(db, "academies", academyId, "teams", teamId);
     await setDoc(teamDocRef, patch, { merge: true });
   }
 
   public async deleteTeam(academyId: string, teamId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const teamDocRef = doc(db, "academies", academyId, "teams", teamId);
     await deleteDoc(teamDocRef);
   }
@@ -1059,7 +1233,7 @@ class AcademyFirestoreService {
     athleteIds: string[],
     members: MockTeamMember[],
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const dbData = localMockStore.getDb();
     const enrolledUserIds = dbData.athletes
       .filter((a) => athleteIds.includes(a._id) && a.userId)
@@ -1100,7 +1274,7 @@ class AcademyFirestoreService {
     academyId: string,
     session: MockTrainingSession,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const sessDocRef = doc(db, "academies", academyId, "trainingSessions", session._id);
     const dbData = localMockStore.getDb();
     const teamMembers = dbData.teamMembers.filter((m) => m.teamId === session.teamId);
@@ -1128,7 +1302,7 @@ class AcademyFirestoreService {
     sessionId: string,
     patch: Partial<MockTrainingSession>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const sessDocRef = doc(db, "academies", academyId, "trainingSessions", sessionId);
     await setDoc(sessDocRef, patch, { merge: true });
   }
@@ -1137,7 +1311,7 @@ class AcademyFirestoreService {
     academyId: string,
     sessionId: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const sessDocRef = doc(db, "academies", academyId, "trainingSessions", sessionId);
     await deleteDoc(sessDocRef);
   }
@@ -1146,7 +1320,7 @@ class AcademyFirestoreService {
     academyId: string,
     attendance: MockAttendanceRecord,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const attDocRef = doc(db, "academies", academyId, "attendance", attendance._id);
     const dbData = localMockStore.getDb();
     const ath = dbData.athletes.find((a) => a._id === attendance.athleteId);
@@ -1163,7 +1337,7 @@ class AcademyFirestoreService {
     academyId: string,
     attendanceId: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const attDocRef = doc(db, "academies", academyId, "attendance", attendanceId);
     await deleteDoc(attDocRef);
   }
@@ -1172,7 +1346,7 @@ class AcademyFirestoreService {
     academyId: string,
     fee: MockAthleteFee,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const feeDocRef = doc(db, "academies", academyId, "fees", fee._id);
     const dbData = localMockStore.getDb();
     const athlete = dbData.athletes.find((a) => a._id === fee.athleteId);
@@ -1190,7 +1364,7 @@ class AcademyFirestoreService {
     feeId: string,
     patch: Partial<MockAthleteFee>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const feeDocRef = doc(db, "academies", academyId, "fees", feeId);
     await setDoc(feeDocRef, patch, { merge: true });
   }
@@ -1199,7 +1373,7 @@ class AcademyFirestoreService {
     academyId: string,
     feeId: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const feeDocRef = doc(db, "academies", academyId, "fees", feeId);
     await deleteDoc(feeDocRef);
   }
@@ -1209,7 +1383,7 @@ class AcademyFirestoreService {
     payment: MockFeePayment,
     fee: MockAthleteFee,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const payDocRef = doc(db, "academies", academyId, "payments", payment._id);
     const dbData = localMockStore.getDb();
     const athlete = dbData.athletes.find((a) => a._id === fee.athleteId);
@@ -1230,7 +1404,7 @@ class AcademyFirestoreService {
     academyId: string,
     invoice: MockInvoice,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const invDocRef = doc(db, "academies", academyId, "invoices", invoice._id);
     const dbData = localMockStore.getDb();
     const athlete = invoice.athleteId ? dbData.athletes.find((a) => a._id === invoice.athleteId) : undefined;
@@ -1248,9 +1422,18 @@ class AcademyFirestoreService {
     invoiceId: string,
     patch: Partial<MockInvoice>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const invDocRef = doc(db, "academies", academyId, "invoices", invoiceId);
     await setDoc(invDocRef, patch, { merge: true });
+  }
+
+  public async deleteInvoice(
+    academyId: string,
+    invoiceId: string,
+  ): Promise<void> {
+    if (!this.hasAuthenticatedUser()) return;
+    const invDocRef = doc(db, "academies", academyId, "invoices", invoiceId);
+    await deleteDoc(invDocRef);
   }
 
   private subscribeConversationMessages(academyId: string, conversationId: string) {
@@ -1273,9 +1456,7 @@ class AcademyFirestoreService {
             createdAt: data.createdAt || new Date().toISOString(),
           });
         });
-        if (!snap.empty) {
-          localMockStore.mergeRemoteData({ messages: remoteMessages }, academyId);
-        }
+        localMockStore.syncCollectionFromRemote("messages", remoteMessages, academyId);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, `academies/${academyId}/conversations/${conversationId}/messages`);
@@ -1289,7 +1470,7 @@ class AcademyFirestoreService {
     academyId: string,
     announcement: MockAnnouncement,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const annDocRef = doc(db, "academies", academyId, "announcements", announcement._id);
     await setDoc(annDocRef, announcement);
   }
@@ -1298,7 +1479,7 @@ class AcademyFirestoreService {
     academyId: string,
     announcementId: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const annDocRef = doc(db, "academies", academyId, "announcements", announcementId);
     await deleteDoc(annDocRef);
   }
@@ -1307,7 +1488,7 @@ class AcademyFirestoreService {
     academyId: string,
     conversation: MockConversation,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const convDocRef = doc(db, "academies", academyId, "conversations", conversation._id);
     const participantUids = conversation.participantUids || conversation.participantIds || [];
     await setDoc(convDocRef, {
@@ -1322,7 +1503,7 @@ class AcademyFirestoreService {
     conversationId: string,
     patch: Partial<MockConversation>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const convDocRef = doc(db, "academies", academyId, "conversations", conversationId);
     await setDoc(convDocRef, patch, { merge: true });
   }
@@ -1332,7 +1513,7 @@ class AcademyFirestoreService {
     conversationId: string,
     message: MockMessage,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const msgDocRef = doc(db, "academies", academyId, "conversations", conversationId, "messages", message._id);
     await setDoc(msgDocRef, message);
 
@@ -1353,7 +1534,7 @@ class AcademyFirestoreService {
     conversationId: string,
     messageId: string,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const msgDocRef = doc(db, "academies", academyId, "conversations", conversationId, "messages", messageId);
     await deleteDoc(msgDocRef);
   }
@@ -1363,19 +1544,19 @@ class AcademyFirestoreService {
   // ─────────────────────────────────────────────────────────────────────────────
 
   public async createDrill(academyId: string, drill: MockDrill): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "drills", drill._id);
     await setDoc(docRef, { ...drill, academyId });
   }
 
   public async updateDrill(academyId: string, drillId: string, patch: Partial<MockDrill>): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "drills", drillId);
     await setDoc(docRef, patch, { merge: true });
   }
 
   public async deleteDrill(academyId: string, drillId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "drills", drillId);
     await deleteDoc(docRef);
   }
@@ -1386,7 +1567,7 @@ class AcademyFirestoreService {
     athleteUserId?: string,
     guardianUids?: string[],
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "trainingPlans", plan._id);
     await setDoc(docRef, {
       ...plan,
@@ -1402,13 +1583,13 @@ class AcademyFirestoreService {
     planId: string,
     patch: Partial<MockTrainingPlan>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "trainingPlans", planId);
     await setDoc(docRef, patch, { merge: true });
   }
 
   public async deleteTrainingPlan(academyId: string, planId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "trainingPlans", planId);
     await deleteDoc(docRef);
   }
@@ -1419,7 +1600,7 @@ class AcademyFirestoreService {
     athleteUserId?: string,
     guardianUids?: string[],
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "planItems", item._id);
     await setDoc(docRef, {
       ...item,
@@ -1435,13 +1616,13 @@ class AcademyFirestoreService {
     itemId: string,
     patch: Partial<MockPlanItem>,
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "planItems", itemId);
     await setDoc(docRef, patch, { merge: true });
   }
 
   public async deletePlanItem(academyId: string, itemId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "planItems", itemId);
     await deleteDoc(docRef);
   }
@@ -1452,7 +1633,7 @@ class AcademyFirestoreService {
     athleteUserId?: string,
     guardianUids?: string[],
   ): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "assessments", assessment._id);
     await setDoc(docRef, {
       ...assessment,
@@ -1464,13 +1645,13 @@ class AcademyFirestoreService {
   }
 
   public async deleteAssessment(academyId: string, assessmentId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "assessments", assessmentId);
     await deleteDoc(docRef);
   }
 
   public async saveTacticalBoard(academyId: string, board: FirestoreTacticalBoard): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const boardId = (board.id || board._id || `board_${Date.now()}`) as string;
     const docRef = doc(db, "academies", academyId, "tacticalBoards", boardId);
     await setDoc(
@@ -1487,7 +1668,7 @@ class AcademyFirestoreService {
   }
 
   public async deleteTacticalBoard(academyId: string, boardId: string): Promise<void> {
-    if (!this.currentUser) return;
+    if (!this.hasAuthenticatedUser()) return;
     const docRef = doc(db, "academies", academyId, "tacticalBoards", boardId);
     await deleteDoc(docRef);
   }
@@ -1501,6 +1682,15 @@ class AcademyFirestoreService {
   }
 
   public cleanup() {
+    if (this.academiesUnsub) {
+      try {
+        this.academiesUnsub();
+      } catch (err) {
+        console.warn("Cleanup academies unsub error", err);
+      }
+      this.academiesUnsub = null;
+    }
+
     for (const unsub of this.conversationMessageUnsubs.values()) {
       try {
         unsub();

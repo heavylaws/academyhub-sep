@@ -52,7 +52,7 @@ import {
   ErrorStateHeader,
   ErrorStateMedia,
   ErrorStateTitle,
-} from "@/components/ui/error-state.tsx";
+} from "@/components/ui/status-state.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { cn } from "@/lib/utils.ts";
 import { EditPlanDialog } from "./_components/plan-dialogs.tsx";

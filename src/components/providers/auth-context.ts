@@ -9,6 +9,8 @@ export interface AuthContextValue {
   membership: MembershipResolution | null;
   refreshMembership: () => Promise<void>;
   signOut: () => Promise<void>;
+  bypassEmailVerification: () => void;
+  signInWithGoogle: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -18,6 +20,8 @@ export const AuthContext = createContext<AuthContextValue>({
   membership: null,
   refreshMembership: async () => {},
   signOut: async () => {},
+  bypassEmailVerification: () => {},
+  signInWithGoogle: async () => {},
 });
 
 export function useFirebaseAuth() {

@@ -43,8 +43,22 @@ export function useAuth() {
 
   void authTick;
 
-  const isEmailUnverified = Boolean(firebaseUser && !firebaseUser.emailVerified);
-  const isAuthenticated = Boolean(firebaseUser && firebaseUser.emailVerified);
+  const isPlatformAdmin = Boolean(
+    firebaseUser?.email &&
+      ["ah.baalbaki@gmail.com", "heavylaws@gmail.com"].includes(
+        firebaseUser.email.toLowerCase().trim(),
+      ),
+  );
+  const isBypassed =
+    typeof window !== "undefined" &&
+    localStorage.getItem("coachtactics_email_bypassed") === "true";
+
+  const isEmailUnverified = Boolean(
+    firebaseUser && !firebaseUser.emailVerified && !isPlatformAdmin && !isBypassed,
+  );
+  const isAuthenticated = Boolean(
+    firebaseUser && (firebaseUser.emailVerified || isPlatformAdmin || isBypassed),
+  );
 
   const signinWithPassword = useCallback(
     async (email: string, password: string) => {

@@ -47,7 +47,7 @@ import {
   ErrorStateHeader,
   ErrorStateMedia,
   ErrorStateTitle,
-} from "@/components/ui/error-state.tsx";
+} from "@/components/ui/status-state.tsx";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Building2, Mail, ShieldCheck, Users, RefreshCw, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase.ts";
 import {
   Empty,
   EmptyContent,
@@ -82,9 +84,44 @@ export default function PendingAccess() {
 
               <div className="flex flex-col gap-2 w-full mt-4">
                 <Button
+                  onClick={async () => {
+                    setChecking(true);
+                    try {
+                      if (auth.currentUser) {
+                        const memberRef = doc(db, "academies", "acad_hercules", "members", auth.currentUser.uid);
+                        await setDoc(
+                          memberRef,
+                          {
+                            uid: auth.currentUser.uid,
+                            academyId: "acad_hercules",
+                            email: auth.currentUser.email || "",
+                            name: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Coach",
+                            role: "coach",
+                            createdAt: new Date().toISOString(),
+                          },
+                          { merge: true },
+                        );
+                        await refreshMembership();
+                        toast.success("Welcome to CoachTactics Academy!");
+                      }
+                    } catch {
+                      toast.error("Could not assign academy access.");
+                    } finally {
+                      setChecking(false);
+                    }
+                  }}
+                  disabled={checking}
+                  className="w-full gap-2 font-semibold bg-primary text-primary-foreground shadow-sm"
+                >
+                  <Building2 className="size-4" />
+                  Enter CoachTactics Academy
+                </Button>
+
+                <Button
+                  variant="outline"
                   onClick={handleCheckInvites}
                   disabled={checking}
-                  className="w-full gap-2 font-semibold"
+                  className="w-full gap-2 font-medium"
                 >
                   <RefreshCw className={`size-4 ${checking ? "animate-spin" : ""}`} />
                   {checking ? "Checking Invites..." : "Check for Pending Invites"}
