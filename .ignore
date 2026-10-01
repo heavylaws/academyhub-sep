@@ -1,3 +1,9 @@
 .git
 node_modules
 .git-keep
+convex/snapshot/
+archives/
+dist/
+dist.zip
+credentials.md
+*.log
