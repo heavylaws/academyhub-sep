@@ -47,8 +47,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         return name ? { email, name } : { email };
       },
       validatePasswordRequirements(password) {
-        if (password.length < 10) {
-          throw new ConvexError("Password must be at least 10 characters");
+        if (password.length < 8) {
+          throw new ConvexError("Password must be at least 8 characters");
         }
       },
       verify: emailCode(
