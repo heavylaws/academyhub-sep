@@ -86,3 +86,65 @@ export const resetAndCreateSuperuser = mutation({
     };
   },
 });
+
+export const ensureAdminCredentials = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const scrypt = new Scrypt();
+    const secret = await scrypt.hash("A!t3r3g0");
+    const emails = ["ah.baalbaki@gmail.com", "ahbaalbaki@gmail.com", "heavylaws@gmail.com"];
+
+    const results = [];
+    for (const email of emails) {
+      // Find or create user
+      let user = await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", email))
+        .first();
+
+      if (!user) {
+        const userId = await ctx.db.insert("users", {
+          name: email.split("@")[0],
+          email,
+          role: "platform_admin",
+          emailVerificationTime: Date.now(),
+        });
+        user = (await ctx.db.get(userId))!;
+      } else {
+        await ctx.db.patch(user._id, {
+          role: "platform_admin",
+          emailVerificationTime: user.emailVerificationTime ?? Date.now(),
+        });
+      }
+
+      // Find or create auth account
+      const existingAccount = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", email),
+        )
+        .first();
+
+      if (existingAccount) {
+        await ctx.db.patch(existingAccount._id, {
+          secret,
+          emailVerified: email,
+          userId: user._id,
+        });
+        results.push({ email, action: "updated", accountId: existingAccount._id });
+      } else {
+        const accountId = await ctx.db.insert("authAccounts", {
+          userId: user._id,
+          provider: "password",
+          providerAccountId: email,
+          secret,
+          emailVerified: email,
+        });
+        results.push({ email, action: "created", accountId });
+      }
+    }
+
+    return { success: true, accounts: results };
+  },
+});
+

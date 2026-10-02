@@ -305,3 +305,49 @@ export const seedDatabase = mutation({
     };
   },
 });
+
+export const seedUserFirestoreAcademies = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const adminUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", "ah.baalbaki@gmail.com"))
+      .first();
+
+    const adminId = adminUser?._id;
+    const nowIso = new Date().toISOString();
+
+    const academiesToSeed = [
+      { name: "Haj Ali", slug: "acad_0qbqv4w", status: "active" as const },
+      { name: "AL-Hakkani", slug: "acad_0xecsfc", status: "active" as const },
+      { name: "SportZona", slug: "sportzona", status: "active" as const },
+      { name: "AL-Hakkani", slug: "al-hakkani", status: "active" as const },
+      { name: "EliteAcademy", slug: "eliteacademy", status: "active" as const },
+    ];
+
+    const results = [];
+    for (const a of academiesToSeed) {
+      const existing = await ctx.db
+        .query("academies")
+        .withIndex("by_slug", (q) => q.eq("slug", a.slug))
+        .first();
+
+      if (!existing) {
+        const id = await ctx.db.insert("academies", {
+          name: a.name,
+          slug: a.slug,
+          status: a.status,
+          nextInvoiceNumber: 1,
+          createdAt: nowIso,
+          createdBy: adminId,
+        });
+        results.push({ name: a.name, slug: a.slug, action: "created", id });
+      } else {
+        results.push({ name: a.name, slug: a.slug, action: "exists", id: existing._id });
+      }
+    }
+
+    return { success: true, academies: results };
+  },
+});
+
