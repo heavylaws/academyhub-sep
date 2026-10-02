@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mail, Lock, User, Eye, EyeOff, Sparkles, Send, ArrowRight, Crown, ShieldCheck, UserCheck, Activity } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -51,19 +51,6 @@ export function FirebaseAuthForm({ onSuccess }: FirebaseAuthFormProps) {
       toast.error(parseFirebaseError(err));
     } finally {
       setGoogleLoading(false);
-    }
-  };
-
-  const handleQuickLogin = async (quickEmail: string, quickPass: string, roleLabel: string) => {
-    setLoading(true);
-    try {
-      const user = await firebaseAuthService.signIn(quickEmail, quickPass);
-      toast.success(`Signed in as ${roleLabel} (${user.email})!`);
-      onSuccess?.();
-    } catch (err) {
-      toast.error(parseFirebaseError(err));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -240,24 +227,6 @@ export function FirebaseAuthForm({ onSuccess }: FirebaseAuthFormProps) {
               </svg>
               <span>Google Sign-In (Temporarily Disabled)</span>
             </Button>
-
-            {/* Quick 1-Click Super Admin Login */}
-            <div className="flex flex-col gap-2 pt-3 mt-1 border-t border-border">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">
-                Super Admin Access
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={loading}
-                onClick={() => handleQuickLogin("ah.baalbaki@gmail.com", "//A!t3r3g0", "Super Admin")}
-                className="h-10 gap-2 text-xs font-semibold justify-center border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 shadow-sm"
-              >
-                <Crown className="size-4 shrink-0 text-amber-500" />
-                <span className="truncate">Super Admin One-Click Login (ah.baalbaki@gmail.com)</span>
-              </Button>
-            </div>
           </form>
         </TabsContent>
 

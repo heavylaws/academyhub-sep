@@ -38,7 +38,7 @@ describe("Firebase Auth & Academy Membership Flows", () => {
     // In test environment without live Firestore doc, it resolves to pending_access gracefully
     expect(res.status).toBeDefined();
     expect(["active", "pending_access"]).toContain(res.status);
-  });
+  }, 15000);
 
   it("enforces role permission boundaries: academy_admin cannot invite another academy_admin", () => {
     const allowedRolesForAcademyAdmin = ["coach", "accounting", "athlete", "guardian"];

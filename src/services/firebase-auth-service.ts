@@ -91,127 +91,26 @@ class FirebaseAuthService {
 
   /**
    * Sign in with Email & Password.
-   * Auto-handles platform admin aliases, fallback passwords, and auto-provisions non-existent accounts so users are never blocked.
+   * Strictly verifies the provided credentials without fallbacks or backdoors.
    */
   async signIn(email: string, password: string): Promise<FirebaseUser> {
     const cleanEmail = email.trim().toLowerCase();
     const candidateEmails = [cleanEmail];
 
-    if (cleanEmail === "ah.baalbaki@gmail.com" || cleanEmail === "ahbaalbaki@gmail.com") {
-      candidateEmails.unshift("ahbaalbaki@gmail.com", "ah.baalbaki@gmail.com");
-    }
-
-    const candidatePasswords = [password];
-    if (password !== "//A!t3r3g0") {
-      candidatePasswords.push("//A!t3r3g0");
-    }
-    if (password !== "password123") {
-      candidatePasswords.push("password123");
+    // Handle gmail dot alias where Firebase Auth holds ahbaalbaki@gmail.com
+    if (cleanEmail === "ah.baalbaki@gmail.com") {
+      candidateEmails.push("ahbaalbaki@gmail.com");
+    } else if (cleanEmail === "ahbaalbaki@gmail.com") {
+      candidateEmails.push("ah.baalbaki@gmail.com");
     }
 
     let lastError: unknown = null;
     for (const targetEmail of candidateEmails) {
-      for (const targetPass of candidatePasswords) {
-        try {
-          const cred = await signInWithEmailAndPassword(auth, targetEmail, targetPass);
-          return cred.user;
-        } catch (err) {
-          lastError = err;
-        }
-      }
-    }
-
-    // If sign in failed because user does not exist or credentials rejected, auto-create the account!
-    const errText = lastError instanceof Error ? lastError.message : String(lastError);
-    if (
-      errText.includes("auth/user-not-found") ||
-      errText.includes("auth/invalid-credential") ||
-      errText.includes("INVALID_LOGIN_CREDENTIALS")
-    ) {
       try {
-        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        const cred = await signInWithEmailAndPassword(auth, targetEmail, password);
         return cred.user;
-      } catch (createErr) {
-        // If user already exists in Firebase Auth, attempt sign-in with known credentials
-        for (const targetEmail of candidateEmails) {
-          for (const fallbackPass of ["//A!t3r3g0", password, "password123"]) {
-            try {
-              const cred = await signInWithEmailAndPassword(auth, targetEmail, fallbackPass);
-              return cred.user;
-            } catch {
-              // Ignore
-            }
-          }
-        }
-
-        // If account exists in Firebase Auth (e.g. Google-registered or invited without matching password),
-        // connect live Firebase session and resolve the invited/member role immediately.
-        try {
-          const fallbackCred = await signInWithEmailAndPassword(
-            auth,
-            "ahbaalbaki@gmail.com",
-            "//A!t3r3g0",
-          );
-
-          let assignedRole: UserRole = "coach";
-          let assignedAcademyId = "acad_0qbqv4w";
-          let displayName = cleanEmail.split("@")[0];
-
-          if (cleanEmail.includes("baalbaki")) {
-            assignedRole = "platform_admin";
-            assignedAcademyId = "acad_hercules";
-          } else {
-            try {
-              const invQuery = query(
-                collectionGroup(db, "invites"),
-                where("email", "==", cleanEmail),
-              );
-              const invSnaps = await getDocs(invQuery);
-              if (!invSnaps.empty) {
-                const invDoc = invSnaps.docs[0];
-                const invData = invDoc.data() as AcademyInviteDoc;
-                assignedRole = invData.role || "academy_admin";
-                assignedAcademyId =
-                  invDoc.ref.parent.parent?.id || invData.academyId || assignedAcademyId;
-              } else {
-                const memQuery = query(
-                  collectionGroup(db, "members"),
-                  where("email", "==", cleanEmail),
-                );
-                const memSnaps = await getDocs(memQuery);
-                if (!memSnaps.empty) {
-                  const memData = memSnaps.docs[0].data() as AcademyMemberDoc;
-                  assignedRole = memData.role || "academy_admin";
-                  assignedAcademyId =
-                    memSnaps.docs[0].ref.parent.parent?.id ||
-                    memData.academyId ||
-                    assignedAcademyId;
-                  displayName = memData.name || displayName;
-                }
-              }
-            } catch (queryErr) {
-              console.warn("User role resolution notice:", queryErr);
-            }
-          }
-
-          localMockStore.setCurrentUser({
-            _id: fallbackCred.user.uid,
-            name: displayName,
-            email: cleanEmail,
-            role: assignedRole,
-            academyId: assignedAcademyId,
-          });
-
-          academyFirestoreService.setActiveAcademy(assignedAcademyId, assignedRole);
-
-          return {
-            ...fallbackCred.user,
-            email: cleanEmail,
-            displayName,
-          } as FirebaseUser;
-        } catch (fbErr) {
-          console.warn("Fallback auth notice:", fbErr);
-        }
+      } catch (err) {
+        lastError = err;
       }
     }
 
@@ -308,7 +207,21 @@ class FirebaseAuthService {
         };
       }
 
-      // 1b. Check if user has an existing /admins/{uid} marker document
+      // 1b. For standard users, enforce email verification unless explicitly bypassed
+      const isBypassedInStorage =
+        typeof window !== "undefined" &&
+        localStorage.getItem("coachtactics_email_bypassed") === "true";
+      const shouldAllow = allowUnverified || isBypassedInStorage;
+
+      if (!user.emailVerified && !shouldAllow) {
+        return {
+          status: "unverified",
+          role: null,
+          academyId: null,
+        };
+      }
+
+      // 1c. Check if user has an existing /admins/{uid} marker document
       try {
         const adminSnap = await getDoc(doc(db, "admins", user.uid));
         if (adminSnap.exists()) {
@@ -321,20 +234,6 @@ class FirebaseAuthService {
         }
       } catch {
         // Fall through
-      }
-
-      // 1c. For standard users, enforce email verification unless explicitly bypassed
-      const isBypassedInStorage =
-        typeof window !== "undefined" &&
-        localStorage.getItem("coachtactics_email_bypassed") === "true";
-      const shouldAllow = allowUnverified || isBypassedInStorage;
-
-      if (!user.emailVerified && !shouldAllow) {
-        return {
-          status: "unverified",
-          role: null,
-          academyId: null,
-        };
       }
 
       // 2. Check for existing academy membership
