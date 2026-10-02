@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useConvexAuth, useQuery } from "convex/react";
 import { format } from "date-fns";
@@ -20,9 +20,11 @@ import {
   DollarSign,
   HeartPulse,
   User,
+  GraduationCap,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
+import { useAdminTutorial } from "@/components/tutorial/tutorial-context.ts";
 import {
   Card,
   CardContent,
@@ -255,9 +257,75 @@ type AdminCoachData = {
   }>;
 };
 
+function AdminOnboardingBanner({ role }: { role: string }) {
+  const { openTutorial } = useAdminTutorial();
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("coachtactics_admin_banner_dismissed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  if (dismissed || (role !== "academy_admin" && role !== "platform_admin")) return null;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-background p-4 sm:p-5 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="size-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-md shadow-primary/20">
+            <GraduationCap className="size-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-sm text-foreground">
+                Academy Admin Guide & Interactive Tutorial
+              </h3>
+              <Badge variant="outline" className="text-[10px] uppercase font-mono tracking-wider">
+                13 Modules
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+              Explore step-by-step how each page is designed to run your soccer academy: from tactical pitch planning and AI drills to tablet entrance kiosks, scheduling, and automated billing.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <Button
+            size="sm"
+            onClick={() => openTutorial(1)}
+            className="text-xs gap-1.5 h-8 font-medium bg-primary text-primary-foreground shadow-sm"
+          >
+            <Sparkles className="size-3.5" />
+            <span>Launch Walkthrough</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDismissed(true);
+              try {
+                localStorage.setItem("coachtactics_admin_banner_dismissed", "true");
+              } catch {
+                // Ignored
+              }
+            }}
+            className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground"
+            title="Dismiss banner"
+          >
+            Dismiss
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminCoachDashboard({ data }: { data: AdminCoachData }) {
   return (
     <div className="flex flex-col gap-6">
+      <AdminOnboardingBanner role={data.role} />
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

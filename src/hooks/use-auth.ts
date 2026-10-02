@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { auth } from "@/lib/firebase.ts";
 import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
@@ -21,6 +22,7 @@ export interface LocalAuthUser {
 }
 
 export function useAuth() {
+  const { signOut: convexSignOut } = useAuthActions();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isLoading, setIsLoading] = useState(true);
   const [authTick, setAuthTick] = useState(0);
@@ -70,12 +72,27 @@ export function useAuth() {
 
   const signout = useCallback(async () => {
     try {
+      await convexSignOut();
+    } catch (e) {
+      console.warn("Convex signout error:", e);
+    }
+    try {
+      localStorage.removeItem("coachtactics_email_bypassed");
+      localStorage.removeItem("coachtactics_persona_id_v3");
+      localStorage.removeItem("coachtactics_auth_user");
+      localStorage.removeItem("coachtactics_active_academy_id");
+      sessionStorage.clear();
+    } catch {
+      // Ignored
+    }
+    localMockStore.setPersona(null);
+    localMockStore.wipe();
+    try {
       await firebaseAuthService.signOut();
     } catch {
       // Ignored
     }
-    localMockStore.wipe();
-  }, []);
+  }, [convexSignOut]);
 
   const effectiveEmail = firebaseUser?.email || undefined;
   const effectiveName = firebaseUser?.displayName || effectiveEmail?.split("@")[0];

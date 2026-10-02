@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
@@ -49,6 +51,7 @@ const PERSONAS: PersonaOption[] = [
 ];
 
 export function DevPersonaSwitcher() {
+  const { signOut: convexSignOut } = useAuthActions();
   const [expanded, setExpanded] = useState(false);
   const [customEmail, setCustomEmail] = useState("");
   const [currentUser, setCurrentUser] = useState(() =>
@@ -72,9 +75,30 @@ export function DevPersonaSwitcher() {
     toast.success(`Switched role to ${p?.label} (${p?.name})`);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      await convexSignOut();
+    } catch {
+      // Ignored
+    }
+    try {
+      await firebaseAuthService.signOut();
+    } catch {
+      // Ignored
+    }
     localMockStore.setPersona(null);
+    localMockStore.wipe();
+    try {
+      localStorage.removeItem("coachtactics_email_bypassed");
+      localStorage.removeItem("coachtactics_persona_id_v3");
+      localStorage.removeItem("coachtactics_auth_user");
+      localStorage.removeItem("coachtactics_active_academy_id");
+      sessionStorage.clear();
+    } catch {
+      // Ignored
+    }
     toast.info("Signed out to landing screen");
+    window.location.href = "/";
   };
 
   const handleResetData = () => {

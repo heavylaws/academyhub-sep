@@ -48,7 +48,10 @@ export default function Index() {
       <EmailVerificationScreen
         email={firebaseUser?.email}
         onVerified={refreshMembership}
-        onSignOut={signOut}
+        onSignOut={async () => {
+          await signOut();
+          window.location.href = "/";
+        }}
         onDevBypass={bypassEmailVerification}
         onSignInWithGoogle={signInWithGoogle}
       />

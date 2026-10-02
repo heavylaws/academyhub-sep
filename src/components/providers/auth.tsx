@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { auth } from "@/lib/firebase.ts";
 import {
   firebaseAuthService,
@@ -9,6 +10,7 @@ import { localMockStore } from "@/lib/local-mock-store.ts";
 import { AuthContext } from "./auth-context.ts";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { signOut: convexSignOut } = useAuthActions();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
   const [isResolvingMembership, setIsResolvingMembership] = useState(false);
   const [membership, setMembership] = useState<MembershipResolution | null>(null);
@@ -112,11 +114,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleSignOut = useCallback(async () => {
     previousUidRef.current = null;
     try {
+      await convexSignOut();
+    } catch (e) {
+      console.warn("Convex signout error:", e);
+    }
+    try {
       localStorage.removeItem("coachtactics_email_bypassed");
+      localStorage.removeItem("coachtactics_persona_id_v3");
+      localStorage.removeItem("coachtactics_auth_user");
+      localStorage.removeItem("coachtactics_active_academy_id");
+      sessionStorage.clear();
     } catch {
       // Ignored
     }
     setDevBypassed(false);
+    localMockStore.setPersona(null);
     localMockStore.wipe();
     try {
       await firebaseAuthService.signOut();
@@ -125,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setFirebaseUser(null);
     setMembership(null);
-  }, []);
+  }, [convexSignOut]);
 
   const isPlatformAdmin = Boolean(
     firebaseUser?.email &&

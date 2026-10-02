@@ -17,6 +17,7 @@ import {
   HeartPulse,
   Target,
   Compass,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/notifications/notification-bell.tsx";
@@ -41,8 +42,13 @@ import {
 import { Separator } from "@/components/ui/separator.tsx";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
+import { useAdminTutorial } from "@/components/tutorial/tutorial-context.ts";
 
 const ROLE_LABEL: Record<UserRole, string> = {
   platform_admin: "Platform Admin",
@@ -147,7 +153,10 @@ export default function AppLayout({
   children?: React.ReactNode;
 }) {
   const { user } = useCurrentUser();
-  const { signout } = useAuth();
+  const { openTutorial } = useAdminTutorial();
+  const { signOut: convexSignOut } = useAuthActions();
+  const { signOut: firebaseSignOut } = useFirebaseAuth();
+  const { signout: legacySignOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -155,8 +164,35 @@ export default function AppLayout({
   const navItems = role ? NAV_BY_ROLE[role] : [];
 
   const handleSignOut = async () => {
-    await signout();
+    try {
+      await convexSignOut();
+    } catch (e) {
+      console.warn("Convex signOut error:", e);
+    }
+    try {
+      await firebaseSignOut();
+    } catch (e) {
+      console.warn("Firebase signOut error:", e);
+    }
+    try {
+      await legacySignOut();
+    } catch (e) {
+      console.warn("Legacy signOut error:", e);
+    }
+    try {
+      localMockStore.setPersona(null);
+      localMockStore.wipe();
+      localStorage.removeItem("coachtactics_email_bypassed");
+      localStorage.removeItem("coachtactics_persona_id_v3");
+      localStorage.removeItem("coachtactics_auth_user");
+      localStorage.removeItem("coachtactics_active_academy_id");
+      sessionStorage.clear();
+    } catch {
+      // Ignored
+    }
+    toast.success("Signed out successfully");
     navigate("/", { replace: true });
+    window.location.href = "/";
   };
 
   return (
@@ -245,6 +281,18 @@ export default function AppLayout({
             </div>
           </div>
           <SidebarMenu>
+            {(role === "academy_admin" || role === "platform_admin" || role === "coach") && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => openTutorial(1)}
+                  tooltip="Academy Admin Guide & Tour"
+                  className="text-primary hover:text-primary hover:bg-primary/10"
+                >
+                  <GraduationCap className="size-4" />
+                  <span>Admin Guide & Tour</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton onClick={handleSignOut} tooltip="Sign out">
                 <LogOut className="size-4" />
@@ -270,8 +318,30 @@ export default function AppLayout({
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {(role === "academy_admin" || role === "platform_admin" || role === "coach") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openTutorial(1)}
+                className="h-8 gap-1.5 text-xs font-medium border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary"
+                title="Launch Academy Admin Guide & Tutorial"
+              >
+                <GraduationCap className="size-3.5" />
+                <span className="hidden sm:inline">Admin Guide</span>
+              </Button>
+            )}
             <CloudSyncIndicator />
             <NotificationBell />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className="text-xs text-muted-foreground hover:text-foreground gap-1.5 h-8 px-2"
+              title="Sign out"
+            >
+              <LogOut className="size-3.5" />
+              <span className="hidden sm:inline">Sign out</span>
+            </Button>
           </div>
         </header>
         <div className="flex-1 overflow-auto p-3 sm:p-5 md:p-6 pb-20 md:pb-6">

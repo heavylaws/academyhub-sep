@@ -129,7 +129,10 @@ export default function PendingAccess() {
 
                 <Button
                   variant="outline"
-                  onClick={signOut}
+                  onClick={async () => {
+                    await signOut();
+                    window.location.href = "/";
+                  }}
                   className="w-full gap-2 text-muted-foreground hover:text-foreground"
                 >
                   <LogOut className="size-4" />
