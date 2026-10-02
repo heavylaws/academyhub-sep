@@ -125,10 +125,10 @@ export function PasswordAuthForm() {
             type={step.kind === "signIn" ? "text" : "email"}
             placeholder={
               step.kind === "signIn"
-                ? "Username or Email (e.g. AdminHajAli)"
+                ? "Email (e.g. adminhajali@academieshub.com)"
                 : "name@domain.com"
             }
-            autoComplete={step.kind === "signIn" ? "username" : "email"}
+            autoComplete="email"
             required
           />
         )}
