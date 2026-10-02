@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server.js";
 import { ConvexError, v } from "convex/values";
 import { Scrypt } from "lucia";
+import type { Id } from "./_generated/dataModel.d.ts";
 
 const TABLES_TO_CLEAR = [
   "announcementReads",
@@ -370,10 +371,38 @@ export const createCustomAcademyAdmin = mutation({
   },
   handler: async (ctx, args) => {
     const scrypt = new Scrypt();
-    const academy = await ctx.db
+    let academy = await ctx.db
       .query("academies")
       .withIndex("by_slug", (q) => q.eq("slug", args.academySlug))
       .first();
+
+    if (!academy) {
+      try {
+        const doc = await ctx.db.get(args.academySlug as Id<"academies">);
+        if (doc && "slug" in doc && "name" in doc) {
+          academy = doc;
+        }
+      } catch {
+        // not a valid ID
+      }
+    }
+
+    if (!academy) {
+      const allAcademies = await ctx.db.query("academies").collect();
+      const search = args.academySlug.toLowerCase().replace(/[^a-z0-9]/g, "");
+      academy =
+        allAcademies.find((a) => {
+          const aSlug = a.slug.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const aName = a.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (search === "hajali" || search === "haj") {
+            return a.slug === "acad_0qbqv4w" || aSlug.includes("haj") || aName.includes("haj");
+          }
+          if (search === "alhakkani" || search === "hakkani") {
+            return a.slug === "al-hakkani" || aSlug.includes("hakkani") || aName.includes("hakkani");
+          }
+          return aSlug === search || aName === search || aSlug.includes(search) || aName.includes(search);
+        }) ?? null;
+    }
 
     if (!academy) {
       throw new ConvexError({
