@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
@@ -88,8 +88,9 @@ export default function Staff() {
   const isAdmin =
     user?.role === "academy_admin" || user?.role === "platform_admin";
 
-  const members = useQuery(api.users.listAcademyMembers, {});
-  const invites = useQuery(api.invites.listInvites, isAdmin ? {} : "skip");
+  const { isAuthenticated } = useConvexAuth();
+  const members = useQuery(api.users.listAcademyMembers, isAuthenticated ? {} : "skip");
+  const invites = useQuery(api.invites.listInvites, isAuthenticated && isAdmin ? {} : "skip");
   const cancelInvite = useMutation(api.invites.cancelInvite);
   const updateRole = useMutation(api.users.updateMemberRole);
   const removeMember = useMutation(api.users.removeAcademyMember);

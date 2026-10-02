@@ -7,8 +7,8 @@ import { TooltipProvider } from "../ui/tooltip.tsx";
 
 export function DefaultProviders({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <ConvexProvider>
+    <ConvexProvider>
+      <AuthProvider>
         <QueryClientProvider>
           <TooltipProvider>
             <ThemeProvider>
@@ -17,7 +17,7 @@ export function DefaultProviders({ children }: { children: React.ReactNode }) {
             </ThemeProvider>
           </TooltipProvider>
         </QueryClientProvider>
-      </ConvexProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </ConvexProvider>
   );
 }

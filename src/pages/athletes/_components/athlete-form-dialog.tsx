@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Building2 } from "lucide-react";
@@ -108,9 +108,10 @@ export default function AthleteFormDialog({
   athlete?: Doc<"athletes">;
 }) {
   const { user } = useCurrentUser();
+  const { isAuthenticated } = useConvexAuth();
   const academies = useQuery(
     api.academies.listAcademies,
-    user?.role === "platform_admin" ? {} : "skip",
+    isAuthenticated && user?.role === "platform_admin" ? {} : "skip",
   );
   const createAthlete = useMutation(api.athletes.createAthlete);
   const updateAthlete = useMutation(api.athletes.updateAthlete);

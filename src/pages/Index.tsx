@@ -2,7 +2,7 @@ import { Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
-import { FirebaseAuthForm } from "@/components/auth/firebase-auth-form.tsx";
+import { PasswordAuthForm } from "@/components/auth/password-auth-form.tsx";
 import { EmailVerificationScreen } from "@/components/auth/email-verification-screen.tsx";
 import PendingAccess from "./PendingAccess.tsx";
 import Dashboard from "./Dashboard.tsx";
@@ -25,7 +25,7 @@ function LandingScreen() {
       </div>
 
       {/* Main Authentication Card */}
-      <FirebaseAuthForm />
+      <PasswordAuthForm />
     </div>
   );
 }

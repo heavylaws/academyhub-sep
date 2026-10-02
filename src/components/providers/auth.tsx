@@ -6,7 +6,6 @@ import {
   type MembershipResolution,
 } from "@/services/firebase-auth-service.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
-import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 import { AuthContext } from "./auth-context.ts";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -51,8 +50,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: res.role,
             academyId: targetAcademyId,
           });
-          academyFirestoreService.syncAcademies(user);
-          academyFirestoreService.setActiveAcademy(targetAcademyId, res.role);
         } else if (res.status === "pending_access") {
           localMockStore.setCurrentUser({
             _id: user.uid,
@@ -78,7 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         previousUidRef.current = currentUid;
         // Wipe local store completely whenever Firebase uid changes before loading new user data
         localMockStore.wipe();
-        academyFirestoreService.cleanup();
       }
       setFirebaseUser(user);
       void resolveAndSync(user);
@@ -122,7 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setDevBypassed(false);
     localMockStore.wipe();
-    academyFirestoreService.cleanup();
     try {
       await firebaseAuthService.signOut();
     } catch {

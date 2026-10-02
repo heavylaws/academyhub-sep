@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import {
   Calendar,
@@ -40,8 +40,12 @@ import LiveSessionPerformance from "../sessions/_components/live-session-perform
 export default function KioskPage() {
   const { sessionId: paramSessionId } = useParams<{ sessionId?: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useConvexAuth();
 
-  const todaySessions = useQuery(api.trainingSessions.listTodaySessions);
+  const todaySessions = useQuery(
+    api.trainingSessions.listTodaySessions,
+    isAuthenticated ? {} : "skip",
+  );
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [successData, setSuccessData] = useState<CheckInSuccessData | null>(null);

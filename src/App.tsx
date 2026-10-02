@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { DefaultProviders } from "./components/providers/default.tsx";
@@ -6,9 +6,6 @@ import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/protected-route.tsx";
-import { isLocalDev } from "@/lib/env.ts";
-import { validateFirestoreConnection } from "@/lib/firebase.ts";
-import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 
 // Code-split pages for high-performance lazy loading
 const Academies = lazy(() => import("./pages/admin/academies/page.tsx"));
@@ -49,14 +46,6 @@ function PageLoadingFallback() {
 }
 
 export default function App() {
-  useEffect(() => {
-    // Validate live Firestore connectivity on boot
-    validateFirestoreConnection().catch((err) => {
-      console.warn("Firestore initialization notice:", err);
-    });
-    academyFirestoreService.init();
-  }, []);
-
   return (
     <DefaultProviders>
       <BrowserRouter>

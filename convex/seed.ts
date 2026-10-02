@@ -32,7 +32,7 @@ export const seedDatabase = mutation({
     });
 
     // Link user to academy
-    await ctx.db.patch(adminUser, { academyId });
+    await ctx.db.patch("users", adminUser, { academyId });
 
     // Secondary Academy
     const secondAcademyId = await ctx.db.insert("academies", {

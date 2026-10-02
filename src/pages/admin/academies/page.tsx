@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useNavigate } from "react-router-dom";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
@@ -60,7 +60,8 @@ import CreateAcademyDialog from "./_components/create-academy-dialog.tsx";
 import InviteAcademyAdminDialog from "./_components/invite-academy-admin-dialog.tsx";
 
 export default function Academies() {
-  const academies = useQuery(api.academies.platformOverview, {});
+  const { isAuthenticated } = useConvexAuth();
+  const academies = useQuery(api.academies.platformOverview, isAuthenticated ? {} : "skip");
   const navigate = useNavigate();
   const setStatus = useMutation(api.academies.setAcademyStatus);
   const deleteAcademy = useMutation(api.academies.deleteAcademy);

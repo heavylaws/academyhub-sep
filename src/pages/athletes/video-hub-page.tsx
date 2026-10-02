@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import {
@@ -41,7 +41,8 @@ const FALLBACK_ANALYSES: VideoAnalysisItem[] = [];
 
 export default function VideoHubPage() {
   const { user } = useCurrentUser();
-  const athletes = useQuery(api.athletes.listAthletes, {});
+  const { isAuthenticated } = useConvexAuth();
+  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
 
   // Fetch analyses for athletes
   // Note: in live or mock mode, we gather all analyses from local mock store / convex

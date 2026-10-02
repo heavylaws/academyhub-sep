@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { format, isToday, isYesterday } from "date-fns";
 import {
   MessageSquare,
@@ -81,7 +81,11 @@ export default function ConversationList({
   onSelectConversation,
   onOpenNewDialog,
 }: ConversationListProps) {
-  const conversations = useQuery(api.messages.listConversations);
+  const { isAuthenticated } = useConvexAuth();
+  const conversations = useQuery(
+    api.messages.listConversations,
+    isAuthenticated ? {} : "skip",
+  );
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all");
 

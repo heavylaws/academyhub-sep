@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   UserRound,
@@ -23,7 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 
 export default function GuardianAthletesPage() {
   const { user } = useCurrentUser();
-  const overview = useQuery(api.athletes.listMyAthletesOverview, {});
+  const { isAuthenticated } = useConvexAuth();
+  const overview = useQuery(
+    api.athletes.listMyAthletesOverview,
+    isAuthenticated ? {} : "skip",
+  );
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto w-full">

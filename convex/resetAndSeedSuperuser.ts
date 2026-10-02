@@ -38,8 +38,10 @@ export const resetAndCreateSuperuser = mutation({
 
     // 1. Wipe all existing records from all application and auth tables
     for (const table of TABLES_TO_CLEAR) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const records = await ctx.db.query(table as any).collect();
       for (const record of records) {
+        // eslint-disable-next-line @convex-dev/explicit-table-ids
         await ctx.db.delete(record._id);
       }
       deletedCounts[table] = records.length;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import {
   Bell,
   Check,
@@ -27,8 +27,15 @@ import { Separator } from "@/components/ui/separator.tsx";
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const unreadCount = useQuery(api.announcements.getUnreadCount) ?? 0;
-  const announcements = useQuery(api.announcements.listAnnouncements, {}) ?? [];
+  const { isAuthenticated } = useConvexAuth();
+  const unreadCount = useQuery(
+    api.announcements.getUnreadCount,
+    isAuthenticated ? {} : "skip",
+  ) ?? 0;
+  const announcements = useQuery(
+    api.announcements.listAnnouncements,
+    isAuthenticated ? {} : "skip",
+  ) ?? [];
   const markAsRead = useMutation(api.announcements.markAnnouncementAsRead);
 
   const handleMarkRead = async (id: string, e: React.MouseEvent) => {

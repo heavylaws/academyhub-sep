@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -62,8 +62,9 @@ interface Props {
 }
 
 export default function CreateAnnouncementDialog({ open, onOpenChange }: Props) {
+  const { isAuthenticated } = useConvexAuth();
   const createAnnouncement = useMutation(api.announcements.createAnnouncement);
-  const teams = useQuery(api.teams.listTeams) ?? [];
+  const teams = useQuery(api.teams.listTeams, open && isAuthenticated ? {} : "skip") ?? [];
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({

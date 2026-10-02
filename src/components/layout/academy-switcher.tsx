@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Building2 } from "lucide-react";
@@ -21,7 +21,11 @@ export function AcademySwitcher({
 }: {
   currentAcademyId: Id<"academies"> | undefined;
 }) {
-  const academies = useQuery(api.academies.listAcademies, {});
+  const { isAuthenticated } = useConvexAuth();
+  const academies = useQuery(
+    api.academies.listAcademies,
+    isAuthenticated ? {} : "skip",
+  );
   const setActiveAcademy = useMutation(api.academies.setActiveAcademy);
 
   if (!academies || academies.length === 0) return null;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { format } from "date-fns";
 import {
@@ -57,7 +57,8 @@ export function KioskHeader({
   onSyncOffline,
   isSyncing = false,
 }: KioskHeaderProps) {
-  const academy = useQuery(api.academies.getMyAcademy, {});
+  const { isAuthenticated } = useConvexAuth();
+  const academy = useQuery(api.academies.getMyAcademy, isAuthenticated ? {} : "skip");
   const navigate = useNavigate();
   const [time, setTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));

@@ -5,10 +5,12 @@ import { localMockConvexClient } from "@/lib/local-mock-convex-client.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { isLocalDev } from "@/lib/env.ts";
 
-const rawConvexUrl = import.meta.env.VITE_CONVEX_URL?.trim();
+const rawConvexUrl =
+  import.meta.env.VITE_CONVEX_URL?.trim() ||
+  "https://peaceful-cassowary-561.eu-west-1.convex.cloud";
 
 function getValidConvexUrl(url?: string): string {
-  if (!url) return "https://placeholder.convex.cloud";
+  if (!url) return "https://peaceful-cassowary-561.eu-west-1.convex.cloud";
   try {
     const parsed = new URL(url);
     if (parsed.protocol === "http:" || parsed.protocol === "https:") {
@@ -17,47 +19,24 @@ function getValidConvexUrl(url?: string): string {
   } catch {
     // invalid URL format fallback
   }
-  return "https://placeholder.convex.cloud";
+  return "https://peaceful-cassowary-561.eu-west-1.convex.cloud";
 }
 
 let liveConvex: ConvexReactClient | null = null;
-function getLiveConvexClient(): ConvexReactClient {
+// eslint-disable-next-line react-refresh/only-export-components
+export function getLiveConvexClient(): ConvexReactClient {
   if (!liveConvex) {
     liveConvex = new ConvexReactClient(getValidConvexUrl(rawConvexUrl));
   }
   return liveConvex;
 }
 
-function LocalConvexProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const mockUseAuth = useCallback(
-    () => ({
-      isLoading,
-      isAuthenticated,
-      fetchAccessToken: async () => (isAuthenticated ? "mock-token" : null),
-    }),
-    [isLoading, isAuthenticated],
-  );
-
-  return (
-    <ConvexProviderWithAuth
-      client={localMockConvexClient as unknown as ConvexReactClient}
-      useAuth={mockUseAuth}
-    >
-      {children}
-    </ConvexProviderWithAuth>
-  );
-}
-
-function LiveConvexProvider({ children }: { children: React.ReactNode }) {
+export function LiveConvexProvider({ children }: { children: React.ReactNode }) {
   return (
     <ConvexAuthProvider client={getLiveConvexClient()}>{children}</ConvexAuthProvider>
   );
 }
 
 export function ConvexProvider({ children }: { children: React.ReactNode }) {
-  if (isLocalDev) {
-    return <LocalConvexProvider>{children}</LocalConvexProvider>;
-  }
   return <LiveConvexProvider>{children}</LiveConvexProvider>;
 }

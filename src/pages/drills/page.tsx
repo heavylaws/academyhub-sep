@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import {
   Search,
   SlidersHorizontal,
@@ -150,10 +150,11 @@ export default function DrillsPage() {
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // Queries & Mutations
-  const athletes = useQuery(api.athletes.listAthletes, {});
+  const { isAuthenticated } = useConvexAuth();
+  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
   const customDrills = useQuery(
     api.drills.listDrills,
-    user?.academyId ? { academyId: user.academyId } : {},
+    isAuthenticated && user?.academyId ? { academyId: user.academyId } : "skip",
   );
   const createPlan = useMutation(api.trainingPlans.createPlan);
   const addPlanItem = useMutation(api.trainingPlans.addPlanItem);

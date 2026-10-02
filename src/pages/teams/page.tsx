@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { Plus, Shield, Users } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
@@ -31,7 +31,8 @@ export default function Teams() {
     user?.role === "coach" ||
     user?.role === "platform_admin";
 
-  const teams = useQuery(api.teams.listTeams, {});
+  const { isAuthenticated } = useConvexAuth();
+  const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
   const [createOpen, setCreateOpen] = useState(false);
 
   return (

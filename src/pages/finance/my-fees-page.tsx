@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -67,11 +67,12 @@ const STATUS_CONFIG: Record<
 export default function MyFeesPage() {
   const { user } = useCurrentUser();
 
+  const { isAuthenticated } = useConvexAuth();
   // athlete: use their own athleteId from profile; for others, use param
   const { athleteId } = useParams<{ athleteId?: string }>();
   const myAthletes = useQuery(
     api.athletes.listMyAthletes,
-    user?.role === "athlete" || user?.role === "guardian" ? {} : "skip",
+    isAuthenticated && (user?.role === "athlete" || user?.role === "guardian") ? {} : "skip",
   );
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>();
 
@@ -82,7 +83,7 @@ export default function MyFeesPage() {
 
   const fees = useQuery(
     api.fees.listFeesForAthlete,
-    resolvedAthleteId ? { athleteId: resolvedAthleteId } : "skip",
+    isAuthenticated && resolvedAthleteId ? { athleteId: resolvedAthleteId } : "skip",
   );
 
   if (!athleteId && myAthletes && myAthletes.length === 0) {

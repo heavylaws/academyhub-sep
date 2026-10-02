@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Pause, Play, Plus, Repeat, Trash2 } from "lucide-react";
@@ -41,7 +41,8 @@ function errorText(e: unknown, fallback: string): string {
 
 /** Recurring monthly fees: generated automatically each month by the backend. */
 export default function RecurringFees() {
-  const schedules = useQuery(api.feeAutomation.listFeeSchedules, {});
+  const { isAuthenticated } = useConvexAuth();
+  const schedules = useQuery(api.feeAutomation.listFeeSchedules, isAuthenticated ? {} : "skip");
   const setActive = useMutation(api.feeAutomation.setFeeScheduleActive);
   const remove = useMutation(api.feeAutomation.deleteFeeSchedule);
   const [open, setOpen] = useState(false);

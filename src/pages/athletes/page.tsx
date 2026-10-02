@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Users, Plus, Search, Upload, KeyRound } from "lucide-react";
@@ -62,9 +62,11 @@ export default function Athletes() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebounce(searchInput, 300);
-  const athletes = useQuery(api.athletes.listAthletes, {
-    search: search || undefined,
-  });
+  const { isAuthenticated } = useConvexAuth();
+  const athletes = useQuery(
+    api.athletes.listAthletes,
+    isAuthenticated ? { search: search || undefined } : "skip",
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const generatePins = useMutation(api.athletes.generateMissingCheckInPins);

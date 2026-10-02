@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -168,11 +168,12 @@ export default function FinancePage() {
   );
   const [deleteTarget, setDeleteTarget] = useState<FeeWithAthlete | null>(null);
 
+  const { isAuthenticated } = useConvexAuth();
   const fees = useQuery(
     api.fees.listFeesForAcademy,
-    statusFilter === "all" ? {} : { status: statusFilter },
+    isAuthenticated ? (statusFilter === "all" ? {} : { status: statusFilter }) : "skip",
   );
-  const athletes = useQuery(api.athletes.listAthletes, {});
+  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
   const updateStatus = useMutation(api.fees.updateFeeStatus);
   const deleteFee = useMutation(api.fees.deleteFee);
 
@@ -208,7 +209,7 @@ export default function FinancePage() {
   };
 
   // Summary counts
-  const allFees = useQuery(api.fees.listFeesForAcademy, {});
+  const allFees = useQuery(api.fees.listFeesForAcademy, isAuthenticated ? {} : "skip");
   const counts = {
     unpaid: allFees?.filter((f) => f.status === "unpaid").length ?? 0,
     partially_paid:

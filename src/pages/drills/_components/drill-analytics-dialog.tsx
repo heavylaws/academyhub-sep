@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth, useQuery, useMutation } from "convex/react";
 import { format } from "date-fns";
 import {
   Trophy,
@@ -77,8 +77,9 @@ export default function DrillAnalyticsDialog({
   const [savingScore, setSavingScore] = useState(false);
 
   // Queries
-  const athletes = useQuery(api.athletes.listAthletes, {});
-  const teams = useQuery(api.teams.listTeams, {});
+  const { isAuthenticated } = useConvexAuth();
+  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
+  const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
   const recordAssessment = useMutation(api.assessments.recordAssessment);
 
   const spec = useMemo(() => {

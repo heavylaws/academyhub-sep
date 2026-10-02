@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -61,7 +61,8 @@ export default function NewConversationDialog({
 }: NewConversationDialogProps) {
   const { user } = useCurrentUser();
   const navigate = useNavigate();
-  const members = useQuery(api.users.listAcademyMembers, {});
+  const { isAuthenticated } = useConvexAuth();
+  const members = useQuery(api.users.listAcademyMembers, isAuthenticated ? {} : "skip");
   const getOrCreateConversation = useMutation(api.messages.getOrCreateConversation);
 
   const [searchQuery, setSearchQuery] = useState("");

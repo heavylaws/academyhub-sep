@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -53,8 +53,9 @@ const ALL = "all";
 const NO_ACADEMY = "none";
 
 export default function AllUsers() {
-  const users = useQuery(api.users.listAllUsers, {});
-  const academies = useQuery(api.academies.listAcademies, {});
+  const { isAuthenticated } = useConvexAuth();
+  const users = useQuery(api.users.listAllUsers, isAuthenticated ? {} : "skip");
+  const academies = useQuery(api.academies.listAcademies, isAuthenticated ? {} : "skip");
   const setActiveAcademy = useMutation(api.academies.setActiveAcademy);
   const navigate = useNavigate();
   const [search, setSearch] = useState("");

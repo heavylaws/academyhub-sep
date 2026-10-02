@@ -85,11 +85,22 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
   }
 
   // Fallback to Convex user if authenticated
-  if (convexIsAuth && convexUser) {
-    return {
-      user: convexUser as unknown as CurrentUser,
-      isLoading: false,
-    };
+  if (convexIsAuth) {
+    if (convexUser === undefined) {
+      return {
+        user: undefined,
+        isLoading: true,
+      };
+    }
+    if (convexUser) {
+      return {
+        user: {
+          ...convexUser,
+          emailVerified: true,
+        } as unknown as CurrentUser,
+        isLoading: false,
+      };
+    }
   }
 
   return {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -202,8 +202,9 @@ function CreateInvoiceDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { isAuthenticated } = useConvexAuth();
   const createInvoice = useMutation(api.invoices.createInvoice);
-  const athletes = useQuery(api.athletes.listAthletes, {});
+  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
 
   const form = useForm<NewInvoiceValues>({
     resolver: zodResolver(newInvoiceSchema),
@@ -501,10 +502,12 @@ export default function InvoicesPage() {
     status: InvoiceStatus;
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Id<"invoices"> | null>(null);
+  const { isAuthenticated } = useConvexAuth();
 
-  const invoices = useQuery(api.invoices.listInvoicesForAcademy, {
-    status: statusFilter,
-  });
+  const invoices = useQuery(
+    api.invoices.listInvoicesForAcademy,
+    isAuthenticated ? { status: statusFilter } : "skip",
+  );
   const deleteInvoice = useMutation(api.invoices.deleteInvoice);
 
   const handleDelete = async () => {
@@ -527,7 +530,10 @@ export default function InvoicesPage() {
   };
 
   // When filtering, fetch all for counts on the unfiltered side
-  const allQuery = useQuery(api.invoices.listInvoicesForAcademy, {});
+  const allQuery = useQuery(
+    api.invoices.listInvoicesForAcademy,
+    isAuthenticated ? {} : "skip",
+  );
   const allForCounts = allQuery ?? [];
   const totalCounts = {
     draft: allForCounts.filter((i) => i.status === "draft").length,

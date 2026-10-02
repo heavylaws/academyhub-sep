@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { Building2, CheckCircle2, DollarSign, FileText } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import AppLayout from "@/components/layout/app-layout.tsx";
@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/empty.tsx";
 
 export default function AdminBillingPage() {
-  const data = useQuery(api.invoices.adminBillingOverview, {});
+  const { isAuthenticated } = useConvexAuth();
+  const data = useQuery(api.invoices.adminBillingOverview, isAuthenticated ? {} : "skip");
 
   return (
     <>

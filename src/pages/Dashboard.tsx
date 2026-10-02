@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   Activity,
@@ -445,9 +445,10 @@ function AdminCoachDashboard({ data }: { data: AdminCoachData }) {
 // ─── Attendance Leaderboard Card ──────────────────────────────────────────────
 
 function AttendanceLeaderboardCard() {
+  const { isAuthenticated } = useConvexAuth();
   const leaderboard = useQuery(
     api.trainingSessions.getAcademyAttendanceLeaderboard,
-    {},
+    isAuthenticated ? {} : "skip",
   );
 
   if (leaderboard === undefined) {
@@ -1047,7 +1048,8 @@ function NoWorkspaceState({ userEmail }: { userEmail?: string }) {
 }
 
 function UrgentAnnouncementBanner() {
-  const announcements = useQuery(api.announcements.listAnnouncements, {});
+  const { isAuthenticated } = useConvexAuth();
+  const announcements = useQuery(api.announcements.listAnnouncements, isAuthenticated ? {} : "skip");
   const activeAnnouncements = useMemo(() => {
     if (!announcements) return [];
     return announcements.filter((a) => a.priority === "urgent" || a.isPinned);
@@ -1096,7 +1098,8 @@ function UrgentAnnouncementBanner() {
 
 export default function Dashboard() {
   const { user } = useCurrentUser();
-  const data = useQuery(api.dashboard.getDashboardData, {});
+  const { isAuthenticated } = useConvexAuth();
+  const data = useQuery(api.dashboard.getDashboardData, isAuthenticated ? {} : "skip");
   const now = useMemo(() => new Date().toISOString(), []);
 
   const greeting = user?.name

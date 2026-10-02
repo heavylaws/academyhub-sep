@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   Megaphone,
@@ -63,8 +63,9 @@ export default function AnnouncementsPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const announcementsData = useQuery(api.announcements.listAnnouncements, {});
-  const teamsData = useQuery(api.teams.listTeams);
+  const { isAuthenticated } = useConvexAuth();
+  const announcementsData = useQuery(api.announcements.listAnnouncements, isAuthenticated ? {} : "skip");
+  const teamsData = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
   const markAsRead = useMutation(api.announcements.markAnnouncementAsRead);
   const deleteAnnouncement = useMutation(api.announcements.deleteAnnouncement);
 

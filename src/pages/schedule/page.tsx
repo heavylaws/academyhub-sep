@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   addMonths,
@@ -111,8 +111,9 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
-  const allSessions = useQuery(api.trainingSessions.listSessionsForAcademy, {});
-  const teams = useQuery(api.teams.listTeams, {});
+  const { isAuthenticated } = useConvexAuth();
+  const allSessions = useQuery(api.trainingSessions.listSessionsForAcademy, isAuthenticated ? {} : "skip");
+  const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
 
   // Filter sessions by team
   const filteredSessions = useMemo(() => {
