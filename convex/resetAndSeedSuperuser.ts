@@ -1,5 +1,5 @@
 import { mutation } from "./_generated/server.js";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { Scrypt } from "lucia";
 
 const TABLES_TO_CLEAR = [
@@ -360,6 +360,95 @@ export const createSingleAcademyAdmin = mutation({
     };
   },
 });
+
+export const createCustomAcademyAdmin = mutation({
+  args: {
+    academySlug: v.string(),
+    name: v.string(),
+    email: v.string(),
+    password: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const scrypt = new Scrypt();
+    const academy = await ctx.db
+      .query("academies")
+      .withIndex("by_slug", (q) => q.eq("slug", args.academySlug))
+      .first();
+
+    if (!academy) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: `Academy ${args.academySlug} not found`,
+      });
+    }
+
+    const rawEmail = args.email.trim();
+    const normalizedEmail = rawEmail.toLowerCase();
+    const secret = await scrypt.hash(args.password);
+
+    // 1. Find or create user
+    let user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", normalizedEmail))
+      .first();
+
+    if (!user) {
+      const userId = await ctx.db.insert("users", {
+        name: args.name,
+        email: normalizedEmail,
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: Date.now(),
+      });
+      user = (await ctx.db.get(userId))!;
+    } else {
+      await ctx.db.patch(user._id, {
+        name: args.name,
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: user.emailVerificationTime ?? Date.now(),
+      });
+    }
+
+    // 2. AuthAccount for all case variations
+    const identifiers = Array.from(new Set([normalizedEmail, rawEmail]));
+    for (const identifier of identifiers) {
+      const existingAuth = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", identifier),
+        )
+        .first();
+
+      if (existingAuth) {
+        await ctx.db.patch(existingAuth._id, {
+          secret,
+          userId: user._id,
+          emailVerified: identifier,
+        });
+      } else {
+        await ctx.db.insert("authAccounts", {
+          userId: user._id,
+          provider: "password",
+          providerAccountId: identifier,
+          secret,
+          emailVerified: identifier,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      name: args.name,
+      email: normalizedEmail,
+      identifiers,
+      role: "academy_admin",
+      academyName: academy.name,
+      academyId: academy._id,
+    };
+  },
+});
+
 
 
 
