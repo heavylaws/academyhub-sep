@@ -122,9 +122,13 @@ export function PasswordAuthForm() {
           step.kind === "forgot") && (
           <Input
             name="email"
-            type="email"
-            placeholder="name@domain.com"
-            autoComplete="email"
+            type={step.kind === "signIn" ? "text" : "email"}
+            placeholder={
+              step.kind === "signIn"
+                ? "Username or Email (e.g. AdminHajAli)"
+                : "name@domain.com"
+            }
+            autoComplete={step.kind === "signIn" ? "username" : "email"}
             required
           />
         )}
