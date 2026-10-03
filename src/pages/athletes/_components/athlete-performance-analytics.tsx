@@ -33,6 +33,10 @@ import {
   Compass,
   Award,
   Search,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Target,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api.js";
@@ -136,9 +140,88 @@ export default function AthletePerformanceAnalytics({
     };
   }, [matchingDrill, activeSelectedMetric]);
 
+  const [showAthleteRadar, setShowAthleteRadar] = useState(true);
+  const [showAcademyAvg, setShowAcademyAvg] = useState(true);
+  const [showEliteBenchmark, setShowEliteBenchmark] = useState(false);
+  const [showDetailedMetrics, setShowDetailedMetrics] = useState(false);
+
   const radarData = useMemo(() => {
     return generateAthleticRadarProfile(assessmentData);
   }, [assessmentData]);
+
+  // AI Talent Discovery & Special Performance Insights
+  const aiTalentInsights = useMemo(() => {
+    if (radarData.length === 0) return null;
+
+    // Standout competencies where athlete exceeds academy average by >= 5 points
+    const standoutTalents = radarData.filter((r) => r.athleteScore - r.academyAvg >= 5);
+    // Elite performances where athleteScore is >= 85
+    const elitePerformances = radarData.filter((r) => r.athleteScore >= 85);
+
+    // Identify primary strengths
+    const sorted = [...radarData].sort((a, b) => b.athleteScore - a.athleteScore);
+    const topPillar = sorted[0];
+    const secondPillar = sorted[1];
+    const weakestPillar = sorted[sorted.length - 1];
+
+    // Determine tactical player archetype based on top pillars
+    let archetype = "Dynamic All-Rounder";
+    let archetypeDescription = "Maintains a balanced athletic and tactical base across core disciplines.";
+
+    if (topPillar && secondPillar) {
+      const pair = [topPillar.attribute, secondPillar.attribute].sort().join("+");
+      if (pair === "Agility+Speed" || pair === "Mobility+Speed") {
+        archetype = "Explosive Transition Specialist / Winger";
+        archetypeDescription = "Dominates open-field counter-attacks, rapid transitions, and wide-channel accelerations.";
+      } else if (pair === "Power+Strength") {
+        archetype = "Commanding Physical Anchor / Target Player";
+        archetypeDescription = "Dominates physical duels, aerial contests, and provides a commanding central spine.";
+      } else if (pair === "Agility+Mobility" || pair === "Agility+Power") {
+        archetype = "High-Pressing Box-to-Box Engine";
+        archetypeDescription = "Relentless motor with quick recovery cycles and evasive maneuverability in tight midfield zones.";
+      } else if (pair === "Agility+Strength") {
+        archetype = "Resilient Ball-Winning Defender";
+        archetypeDescription = "Combines solid physical balance with rapid lateral tackling and defensive containment.";
+      } else if (pair === "Endurance+Speed") {
+        archetype = "High-Stamina Full-Back / Box-to-Box Operator";
+        archetypeDescription = "Capable of sustaining high sprint intensity and repeated efforts into late match phases.";
+      }
+    }
+
+    const overallAthleteAvg = Math.round(
+      radarData.reduce((acc, curr) => acc + curr.athleteScore, 0) / radarData.length,
+    );
+    const overallAcademyAvg = Math.round(
+      radarData.reduce((acc, curr) => acc + curr.academyAvg, 0) / radarData.length,
+    );
+    const netDelta = overallAthleteAvg - overallAcademyAvg;
+
+    // Recommended drill to improve the weakest area
+    const recommendedDrill =
+      allDrills.find((d) => {
+        const cat = d.category?.toLowerCase() || "";
+        const weak = weakestPillar?.attribute.toLowerCase() || "";
+        if (weak === "speed" && (cat.includes("counter") || cat.includes("transition"))) return true;
+        if (weak === "power" && (cat.includes("finish") || cat.includes("shooting"))) return true;
+        if (weak === "agility" && (cat.includes("dribbl") || cat.includes("pass"))) return true;
+        if (weak === "strength" && (cat.includes("press") || cat.includes("defend"))) return true;
+        return false;
+      }) || allDrills[0];
+
+    return {
+      archetype,
+      archetypeDescription,
+      standoutTalents,
+      elitePerformances,
+      topPillar,
+      secondPillar,
+      weakestPillar,
+      overallAthleteAvg,
+      overallAcademyAvg,
+      netDelta,
+      recommendedDrill,
+    };
+  }, [radarData, allDrills]);
 
   const personalBests = useMemo(() => {
     return assessmentData
@@ -367,6 +450,48 @@ export default function AthletePerformanceAnalytics({
               </p>
             ) : (
               <>
+                {/* Series Visibility Toggles */}
+                <div className="flex flex-wrap items-center justify-center gap-1.5 w-full pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAthleteRadar((prev) => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      showAthleteRadar
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                        : "bg-muted/40 border-border text-muted-foreground line-through opacity-60"
+                    }`}
+                  >
+                    <span className="size-2 rounded-full bg-emerald-500" />
+                    Athlete
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAcademyAvg((prev) => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      showAcademyAvg
+                        ? "bg-indigo-500/15 border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                        : "bg-muted/40 border-border text-muted-foreground line-through opacity-60"
+                    }`}
+                  >
+                    <span className="size-2 rounded-full bg-indigo-500" />
+                    Academy Avg
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowEliteBenchmark((prev) => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      showEliteBenchmark
+                        ? "bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400"
+                        : "bg-muted/40 border-border text-muted-foreground opacity-60"
+                    }`}
+                  >
+                    <span className="size-2 rounded-full bg-amber-500" />
+                    Elite (90th%)
+                  </button>
+                </div>
+
                 <div className="w-full h-64 sm:h-72">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
@@ -381,38 +506,162 @@ export default function AthletePerformanceAnalytics({
                         stroke="hsl(var(--border))"
                         tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 8 }}
                       />
-                      <Radar
-                        name="Athlete"
-                        dataKey="athleteScore"
-                        stroke="#10b981"
-                        fill="#10b981"
-                        fillOpacity={0.4}
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const d = payload[0].payload as {
+                            attribute: string;
+                            athleteScore: number;
+                            academyAvg: number;
+                            eliteBenchmark: number;
+                          };
+                          const diff = d.athleteScore - d.academyAvg;
+                          return (
+                            <div className="rounded-lg border bg-popover/95 p-2.5 shadow-lg backdrop-blur-md text-xs space-y-1 min-w-[170px]">
+                              <div className="font-bold text-foreground border-b pb-1">
+                                {d.attribute} Competency
+                              </div>
+                              <div className="flex items-center justify-between text-emerald-500 font-medium">
+                                <span>Athlete Score:</span>
+                                <span className="font-bold">{d.athleteScore} / 100</span>
+                              </div>
+                              <div className="flex items-center justify-between text-indigo-400 font-medium">
+                                <span>Academy Avg:</span>
+                                <span>{d.academyAvg} / 100</span>
+                              </div>
+                              <div className="flex items-center justify-between text-amber-400 font-medium">
+                                <span>Elite Target:</span>
+                                <span>{d.eliteBenchmark} / 100</span>
+                              </div>
+                              <div className="pt-1 border-t text-[11px] flex items-center justify-between">
+                                <span className="text-muted-foreground">Variance:</span>
+                                <span className={`font-semibold ${diff >= 0 ? "text-emerald-500" : "text-amber-500"}`}>
+                                  {diff >= 0 ? `+${diff}` : diff} pts vs Avg
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }}
                       />
+                      {showAthleteRadar && (
+                        <Radar
+                          name="Athlete"
+                          dataKey="athleteScore"
+                          stroke="#10b981"
+                          fill="#10b981"
+                          fillOpacity={0.4}
+                          strokeWidth={2}
+                        />
+                      )}
+                      {showAcademyAvg && (
+                        <Radar
+                          name="Academy Avg"
+                          dataKey="academyAvg"
+                          stroke="#6366f1"
+                          fill="#6366f1"
+                          fillOpacity={0.15}
+                          strokeWidth={2}
+                          strokeDasharray="4 4"
+                        />
+                      )}
+                      {showEliteBenchmark && (
+                        <Radar
+                          name="Elite Benchmark"
+                          dataKey="eliteBenchmark"
+                          stroke="#f59e0b"
+                          fill="#f59e0b"
+                          fillOpacity={0.06}
+                          strokeWidth={1.5}
+                          strokeDasharray="2 2"
+                        />
+                      )}
                       <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
+
                 <div className="w-full grid grid-cols-3 gap-2 mt-3 pt-3 border-t text-center text-xs">
                   <div>
                     <div className="text-muted-foreground text-[11px]">Top Competency</div>
                     <div className="font-semibold text-emerald-500">
-                      {radarData.reduce((prev, curr) =>
-                        curr.athleteScore > prev.athleteScore ? curr : prev,
-                      ).attribute}
+                      {aiTalentInsights?.topPillar?.attribute ?? "—"}
                     </div>
                   </div>
                   <div>
                     <div className="text-muted-foreground text-[11px]">Development Focus</div>
                     <div className="font-semibold text-amber-500">
-                      {radarData.reduce((prev, curr) =>
-                        curr.athleteScore < prev.athleteScore ? curr : prev,
-                      ).attribute}
+                      {aiTalentInsights?.weakestPillar?.attribute ?? "—"}
                     </div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-[11px]">Areas Logged</div>
-                    <div className="font-semibold text-foreground">{radarData.length} / 6</div>
+                    <div className="text-muted-foreground text-[11px]">vs Academy Avg</div>
+                    <div
+                      className={`font-semibold ${
+                        (aiTalentInsights?.netDelta ?? 0) >= 0 ? "text-emerald-500" : "text-amber-500"
+                      }`}
+                    >
+                      {(aiTalentInsights?.netDelta ?? 0) >= 0 ? "+" : ""}
+                      {aiTalentInsights?.netDelta ?? 0} pts
+                    </div>
                   </div>
+                </div>
+
+                {/* Comparative Breakdown Toggle */}
+                <div className="w-full mt-3 pt-2 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailedMetrics((prev) => !prev)}
+                    className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground py-1 px-1 transition-colors"
+                  >
+                    <span className="font-medium">
+                      {showDetailedMetrics ? "Hide" : "Show"} Detailed Competency Breakdown
+                    </span>
+                    {showDetailedMetrics ? (
+                      <ChevronUp className="size-3.5" />
+                    ) : (
+                      <ChevronDown className="size-3.5" />
+                    )}
+                  </button>
+
+                  {showDetailedMetrics && (
+                    <div className="space-y-2 pt-2 animate-in fade-in duration-200">
+                      {radarData.map((row) => {
+                        const diff = row.athleteScore - row.academyAvg;
+                        const isPositive = diff >= 0;
+                        return (
+                          <div
+                            key={row.attribute}
+                            className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/30 border text-xs"
+                          >
+                            <div className="min-w-0">
+                              <span className="font-semibold text-foreground">{row.attribute}</span>
+                              <div className="text-[10px] text-muted-foreground">
+                                Athlete: <strong className="text-emerald-500">{row.athleteScore}</strong> · Academy:{" "}
+                                <strong className="text-indigo-400">{row.academyAvg}</strong>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge
+                                variant={isPositive ? "default" : "secondary"}
+                                className={`text-[10px] h-5 px-1.5 font-mono ${
+                                  isPositive
+                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/30"
+                                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 border-amber-500/30"
+                                }`}
+                              >
+                                {isPositive ? `+${diff}` : diff} pts
+                              </Badge>
+                              {row.athleteScore >= 85 && (
+                                <Badge variant="outline" className="text-[9px] h-5 px-1 border-amber-500/40 text-amber-500">
+                                  Elite
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -488,8 +737,128 @@ export default function AthletePerformanceAnalytics({
         </Card>
       </div>
 
+      {/* AI Talent Discovery & Special Performance Insights */}
+      {aiTalentInsights && (
+        <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-primary/5 to-card overflow-hidden shadow-sm">
+          <CardHeader className="pb-3 border-b border-purple-500/10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="size-9 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    AI Talent Identification & Tactical Archetype
+                    <Badge variant="outline" className="text-[10px] font-mono border-purple-500/40 text-purple-600 dark:text-purple-400">
+                      AI Scout
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Synthesized from multi-pillar radar competencies, drill personal bests, and academy benchmark variances.
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <Badge className="bg-purple-500 text-white hover:bg-purple-600 text-xs px-2.5 py-0.5">
+                  {aiTalentInsights.archetype}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {/* Tactical Profile */}
+              <div className="rounded-xl border bg-card/60 p-3.5 space-y-1.5 backdrop-blur-sm">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Target className="size-3.5 text-primary" />
+                  Tactical Archetype
+                </div>
+                <div className="font-bold text-sm text-foreground">
+                  {aiTalentInsights.archetype}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {aiTalentInsights.archetypeDescription}
+                </p>
+              </div>
+
+              {/* Special Talents / Standout Metrics */}
+              <div className="rounded-xl border bg-card/60 p-3.5 space-y-1.5 backdrop-blur-sm">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Flame className="size-3.5 text-emerald-500" />
+                  Special Talents vs Academy
+                </div>
+                {aiTalentInsights.standoutTalents.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {aiTalentInsights.standoutTalents.map((t) => {
+                      const diff = t.athleteScore - t.academyAvg;
+                      return (
+                        <div key={t.attribute} className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-foreground flex items-center gap-1">
+                            <Zap className="size-3 text-emerald-500 shrink-0" />
+                            {t.attribute}
+                          </span>
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                            +{diff} pts vs avg ({t.athleteScore}/100)
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Athlete performs right along academy baseline with solid balance across all measured pillars.
+                  </p>
+                )}
+                {aiTalentInsights.elitePerformances.length > 0 && (
+                  <div className="pt-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                    ⭐ Ranks in elite academy top tier in {aiTalentInsights.elitePerformances.map((p) => p.attribute).join(", ")}.
+                  </div>
+                )}
+              </div>
+
+              {/* AI Coaching Prescription */}
+              <div className="rounded-xl border bg-card/60 p-3.5 space-y-1.5 backdrop-blur-sm">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Trophy className="size-3.5 text-amber-500" />
+                  Target Development Drill
+                </div>
+                <div className="font-bold text-sm text-foreground">
+                  Focus: {aiTalentInsights.weakestPillar?.attribute}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Recommended Playbook Drill:{" "}
+                  <strong className="text-foreground">
+                    {aiTalentInsights.recommendedDrill.title}
+                  </strong>{" "}
+                  ({aiTalentInsights.recommendedDrill.category}) to elevate baseline competency.
+                </p>
+                <div className="pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedMetric(
+                        aiTalentInsights.recommendedDrill.metricName ||
+                          aiTalentInsights.recommendedDrill.title,
+                      );
+                      const el = document.getElementById("drill-performance-studio");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="h-6 text-[11px] px-2 gap-1 border-primary/30 text-primary hover:bg-primary/5"
+                  >
+                    <span>Analyze Drill</span>
+                    <TrendingUp className="size-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Interactive Time-Series Studio: Analyze ANY Drill */}
-      <Card>
+      <Card id="drill-performance-studio">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

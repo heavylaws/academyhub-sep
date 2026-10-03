@@ -111,9 +111,9 @@ export const ensureAdminCredentials = mutation({
           role: "platform_admin",
           emailVerificationTime: Date.now(),
         });
-        user = (await ctx.db.get(userId))!;
+        user = (await ctx.db.get("users", userId))!;
       } else {
-        await ctx.db.patch(user._id, {
+        await ctx.db.patch("users", user._id, {
           role: "platform_admin",
           emailVerificationTime: user.emailVerificationTime ?? Date.now(),
         });
@@ -128,7 +128,7 @@ export const ensureAdminCredentials = mutation({
         .first();
 
       if (existingAccount) {
-        await ctx.db.patch(existingAccount._id, {
+        await ctx.db.patch("authAccounts", existingAccount._id, {
           secret,
           emailVerified: email,
           userId: user._id,
@@ -292,11 +292,11 @@ export const createSingleAcademyAdmin = mutation({
     const secret = await scrypt.hash(config.password);
 
     // 1. Find or create User document
-    let user = await ctx.db
+    const academyUsers = await ctx.db
       .query("users")
       .withIndex("by_academy", (q) => q.eq("academyId", academy._id))
-      .filter((q) => q.eq(q.field("role"), "academy_admin"))
-      .first();
+      .collect();
+    let user = academyUsers.find((u) => u.role === "academy_admin") ?? null;
 
     if (!user) {
       const userId = await ctx.db.insert("users", {
@@ -306,9 +306,9 @@ export const createSingleAcademyAdmin = mutation({
         academyId: academy._id,
         emailVerificationTime: Date.now(),
       });
-      user = (await ctx.db.get(userId))!;
+      user = (await ctx.db.get("users", userId))!;
     } else {
-      await ctx.db.patch(user._id, {
+      await ctx.db.patch("users", user._id, {
         name: `${config.username} (${academy.name})`,
         role: "academy_admin",
         academyId: academy._id,
@@ -334,7 +334,7 @@ export const createSingleAcademyAdmin = mutation({
         .first();
 
       if (existingAuth) {
-        await ctx.db.patch(existingAuth._id, {
+        await ctx.db.patch("authAccounts", existingAuth._id, {
           secret,
           userId: user._id,
           emailVerified: identifier,
@@ -378,7 +378,7 @@ export const createCustomAcademyAdmin = mutation({
 
     if (!academy) {
       try {
-        const doc = await ctx.db.get(args.academySlug as Id<"academies">);
+        const doc = await ctx.db.get("academies", args.academySlug as Id<"academies">);
         if (doc && "slug" in doc && "name" in doc) {
           academy = doc;
         }
@@ -429,9 +429,9 @@ export const createCustomAcademyAdmin = mutation({
         academyId: academy._id,
         emailVerificationTime: Date.now(),
       });
-      user = (await ctx.db.get(userId))!;
+      user = (await ctx.db.get("users", userId))!;
     } else {
-      await ctx.db.patch(user._id, {
+      await ctx.db.patch("users", user._id, {
         name: args.name,
         role: "academy_admin",
         academyId: academy._id,
@@ -450,7 +450,7 @@ export const createCustomAcademyAdmin = mutation({
         .first();
 
       if (existingAuth) {
-        await ctx.db.patch(existingAuth._id, {
+        await ctx.db.patch("authAccounts", existingAuth._id, {
           secret,
           userId: user._id,
           emailVerified: identifier,

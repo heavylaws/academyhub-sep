@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
-import { Users, Plus, Search, Upload, KeyRound } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Users, Plus, Search, Upload, KeyRound, Sparkles } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import { api } from "@/convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import {
   Table,
   TableBody,
@@ -35,6 +36,7 @@ import {
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import AthleteFormDialog from "./_components/athlete-form-dialog.tsx";
 import ImportAthletesDialog from "./_components/import-athletes-dialog.tsx";
+import { AiTalentScoutHub } from "./_components/ai-talent-scout-hub.tsx";
 
 function initials(firstName: string, lastName: string): string {
   return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
@@ -60,12 +62,19 @@ export default function Athletes() {
     user?.role === "coach" ||
     user?.role === "platform_admin";
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") === "scout" ? "scout" : "roster";
+
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebounce(searchInput, 300);
   const { isAuthenticated } = useConvexAuth();
   const athletes = useQuery(
     api.athletes.listAthletes,
     isAuthenticated ? { search: search || undefined } : "skip",
+  );
+  const analyticsAssessments = useQuery(
+    api.assessments.listAssessmentsForAnalytics,
+    canManage && isAuthenticated ? {} : "skip",
   );
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -93,7 +102,7 @@ export default function Athletes() {
           </h1>
           <p className="text-muted-foreground">
             {canManage
-              ? "Manage athlete profiles for your academy."
+              ? "Manage athlete profiles, scout talent, and inspect academy benchmarks."
               : "Your athlete profile."}
           </p>
         </div>
@@ -127,16 +136,70 @@ export default function Athletes() {
       </div>
 
       {canManage && (
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search athletes by name..."
-            className="pl-9 h-11 sm:h-10 text-sm"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </div>
+        <Tabs
+          value={currentTab}
+          onValueChange={(val) => {
+            const next = new URLSearchParams(searchParams);
+            if (val === "scout") {
+              next.set("tab", "scout");
+            } else {
+              next.delete("tab");
+            }
+            setSearchParams(next);
+          }}
+          className="w-full"
+        >
+          <TabsList className="grid grid-cols-2 max-w-md h-10">
+            <TabsTrigger value="roster" className="text-xs sm:text-sm gap-2">
+              <Users className="size-4" />
+              <span>Roster Directory ({athletes?.length ?? 0})</span>
+            </TabsTrigger>
+            <TabsTrigger value="scout" className="text-xs sm:text-sm gap-2 font-medium">
+              <Sparkles className="size-4 text-purple-500" />
+              <span>AI Talent Scout</span>
+              <Badge className="bg-purple-500 text-white text-[9px] px-1.5 py-0 hidden sm:inline">
+                Option D
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       )}
+
+      {currentTab === "scout" && canManage ? (
+        <AiTalentScoutHub
+          athletes={athletes || []}
+          assessments={analyticsAssessments || []}
+          canManage={canManage}
+        />
+      ) : (
+        <>
+          {canManage && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative max-w-sm flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search athletes by name..."
+                  className="pl-9 h-11 sm:h-10 text-sm"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                />
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("tab", "scout");
+                  setSearchParams(next);
+                }}
+                className="h-10 sm:h-9 text-xs gap-1.5 font-medium"
+              >
+                <Sparkles className="size-3.5" />
+                <span>Launch AI Scout & Leaderboard (Option D)</span>
+              </Button>
+            </div>
+          )}
 
       <Card>
         <CardHeader>
@@ -267,6 +330,8 @@ export default function Athletes() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {canManage && (
         <>
