@@ -1032,6 +1032,74 @@ class LocalMockStore {
         };
       }
 
+      case "dashboard:getPlatformKpis": {
+        const activeAthletes = this.db.athletes.filter(
+          (a) => (!academyId || a.academyId === academyId) && a.status === "active",
+        );
+        const count = activeAthletes.length > 0 ? activeAthletes.length : 24;
+
+        const monthNames = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+        const athleteTrend = monthNames.map((month, idx) => {
+          const factor = 0.65 + (idx / (monthNames.length - 1)) * 0.35;
+          return { name: month, count: Math.max(1, Math.round(count * factor)) };
+        });
+        if (athleteTrend.length > 0) {
+          athleteTrend[athleteTrend.length - 1].count = count;
+        }
+
+        // Attendance rate
+        const academySessions = this.db.trainingSessions.filter(
+          (s) => !academyId || s.academyId === academyId,
+        );
+        const sessionIds = new Set(academySessions.map((s) => s._id));
+        const attendance = this.db.attendanceRecords.filter(
+          (r) => sessionIds.has(r.sessionId),
+        );
+        let attendanceRate = 88.5;
+        const attendanceTrend = [
+          { session: "W1", rate: 82 },
+          { session: "W2", rate: 85 },
+          { session: "W3", rate: 89 },
+          { session: "W4", rate: 87 },
+          { session: "W5", rate: 91 },
+          { session: "W6", rate: 94 },
+        ];
+
+        if (attendance.length > 0) {
+          const present = attendance.filter(
+            (r) => r.status === "present" || r.status === "late",
+          ).length;
+          attendanceRate = Math.round((present / attendance.length) * 1000) / 10;
+        }
+
+        // Invoices / Revenue
+        const invoices = this.db.invoices.filter(
+          (inv) => !academyId || inv.academyId === academyId,
+        );
+        const paidInvoices = invoices.filter((inv) => inv.status === "paid");
+        const totalPaidRevenue = paidInvoices.reduce((acc, inv) => acc + inv.amount, 0);
+        const recentRevenue = totalPaidRevenue > 0 ? totalPaidRevenue : 18450;
+
+        const revenueTrend = monthNames.map((month, idx) => {
+          const base = recentRevenue / 6;
+          const variation = 0.8 + 0.08 * idx;
+          return { month, revenue: Math.round(base * variation) };
+        });
+
+        return {
+          totalActiveAthletes: count,
+          athleteGrowthPct: 14.8,
+          athleteTrend,
+          attendanceRate,
+          attendanceTrend,
+          recentRevenue,
+          revenueTrend,
+          currency: invoices[0]?.currency || "USD",
+          paidInvoiceCount: paidInvoices.length > 0 ? paidInvoices.length : 16,
+          totalInvoiceCount: invoices.length > 0 ? invoices.length : 18,
+        };
+      }
+
       case "trainingSessions:listSessionsForAcademy": {
         if (!academyId) return [];
         const sessions = this.db.trainingSessions

@@ -34,6 +34,7 @@ export const attendanceRecords = defineTable({
   recordedBy: v.id("users"),
   recordedAt: v.string(),
 })
+  .index("by_academy", ["academyId"])
   .index("by_session", ["sessionId"])
   .index("by_session_and_athlete", ["sessionId", "athleteId"])
   .index("by_athlete", ["athleteId"]);

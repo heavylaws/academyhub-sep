@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/empty.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { cn } from "@/lib/utils.ts";
+import { KpiSummaryCards } from "@/components/dashboard/kpi-summary-cards.tsx";
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
@@ -1168,6 +1169,7 @@ export default function Dashboard() {
   const { user } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
   const data = useQuery(api.dashboard.getDashboardData, isAuthenticated ? {} : "skip");
+  const kpiData = useQuery(api.dashboard.getPlatformKpis, isAuthenticated ? {} : "skip");
   const now = useMemo(() => new Date().toISOString(), []);
 
   const greeting = user?.name
@@ -1208,6 +1210,9 @@ export default function Dashboard() {
 
       {/* Urgent Announcement Banner */}
       <UrgentAnnouncementBanner />
+
+      {/* Real-time Platform KPI Summary Rechart Cards */}
+      <KpiSummaryCards data={kpiData} isLoading={kpiData === undefined} />
 
       {/* Role-specific content */}
       {data === undefined ? (
