@@ -38,7 +38,11 @@ export type EquipmentType =
   | "mannequin"
   | "mini_goal"
   | "agility_pole"
-  | "hurdle";
+  | "hurdle"
+  | "speed_ladder"
+  | "passing_gate"
+  | "rebounder_board"
+  | "ball_cart";
 
 export interface EquipmentNode {
   id: string;
@@ -53,6 +57,8 @@ export type AnnotationType =
   | "run_arrow"
   | "dribble_wave"
   | "press_zone"
+  | "cover_shadow"
+  | "defensive_block"
   | "freehand"
   | "text";
 
@@ -82,13 +88,28 @@ export type PitchType =
   | "attacking_half"
   | "defending_half"
   | "penalty_box"
-  | "rondo_grid";
+  | "rondo_grid"
+  | "basketball_full"
+  | "basketball_half"
+  | "futsal_court"
+  | "handball_court"
+  | "volleyball_court"
+  | "rugby_pitch";
+
+export type SportType =
+  | "soccer"
+  | "basketball"
+  | "futsal"
+  | "handball"
+  | "volleyball"
+  | "rugby";
 
 export interface TacticalPlan {
   id: string;
   drillId?: string;
   title: string;
   category?: string;
+  sport?: SportType;
   pitchType: PitchType;
   gridDimensions?: string;
   phases: TacticalPhase[];
@@ -161,6 +182,12 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
     "defending_half",
     "penalty_box",
     "rondo_grid",
+    "basketball_full",
+    "basketball_half",
+    "futsal_court",
+    "handball_court",
+    "volleyball_court",
+    "rugby_pitch",
   ];
   const pitchType: PitchType = validPitchTypes.includes(input.pitchType as PitchType)
     ? (input.pitchType as PitchType)
@@ -287,6 +314,10 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
         "mini_goal",
         "agility_pole",
         "hurdle",
+        "speed_ladder",
+        "passing_gate",
+        "rebounder_board",
+        "ball_cart",
       ];
       const type: EquipmentType = validTypes.includes(eq.type as EquipmentType)
         ? (eq.type as EquipmentType)
@@ -318,6 +349,8 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
         "run_arrow",
         "dribble_wave",
         "press_zone",
+        "cover_shadow",
+        "defensive_block",
         "freehand",
         "text",
       ];
@@ -548,6 +581,271 @@ export function createDefaultTacticalPlan(drillTitle = "Tactical Possession & Tr
       "Body shape open to receive on back foot.",
       "Play the pass with appropriate weight into the runner's stride.",
       "Immediate transition mindset upon ball turnover.",
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Creates a default Basketball tactical plan (5-Out Pick & Roll Offense)
+ */
+export function createBasketballTacticalPlan(title = "5-Out Pick & Roll Motion"): TacticalPlan {
+  const now = new Date().toISOString();
+  return {
+    id: `plan_bball_${Date.now()}`,
+    title,
+    category: "Basketball Offense",
+    sport: "basketball",
+    pitchType: "basketball_half",
+    gridDimensions: "Half Court (14m × 15m)",
+    phases: [
+      {
+        id: "phase_bball_1",
+        phaseNumber: 1,
+        title: "High Pick & Roll Initiation",
+        durationSeconds: 4,
+        coachingNotes: "Point Guard calls high ball screen from Center; wings space to the corners for 3-point kickout.",
+        players: [
+          { id: "bb_pg", team: "home", number: 1, role: "PG", label: "Point Guard", position: { x: 55, y: 50 }, hasBall: true },
+          { id: "bb_c", team: "home", number: 15, role: "C", label: "Center", position: { x: 65, y: 48 }, targetPosition: { x: 58, y: 52 } },
+          { id: "bb_sg", team: "home", number: 2, role: "SG", label: "Shooting Guard", position: { x: 68, y: 15 } },
+          { id: "bb_sf", team: "home", number: 3, role: "SF", label: "Small Forward", position: { x: 68, y: 85 } },
+          { id: "bb_pf", team: "home", number: 4, role: "PF", label: "Power Forward", position: { x: 85, y: 20 } },
+          // Defenders
+          { id: "bb_d1", team: "away", number: 1, role: "D", label: "On-Ball Def.", position: { x: 60, y: 50 } },
+          { id: "bb_d5", team: "away", number: 15, role: "D", label: "Drop Big Def.", position: { x: 74, y: 50 } },
+          { id: "bb_d2", team: "away", number: 2, role: "D", label: "Wing Def.", position: { x: 72, y: 22 } },
+        ],
+        ball: { x: 55, y: 50, attachedPlayerId: "bb_pg" },
+        equipment: [{ id: "bb_cone1", type: "cone", position: { x: 50, y: 50 } }],
+        annotations: [
+          {
+            id: "ann_screen",
+            type: "run_arrow",
+            points: [{ x: 65, y: 48 }, { x: 58, y: 52 }],
+            color: "#F97316",
+            width: 2.5,
+            label: "Ball Screen",
+          },
+        ],
+      },
+    ],
+    coachingPoints: [
+      "Point Guard rubs shoulder-to-shoulder on the screen.",
+      "Center sets solid base before rolling with target hand raised.",
+      "Corner shooters remain stationary in passing vision.",
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Creates a default Futsal tactical plan (3-1 Diamond Pivot Rotation)
+ */
+export function createFutsalTacticalPlan(title = "3-1 Diamond Rotation & Pivot Set"): TacticalPlan {
+  const now = new Date().toISOString();
+  return {
+    id: `plan_futsal_${Date.now()}`,
+    title,
+    category: "Futsal Tactics",
+    sport: "futsal",
+    pitchType: "futsal_court",
+    gridDimensions: "40m × 20m Court",
+    phases: [
+      {
+        id: "phase_futsal_1",
+        phaseNumber: 1,
+        title: "Pivot Hold-up & Parallel Run",
+        durationSeconds: 3,
+        coachingNotes: "Fixo plays into the feet of the Pivô, Ala Right performs blindside parallel diagonal cut.",
+        players: [
+          { id: "fut_gk", team: "gk_home", number: 1, role: "GKP", label: "Goalkeeper", position: { x: 10, y: 50 } },
+          { id: "fut_fixo", team: "home", number: 4, role: "Fixo", label: "Fixo (Def)", position: { x: 30, y: 50 }, hasBall: true },
+          { id: "fut_ala_l", team: "home", number: 7, role: "Ala E", label: "Ala Left", position: { x: 50, y: 15 } },
+          { id: "fut_ala_r", team: "home", number: 10, role: "Ala D", label: "Ala Right", position: { x: 50, y: 85 } },
+          { id: "fut_pivo", team: "home", number: 9, role: "Pivô", label: "Pivô (Target)", position: { x: 75, y: 50 } },
+          // Opposition
+          { id: "fut_def1", team: "away", number: 3, role: "Def", label: "Opp. Presser", position: { x: 42, y: 50 } },
+          { id: "fut_def2", team: "away", number: 5, role: "Def", label: "Opp. Stopper", position: { x: 70, y: 50 } },
+          { id: "fut_ogk", team: "gk_away", number: 1, role: "GKP", label: "Opp. GK", position: { x: 92, y: 50 } },
+        ],
+        ball: { x: 30, y: 50, attachedPlayerId: "fut_fixo" },
+        equipment: [],
+        annotations: [
+          {
+            id: "fut_pass",
+            type: "pass_line",
+            points: [{ x: 30, y: 50 }, { x: 75, y: 50 }],
+            color: "#EAB308",
+            width: 2.5,
+            label: "Direct Pivot Entry Pass",
+          },
+        ],
+      },
+    ],
+    coachingPoints: [
+      "Pivô shields ball with low center of gravity using arms for body contact.",
+      "Ala makes sharp change of pace on the diagonal parallel sprint.",
+      "Immediate support run behind the ball in case of back pass.",
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Creates a default Handball tactical plan (6:0 Defense vs Crossing Attack)
+ */
+export function createHandballTacticalPlan(title = "Handball 6:0 Defense vs Crossing Attack"): TacticalPlan {
+  const now = new Date().toISOString();
+  return {
+    id: `plan_handball_${Date.now()}`,
+    title,
+    category: "Handball System",
+    sport: "handball",
+    pitchType: "handball_court",
+    gridDimensions: "40m × 20m Handball Court",
+    phases: [
+      {
+        id: "phase_hb_1",
+        phaseNumber: 1,
+        title: "Center Back & Left Back Piston Crossing",
+        durationSeconds: 3.5,
+        coachingNotes: "Center Back attacks 9m line and executes crossing scissors with Left Back.",
+        players: [
+          { id: "hb_gk", team: "gk_home", number: 1, role: "GK", label: "Handball GK", position: { x: 92, y: 50 } },
+          { id: "hb_cb", team: "home", number: 24, role: "CB", label: "Playmaker", position: { x: 55, y: 50 }, hasBall: true },
+          { id: "hb_lb", team: "home", number: 13, role: "LB", label: "Left Back Shooter", position: { x: 58, y: 30 } },
+          { id: "hb_rb", team: "home", number: 18, role: "RB", label: "Right Back", position: { x: 58, y: 70 } },
+          { id: "hb_lw", team: "home", number: 7, role: "LW", label: "Left Wing", position: { x: 75, y: 12 } },
+          { id: "hb_rw", team: "home", number: 9, role: "RW", label: "Right Wing", position: { x: 75, y: 88 } },
+          { id: "hb_piv", team: "home", number: 21, role: "P", label: "Line Player (Pivot)", position: { x: 82, y: 55 } },
+          // 6:0 Defensive Wall
+          { id: "hb_d1", team: "away", number: 2, role: "D", label: "Left Def 1", position: { x: 80, y: 25 } },
+          { id: "hb_d2", team: "away", number: 4, role: "D", label: "Blocker 2", position: { x: 82, y: 40 } },
+          { id: "hb_d3", team: "away", number: 5, role: "D", label: "Blocker 3", position: { x: 82, y: 60 } },
+          { id: "hb_d4", team: "away", number: 6, role: "D", label: "Right Def 4", position: { x: 80, y: 75 } },
+        ],
+        ball: { x: 55, y: 50, attachedPlayerId: "hb_cb" },
+        equipment: [],
+        annotations: [],
+      },
+    ],
+    coachingPoints: [
+      "Attacker must commit the defender past the 9m line before releasing pass.",
+      "Pivot seals the central defender to open shooting lane.",
+      "Quick wrist release with maximum hip rotation.",
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Creates a default Volleyball tactical plan (5-1 Serve Receive & Middle Quick)
+ */
+export function createVolleyballTacticalPlan(title = "5-1 System Serve Receive & Middle Attack"): TacticalPlan {
+  const now = new Date().toISOString();
+  return {
+    id: `plan_vball_${Date.now()}`,
+    title,
+    category: "Volleyball Tactics",
+    sport: "volleyball",
+    pitchType: "volleyball_court",
+    gridDimensions: "18m × 9m Court",
+    phases: [
+      {
+        id: "phase_vb_1",
+        phaseNumber: 1,
+        title: "Serve Reception W-Formation & Setter Penetration",
+        durationSeconds: 3,
+        coachingNotes: "Libero and Outside Hitter form 3-passer line; Setter runs from back-row position 1 to target spot.",
+        players: [
+          { id: "vb_s", team: "home", number: 1, role: "S", label: "Setter", position: { x: 38, y: 65 } },
+          { id: "vb_l", team: "home", number: 10, role: "L", label: "Libero", position: { x: 22, y: 50 } },
+          { id: "vb_oh1", team: "home", number: 7, role: "OH", label: "Passer/Hitter 1", position: { x: 20, y: 25 } },
+          { id: "vb_oh2", team: "home", number: 11, role: "OH", label: "Passer/Hitter 2", position: { x: 20, y: 75 } },
+          { id: "vb_mb", team: "home", number: 5, role: "MB", label: "Middle Blocker", position: { x: 40, y: 45 } },
+          { id: "vb_opp", team: "home", number: 9, role: "OPP", label: "Opposite", position: { x: 42, y: 15 } },
+          // Opposition Server
+          { id: "vb_srv", team: "away", number: 8, role: "Server", label: "Opp. Server", position: { x: 92, y: 70 }, hasBall: true },
+        ],
+        ball: { x: 92, y: 70, attachedPlayerId: "vb_srv" },
+        equipment: [],
+        annotations: [
+          {
+            id: "ann_serve",
+            type: "pass_line",
+            points: [{ x: 92, y: 70 }, { x: 22, y: 50 }],
+            color: "#60A5FA",
+            width: 2.5,
+            label: "Floating Deep Serve",
+          },
+        ],
+      },
+    ],
+    coachingPoints: [
+      "Platform angle oriented towards target position #2.5.",
+      "Middle attacker approaches with high arm velocity for quick 1-tempo ball.",
+      "Setter penetrates on the server's arm swing contact.",
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Creates a default Rugby tactical plan (Phase Play Pods & Wide Overload)
+ */
+export function createRugbyTacticalPlan(title = "Rugby 3-Man Forward Pod & Backline Spread"): TacticalPlan {
+  const now = new Date().toISOString();
+  return {
+    id: `plan_rugby_${Date.now()}`,
+    title,
+    category: "Rugby Tactics",
+    sport: "rugby",
+    pitchType: "rugby_pitch",
+    gridDimensions: "100m × 70m Pitch",
+    phases: [
+      {
+        id: "phase_rugby_1",
+        phaseNumber: 1,
+        title: "Ruck Exit to Forward Crash Pod",
+        durationSeconds: 3.5,
+        coachingNotes: "Scrum-half passes off the deck to 3-man forward pod; fly-half sets depth behind the pod for out-the-back sweep.",
+        players: [
+          { id: "rug_9", team: "home", number: 9, role: "SH", label: "Scrum-half", position: { x: 35, y: 40 }, hasBall: true },
+          { id: "rug_p1", team: "home", number: 1, role: "Prop", label: "Forward 1 (Tip)", position: { x: 42, y: 48 } },
+          { id: "rug_p2", team: "home", number: 4, role: "Lock", label: "Forward 2 (Carrier)", position: { x: 45, y: 52 } },
+          { id: "rug_p3", team: "home", number: 6, role: "Flanker", label: "Forward 3 (Support)", position: { x: 43, y: 56 } },
+          { id: "rug_10", team: "home", number: 10, role: "FH", label: "Fly-half (Playmaker)", position: { x: 38, y: 70 } },
+          { id: "rug_12", team: "home", number: 12, role: "Center", label: "Inside Center", position: { x: 44, y: 80 } },
+          { id: "rug_15", team: "home", number: 15, role: "FB", label: "Fullback", position: { x: 38, y: 90 } },
+          // Opposition Defensive Line
+          { id: "rug_d1", team: "away", number: 7, role: "Def", label: "A-Defender", position: { x: 50, y: 45 } },
+          { id: "rug_d2", team: "away", number: 8, role: "Def", label: "B-Defender", position: { x: 52, y: 55 } },
+          { id: "rug_d3", team: "away", number: 10, role: "Def", label: "C-Defender", position: { x: 52, y: 68 } },
+        ],
+        ball: { x: 35, y: 40, attachedPlayerId: "rug_9" },
+        equipment: [],
+        annotations: [
+          {
+            id: "rug_pass",
+            type: "pass_line",
+            points: [{ x: 35, y: 40 }, { x: 45, y: 52 }],
+            color: "#34D399",
+            width: 2.5,
+            label: "Crisp Service to Pod Carrier",
+          },
+        ],
+      },
+    ],
+    coachingPoints: [
+      "Scrum-half clears ball in under 2.5 seconds to maintain momentum.",
+      "Carrier attacks inside shoulder of defender to gain post-contact meters.",
+      "Support latchers lock in immediately to prevent turnover at breakdown.",
     ],
     createdAt: now,
     updatedAt: now,

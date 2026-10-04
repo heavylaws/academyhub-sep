@@ -5,6 +5,7 @@ import {
   type PlayerNode,
   type BallNode,
   type EquipmentNode,
+  type EquipmentType,
   type TacticalAnnotation,
   type PitchType,
   interpolateTacticalPositions,
@@ -17,6 +18,14 @@ import {
 } from "./tactical-board-canvas.tsx";
 import { TacticalBoardControls } from "./tactical-board-controls.tsx";
 import { PlayerInspectorDrawer } from "./player-inspector-drawer.tsx";
+import { SquadStepperToolbar } from "./squad-stepper-toolbar.tsx";
+import { TacticalSheetExportModal } from "./tactical-sheet-export-modal.tsx";
+import { TacticalTimelineScrubber } from "./tactical-timeline-scrubber.tsx";
+import {
+  smoothInterpolatePhase,
+  resolveGlobalTime,
+} from "@/domain/tactics/tactical-interpolator.ts";
+import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
 import {
   Maximize2,
   Minimize2,
@@ -26,6 +35,7 @@ import {
   FileText,
   Save,
   Check,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -35,12 +45,14 @@ import { toast } from "sonner";
 interface TacticalBoardProps {
   initialPlan?: TacticalPlan;
   onSavePlan?: (plan: TacticalPlan) => void;
+  onPlanChange?: (plan: TacticalPlan) => void;
   readOnly?: boolean;
 }
 
 export const TacticalBoard: React.FC<TacticalBoardProps> = ({
   initialPlan,
   onSavePlan,
+  onPlanChange,
   readOnly = false,
 }) => {
   // Current tactical plan state
@@ -53,13 +65,17 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
   const [activeColor, setActiveColor] = useState("#FFFFFF");
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerNode | null>(null);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [printSheetOpen, setPrintSheetOpen] = useState(false);
 
   // Playback animation state
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0); // 0.0 to 1.0 within current phase
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [isLooping, setIsLooping] = useState<boolean>(true);
   const animationFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
 
@@ -70,14 +86,17 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     return plan.phases[activePhaseIndex] || plan.phases[0];
   }, [plan.phases, activePhaseIndex]);
 
-  // Animated interpolated positions when isPlaying is true
+  // Smooth Bezier/Catmull interpolated positions when isPlaying is true or scrubbing
   const interpolatedState = useMemo(() => {
-    if (!isPlaying) return null;
+    if (!isPlaying && playbackProgress === 0) return null;
     const nextIdx = (activePhaseIndex + 1) % plan.phases.length;
     const fromPhase = currentPhase;
     const toPhase = plan.phases[nextIdx] || currentPhase;
-    return interpolateTacticalPositions(fromPhase, toPhase, playbackProgress);
-  }, [isPlaying, activePhaseIndex, plan.phases, currentPhase, playbackProgress]);
+    return smoothInterpolatePhase(fromPhase, toPhase, playbackProgress, {
+      useEasing: true,
+      includeBallArc: true,
+    });
+  }, [isPlaying, playbackProgress, activePhaseIndex, plan.phases, currentPhase]);
 
   // Effective displayed players and ball
   const displayPlayers: PlayerNode[] = useMemo(() => {
@@ -103,7 +122,7 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     return currentPhase.ball;
   }, [interpolatedState, currentPhase.ball]);
 
-  // Animation Loop
+  // Animation Loop with Speed Control and Loop Support
   useEffect(() => {
     if (!isPlaying) {
       if (animationFrameRef.current) {
@@ -119,14 +138,19 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
       if (lastTimeRef.current === null) {
         lastTimeRef.current = timestamp;
       }
-      const deltaSeconds = (timestamp - lastTimeRef.current) / 1000;
+      const deltaSeconds = ((timestamp - lastTimeRef.current) / 1000) * playbackSpeed;
       lastTimeRef.current = timestamp;
 
       const phaseDuration = currentPhase.durationSeconds || 4;
       setPlaybackProgress((prev) => {
         const nextProgress = prev + deltaSeconds / phaseDuration;
         if (nextProgress >= 1) {
-          setActivePhaseIndex((idx) => (idx + 1) % plan.phases.length);
+          const nextIdx = (activePhaseIndex + 1) % plan.phases.length;
+          if (nextIdx === 0 && !isLooping) {
+            setIsPlaying(false);
+            return 1;
+          }
+          setActivePhaseIndex(nextIdx);
           return 0;
         }
         return nextProgress;
@@ -140,7 +164,38 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [isPlaying, currentPhase.durationSeconds, plan.phases.length]);
+  }, [isPlaying, currentPhase.durationSeconds, plan.phases.length, playbackSpeed, isLooping, activePhaseIndex]);
+
+  // Global multi-phase scrub calculation
+  const totalDuration = useMemo(() => {
+    return plan.phases.reduce((acc, p) => acc + (p.durationSeconds || 4), 0);
+  }, [plan.phases]);
+
+  const globalProgress = useMemo(() => {
+    if (totalDuration <= 0) return 0;
+    let elapsedBefore = 0;
+    for (let i = 0; i < activePhaseIndex; i++) {
+      elapsedBefore += plan.phases[i].durationSeconds || 4;
+    }
+    const currentElapsed = elapsedBefore + playbackProgress * (currentPhase.durationSeconds || 4);
+    return Math.max(0, Math.min(1, currentElapsed / totalDuration));
+  }, [totalDuration, activePhaseIndex, playbackProgress, currentPhase.durationSeconds, plan.phases]);
+
+  const handleScrubGlobal = useCallback((targetGlobalT: number) => {
+    const resolved = resolveGlobalTime(plan.phases, targetGlobalT);
+    setActivePhaseIndex(resolved.activePhaseIndex);
+    setPlaybackProgress(resolved.localT);
+  }, [plan.phases]);
+
+  const handleStepPhase = useCallback((forward: boolean) => {
+    setIsPlaying(false);
+    setPlaybackProgress(0);
+    if (forward) {
+      setActivePhaseIndex((idx) => Math.min(plan.phases.length - 1, idx + 1));
+    } else {
+      setActivePhaseIndex((idx) => Math.max(0, idx - 1));
+    }
+  }, [plan.phases.length]);
 
   // Phase Mutation Helpers
   const updateCurrentPhase = useCallback((updater: (prev: TacticalPhase) => TacticalPhase) => {
@@ -201,14 +256,14 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
   }, [currentPhase.players, updateCurrentPhase]);
 
   // Add Equipment
-  const handleAddEquipment = useCallback((type: "cone" | "mannequin" | "mini_goal") => {
+  const handleAddEquipment = useCallback((type: EquipmentType) => {
     const newEq: EquipmentNode = {
       id: `eq_${type}_${Date.now()}`,
       type,
       position: { x: 50, y: 50 },
     };
     updateCurrentPhase((p) => ({ ...p, equipment: [...p.equipment, newEq] }));
-    toast.success(`Added ${type} to center pitch`);
+    toast.success(`Added ${type.replace(/_/g, " ")} to pitch`);
   }, [updateCurrentPhase]);
 
   // Phase Management
@@ -237,7 +292,7 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     }));
     setActivePhaseIndex(plan.phases.length);
     toast.success(`Created Phase ${newPhaseNumber}`);
-  }, [plan.phases.length, currentPhase]);
+  }, [plan.phases.length, currentPhase, setActivePhaseIndex]);
 
   const handleDuplicatePhase = useCallback(() => {
     const dupPhase: TacticalPhase = {
@@ -253,7 +308,7 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     }));
     setActivePhaseIndex(plan.phases.length);
     toast.success("Phase duplicated");
-  }, [currentPhase, plan.phases.length]);
+  }, [currentPhase, plan.phases.length, setActivePhaseIndex]);
 
   const handleDeletePhase = useCallback((idx: number) => {
     if (plan.phases.length <= 1) return;
@@ -264,7 +319,7 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
     });
     setActivePhaseIndex((prev) => Math.max(0, prev - 1));
     toast.info("Phase removed");
-  }, [plan.phases.length]);
+  }, [plan.phases.length, setActivePhaseIndex]);
 
   // Save / Export
   const handleSave = () => {
@@ -390,6 +445,17 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
 
           <Button
             variant="outline"
+            size="sm"
+            onClick={() => setPrintSheetOpen(true)}
+            className="h-8 text-xs gap-1.5 font-medium"
+            title="Print Tactical Clipboard Sheet / PDF"
+          >
+            <Printer className="size-3.5 text-primary" />
+            <span className="hidden sm:inline">Print Sheet</span>
+          </Button>
+
+          <Button
+            variant="outline"
             size="icon"
             onClick={toggleFullscreen}
             className="size-8"
@@ -429,6 +495,18 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
         </div>
       )}
 
+      {/* Squad Formations & Player Steppers Toolbar */}
+      {!readOnly && (
+        <SquadStepperToolbar
+          players={currentPhase.players}
+          pitchType={plan.pitchType}
+          onUpdatePlayers={handleUpdatePlayers}
+          onSetGridDimensions={(dim) => setPlan((p) => ({ ...p, gridDimensions: dim }))}
+          onSetTitle={(title) => setPlan((p) => ({ ...p, title }))}
+          disabled={isPlaying}
+        />
+      )}
+
       {/* Main Interactive Pitch Board with Floating Drawers */}
       <div className="relative w-full">
         <TacticalBoardCanvas
@@ -447,6 +525,15 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           onRemoveAnnotation={handleRemoveAnnotation}
           onSelectPlayer={(p) => setSelectedPlayer(p)}
           selectedPlayerId={selectedPlayer?.id}
+          onSetMode={setMode}
+          selectedPlayerIds={selectedPlayerIds}
+          onSelectPlayerIds={setSelectedPlayerIds}
+          onToggleBallPossession={handleToggleBallPossession}
+          onDeletePlayer={(pid) => {
+            handleUpdatePlayers(currentPhase.players.filter((pl) => pl.id !== pid));
+            setSelectedPlayer(null);
+            setSelectedPlayerIds((prev) => prev.filter((id) => id !== pid));
+          }}
           isReadOnly={readOnly || isPlaying}
         />
 
@@ -463,11 +550,39 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           onDeletePlayer={(pid) => {
             handleUpdatePlayers(currentPhase.players.filter((pl) => pl.id !== pid));
             setSelectedPlayer(null);
+            setSelectedPlayerIds((prev) => prev.filter((id) => id !== pid));
           }}
           onToggleBallPossession={handleToggleBallPossession}
           hasBall={Boolean(currentPhase.ball.attachedPlayerId === selectedPlayer?.id)}
         />
       </div>
+
+      {/* Multi-Phase Timeline Scrubber & Speed Controls */}
+      <TacticalTimelineScrubber
+        phases={plan.phases}
+        activePhaseIndex={activePhaseIndex}
+        localProgress={playbackProgress}
+        globalProgress={globalProgress}
+        isPlaying={isPlaying}
+        playbackSpeed={playbackSpeed}
+        isLooping={isLooping}
+        onTogglePlay={() => {
+          if (isPlaying) {
+            setIsPlaying(false);
+          } else {
+            setIsPlaying(true);
+          }
+        }}
+        onReset={() => {
+          setIsPlaying(false);
+          setActivePhaseIndex(0);
+          setPlaybackProgress(0);
+        }}
+        onStepPhase={handleStepPhase}
+        onScrubGlobal={handleScrubGlobal}
+        onSetSpeed={setPlaybackSpeed}
+        onToggleLoop={() => setIsLooping(!isLooping)}
+      />
 
       {/* Tactical Board Controls Toolbar */}
       {!readOnly && (
@@ -477,7 +592,14 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           activeColor={activeColor}
           onSetColor={setActiveColor}
           pitchType={plan.pitchType}
-          onSetPitchType={(type) => setPlan((p) => ({ ...p, pitchType: type }))}
+          onSetPitchType={(type) => {
+            setPlan((p) => {
+              const updated = { ...p, pitchType: type, updatedAt: new Date().toISOString() };
+              onPlanChange?.(updated);
+              return updated;
+            });
+            toast.info(`Pitch mode switched to ${type.replace(/_/g, " ")}`);
+          }}
           phases={plan.phases}
           activePhaseIndex={activePhaseIndex}
           onSelectPhase={(idx) => {
@@ -487,6 +609,8 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           onAddPhase={handleAddPhase}
           onDuplicatePhase={handleDuplicatePhase}
           onDeletePhase={handleDeletePhase}
+          selectedCount={selectedPlayerIds.length}
+          onClearSelection={() => setSelectedPlayerIds([])}
           isPlaying={isPlaying}
           onTogglePlay={() => {
             if (isPlaying) {
@@ -508,6 +632,14 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           onAddEquipment={handleAddEquipment}
         />
       )}
+
+      {/* High-Contrast Print / Clipboard Sheet Modal */}
+      <TacticalSheetExportModal
+        open={printSheetOpen}
+        onOpenChange={setPrintSheetOpen}
+        drill={SOCCER_DRILLS[0] || null}
+        tacticalPlan={plan}
+      />
     </div>
   );
 };

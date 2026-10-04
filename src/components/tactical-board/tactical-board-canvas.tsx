@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from "react";
+import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import {
   type PlayerNode,
   type BallNode,
@@ -9,13 +9,18 @@ import {
   clampCoordinate,
 } from "@/domain/tactics/tactical-domain.ts";
 import { TacticalPitchSvg } from "./tactical-pitch-svg.tsx";
+import { PlayerQuickPopover } from "./player-quick-popover.tsx";
+import { toast } from "sonner";
 
 export type BoardInteractionMode =
   | "select"
+  | "lasso"
   | "pass_line"
   | "run_arrow"
   | "dribble_wave"
   | "press_zone"
+  | "cover_shadow"
+  | "defensive_block"
   | "freehand"
   | "eraser";
 
@@ -26,6 +31,7 @@ interface TacticalBoardCanvasProps {
   equipment: EquipmentNode[];
   annotations: TacticalAnnotation[];
   mode: BoardInteractionMode;
+  onSetMode?: (mode: BoardInteractionMode) => void;
   activeColor: string;
   showHeatmap: boolean;
   onUpdatePlayers: (players: PlayerNode[]) => void;
@@ -35,6 +41,10 @@ interface TacticalBoardCanvasProps {
   onRemoveAnnotation: (id: string) => void;
   onSelectPlayer?: (player: PlayerNode | null) => void;
   selectedPlayerId?: string | null;
+  selectedPlayerIds?: string[];
+  onSelectPlayerIds?: (ids: string[]) => void;
+  onToggleBallPossession?: (playerId: string) => void;
+  onDeletePlayer?: (playerId: string) => void;
   isReadOnly?: boolean;
 }
 
@@ -45,6 +55,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
   equipment,
   annotations,
   mode,
+  onSetMode,
   activeColor,
   showHeatmap,
   onUpdatePlayers,
@@ -54,6 +65,10 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
   onRemoveAnnotation,
   onSelectPlayer,
   selectedPlayerId,
+  selectedPlayerIds = [],
+  onSelectPlayerIds,
+  onToggleBallPossession,
+  onDeletePlayer,
   isReadOnly = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +78,26 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     type: "player" | "ball" | "equipment";
     id: string;
   } | null>(null);
+
+  const lastPlayerPosRef = useRef<PitchCoordinate | null>(null);
+
+  // Lasso multi-select state
+  const [lassoBox, setLassoBox] = useState<{ start: PitchCoordinate; current: PitchCoordinate } | null>(null);
+
+  // Touch quick-edit popover state
+  const [quickEditPlayer, setQuickEditPlayer] = useState<PlayerNode | null>(null);
+
+  // RAF optimization refs for smooth 60fps dragging without React render thrashing
+  const rafIdRef = useRef<number | null>(null);
+  const pendingCoordsRef = useRef<PitchCoordinate | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
 
   // Drawing state
   const [currentStroke, setCurrentStroke] = useState<PitchCoordinate[]>([]);
@@ -84,10 +119,18 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     if (isReadOnly) return;
     const coords = getPitchCoords(e);
 
+    if (mode === "lasso") {
+      containerRef.current?.setPointerCapture(e.pointerId);
+      setLassoBox({ start: coords, current: coords });
+      return;
+    }
+
     if (mode === "select") {
       // Background click: deselect
       if (e.target === containerRef.current || (e.target as HTMLElement).tagName === "svg") {
         onSelectPlayer?.(null);
+        onSelectPlayerIds?.([]);
+        setQuickEditPlayer(null);
       }
       return;
     }
@@ -101,35 +144,75 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     setCurrentStroke([coords]);
   };
 
-  // Pointer Move
+  // Pointer Move with RAF Batching
   const handlePointerMove = (e: React.PointerEvent) => {
     if (isReadOnly) return;
     const coords = getPitchCoords(e);
 
-    // Entity dragging
+    if (lassoBox) {
+      setLassoBox((prev) => (prev ? { ...prev, current: coords } : null));
+      return;
+    }
+
+    // Entity dragging via RAF batching
     if (draggingEntity) {
-      if (draggingEntity.type === "player") {
-        const updated = players.map((p) =>
-          p.id === draggingEntity.id ? { ...p, position: coords } : p,
-        );
-        onUpdatePlayers(updated);
-      } else if (draggingEntity.type === "ball") {
-        onUpdateBall({ ...ball, x: coords.x, y: coords.y, attachedPlayerId: undefined });
-      } else if (draggingEntity.type === "equipment") {
-        const updated = equipment.map((eq) =>
-          eq.id === draggingEntity.id ? { ...eq, position: coords } : eq,
-        );
-        onUpdateEquipment(updated);
+      pendingCoordsRef.current = coords;
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = null;
+          const targetCoords = pendingCoordsRef.current;
+          if (!targetCoords || !draggingEntity) return;
+
+          if (draggingEntity.type === "player") {
+            const activePlayer = players.find((p) => p.id === draggingEntity.id);
+            if (!activePlayer) return;
+
+            const isMulti = selectedPlayerIds.length > 1 && selectedPlayerIds.includes(activePlayer.id);
+
+            if (isMulti) {
+              const prev = lastPlayerPosRef.current || activePlayer.position;
+              const deltaX = targetCoords.x - prev.x;
+              const deltaY = targetCoords.y - prev.y;
+              lastPlayerPosRef.current = targetCoords;
+
+              const updated = players.map((p) => {
+                if (selectedPlayerIds.includes(p.id)) {
+                  return {
+                    ...p,
+                    position: {
+                      x: clampCoordinate(p.position.x + deltaX),
+                      y: clampCoordinate(p.position.y + deltaY),
+                    },
+                  };
+                }
+                return p;
+              });
+              onUpdatePlayers(updated);
+            } else {
+              const updated = players.map((p) =>
+                p.id === draggingEntity.id ? { ...p, position: targetCoords } : p,
+              );
+              onUpdatePlayers(updated);
+            }
+          } else if (draggingEntity.type === "ball") {
+            onUpdateBall({ ...ball, x: targetCoords.x, y: targetCoords.y, attachedPlayerId: undefined });
+          } else if (draggingEntity.type === "equipment") {
+            const updated = equipment.map((eq) =>
+              eq.id === draggingEntity.id ? { ...eq, position: targetCoords } : eq,
+            );
+            onUpdateEquipment(updated);
+          }
+        });
       }
       return;
     }
 
-    // Active drawing
+    // Drawing in-progress stroke
     if (currentStroke.length > 0) {
       if (mode === "freehand") {
         setCurrentStroke((prev) => [...prev, coords]);
       } else {
-        // Line/Arrow preview: 2 points [start, current]
+        // Line or Zone preview: keep start point and update current end point
         setCurrentStroke([currentStroke[0], coords]);
       }
     }
@@ -138,8 +221,37 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
   // Pointer Up
   const handlePointerUp = (e: React.PointerEvent) => {
     if (isReadOnly) return;
+    try {
+      containerRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignored if capture wasn't held
+    }
+
+    if (lassoBox) {
+      const minX = Math.min(lassoBox.start.x, lassoBox.current.x);
+      const maxX = Math.max(lassoBox.start.x, lassoBox.current.x);
+      const minY = Math.min(lassoBox.start.y, lassoBox.current.y);
+      const maxY = Math.max(lassoBox.start.y, lassoBox.current.y);
+
+      const captured = players.filter(
+        (p) => p.position.x >= minX && p.position.x <= maxX && p.position.y >= minY && p.position.y <= maxY,
+      );
+      const capturedIds = captured.map((p) => p.id);
+      onSelectPlayerIds?.(capturedIds);
+      setLassoBox(null);
+      onSetMode?.("select");
+      if (capturedIds.length > 0) {
+        toast.success(`Selected unit of ${capturedIds.length} players. Drag any player to move as a block!`);
+      }
+      return;
+    }
 
     if (draggingEntity) {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      lastPlayerPosRef.current = null;
       setDraggingEntity(null);
       return;
     }
@@ -164,6 +276,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     containerRef.current?.setPointerCapture(e.pointerId);
     setDraggingEntity({ type: "player", id: playerId });
     const p = players.find((pl) => pl.id === playerId) || null;
+    lastPlayerPosRef.current = p ? { ...p.position } : null;
     onSelectPlayer?.(p);
   };
 
@@ -188,7 +301,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     return players.map((p) => ({
       x: p.position.x,
       y: p.position.y,
-      intensity: p.team === "home" ? 1.0 : 0.8,
+      intensity: 1.0,
     }));
   }, [players]);
 
@@ -198,44 +311,72 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
-        setDraggingEntity(null);
-        setCurrentStroke([]);
-      }}
-      className={`relative w-full aspect-[16/10.5] sm:aspect-[16/10] max-h-[70vh] rounded-xl overflow-hidden shadow-md select-none touch-none bg-emerald-950 ${
-        mode !== "select" ? "cursor-crosshair" : "cursor-default"
+      onPointerCancel={handlePointerUp}
+      className={`relative w-full aspect-[1000/650] select-none rounded-xl overflow-hidden shadow-xl border border-border/80 bg-zinc-950 ${
+        mode === "select"
+          ? "cursor-default"
+          : mode === "lasso"
+          ? "cursor-crosshair"
+          : mode === "eraser"
+          ? "cursor-not-allowed"
+          : "cursor-crosshair"
       }`}
     >
-      {/* Background SVG Pitch */}
+      {/* Underlying Pitch Geometry Canvas */}
       <TacticalPitchSvg
         pitchType={pitchType}
         showHeatmap={showHeatmap}
         heatmapData={heatmapData}
       />
 
-      {/* SVG Layer for Tactical Annotations */}
+      {/* SVG Overlay for Vector Drawing & Annotations */}
       <svg
         viewBox="0 0 100 100"
         className="absolute inset-0 w-full h-full pointer-events-none"
         preserveAspectRatio="none"
       >
-        {/* Render Saved Annotations */}
+        <defs>
+          <marker
+            id="arrow-white"
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="4"
+            markerHeight="4"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#FFFFFF" />
+          </marker>
+          <marker
+            id="arrow-yellow"
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="4"
+            markerHeight="4"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#FBBF24" />
+          </marker>
+        </defs>
+
+        {/* Existing Annotations */}
         {annotations.map((ann) => {
-          if (ann.points.length < 2) return null;
+          if (ann.points.length === 0) return null;
 
           if (ann.type === "freehand") {
-            const pathData = ann.points.reduce((acc, pt, i) => {
-              return i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
-            }, "");
+            const d = ann.points.reduce(
+              (acc, pt, i) => (i === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`),
+              "",
+            );
             return (
               <path
                 key={ann.id}
-                d={pathData}
+                d={d}
                 fill="none"
                 stroke={ann.color}
-                strokeWidth={ann.width * 0.4}
+                strokeWidth={ann.width * 0.3}
                 strokeLinecap="round"
-                strokeLinejoin="round"
                 className={mode === "eraser" ? "pointer-events-auto cursor-pointer hover:opacity-50" : ""}
                 onClick={() => mode === "eraser" && onRemoveAnnotation(ann.id)}
               />
@@ -243,7 +384,6 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
           }
 
           if (ann.type === "press_zone") {
-            // Semi-transparent shaded tactical press zone
             const [p1, p2] = [ann.points[0], ann.points[ann.points.length - 1]];
             const minX = Math.min(p1.x, p2.x);
             const minY = Math.min(p1.y, p2.y);
@@ -261,6 +401,56 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
                 fillOpacity={0.2}
                 stroke={ann.color}
                 strokeWidth={0.8}
+                strokeDasharray="2 2"
+                className={mode === "eraser" ? "pointer-events-auto cursor-pointer hover:opacity-50" : ""}
+                onClick={() => mode === "eraser" && onRemoveAnnotation(ann.id)}
+              />
+            );
+          }
+
+          if (ann.type === "cover_shadow") {
+            const p1 = ann.points[0];
+            const p2 = ann.points[ann.points.length - 1] || { x: p1.x + 10, y: p1.y };
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const angle = Math.atan2(dy, dx);
+            const spread = Math.PI / 5;
+            const length = Math.max(8, Math.sqrt(dx * dx + dy * dy));
+            const leftX = p1.x + Math.cos(angle - spread) * length;
+            const leftY = p1.y + Math.sin(angle - spread) * length;
+            const rightX = p1.x + Math.cos(angle + spread) * length;
+            const rightY = p1.y + Math.sin(angle + spread) * length;
+            const pathData = `M ${p1.x} ${p1.y} L ${leftX} ${leftY} A ${length} ${length} 0 0 1 ${rightX} ${rightY} Z`;
+
+            return (
+              <g
+                key={ann.id}
+                className={mode === "eraser" ? "pointer-events-auto cursor-pointer hover:opacity-50" : ""}
+                onClick={() => mode === "eraser" && onRemoveAnnotation(ann.id)}
+              >
+                <path
+                  d={pathData}
+                  fill={ann.color}
+                  fillOpacity={0.25}
+                  stroke={ann.color}
+                  strokeWidth={0.6}
+                  strokeDasharray="1.5 1.5"
+                />
+                <circle cx={p1.x} cy={p1.y} r={1.5} fill={ann.color} />
+              </g>
+            );
+          }
+
+          if (ann.type === "defensive_block") {
+            const ptsString = ann.points.map((pt) => `${pt.x},${pt.y}`).join(" ");
+            return (
+              <polygon
+                key={ann.id}
+                points={ptsString}
+                fill={ann.color}
+                fillOpacity={0.2}
+                stroke={ann.color}
+                strokeWidth={1}
                 strokeDasharray="2 2"
                 className={mode === "eraser" ? "pointer-events-auto cursor-pointer hover:opacity-50" : ""}
                 onClick={() => mode === "eraser" && onRemoveAnnotation(ann.id)}
@@ -306,6 +496,21 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
             </g>
           );
         })}
+
+        {/* Lasso Selection Marquee */}
+        {lassoBox && (
+          <rect
+            x={Math.min(lassoBox.start.x, lassoBox.current.x)}
+            y={Math.min(lassoBox.start.y, lassoBox.current.y)}
+            width={Math.abs(lassoBox.current.x - lassoBox.start.x)}
+            height={Math.abs(lassoBox.current.y - lassoBox.start.y)}
+            fill="#3B82F6"
+            fillOpacity={0.15}
+            stroke="#3B82F6"
+            strokeWidth={1}
+            strokeDasharray="2 2"
+          />
+        )}
 
         {/* Current In-progress Drawing Stroke */}
         {currentStroke.length > 1 && (
@@ -382,21 +587,49 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
             }`}
           >
             {eq.type === "cone" && (
-              <div className="size-4 sm:size-5 bg-amber-500 clip-triangle shadow-sm border border-amber-600/80 rounded-xs" />
+              <div className="size-4 sm:size-5 bg-amber-500 clip-triangle shadow-sm border border-amber-600/80 rounded-xs" title="Field Cone" />
             )}
             {eq.type === "mannequin" && (
-              <div className="w-2.5 h-6 sm:w-3 sm:h-7 bg-amber-400 border border-amber-600 rounded-sm shadow-md flex items-center justify-center">
+              <div className="w-2.5 h-6 sm:w-3 sm:h-7 bg-amber-400 border border-amber-600 rounded-sm shadow-md flex items-center justify-center" title="Free-kick Mannequin">
                 <span className="text-[8px] font-bold text-amber-900 leading-none">M</span>
               </div>
             )}
             {eq.type === "mini_goal" && (
-              <div className="w-6 h-3 sm:w-8 sm:h-4 border-2 border-red-500 bg-red-500/20 rounded-xs shadow-md" />
+              <div className="w-6 h-3 sm:w-8 sm:h-4 border-2 border-red-500 bg-red-500/20 rounded-xs shadow-md" title="Target Mini Goal" />
             )}
             {eq.type === "agility_pole" && (
-              <div className="w-1.5 h-6 bg-yellow-300 border border-yellow-500 rounded-full shadow-sm" />
+              <div className="flex flex-col items-center" title="Slalom Agility Pole">
+                <div className="w-2.5 h-2 bg-red-500 clip-triangle -mr-2" />
+                <div className="w-1.5 h-6 bg-yellow-300 border border-yellow-500 rounded-full shadow-sm" />
+              </div>
             )}
             {eq.type === "hurdle" && (
-              <div className="w-5 h-2 border-t-2 border-orange-400 bg-transparent" />
+              <div className="w-5 h-2.5 border-t-2 border-x-2 border-orange-400 bg-transparent rounded-t-xs" title="Speed Hurdle" />
+            )}
+            {eq.type === "speed_ladder" && (
+              <div className="w-4 h-12 border-x-2 border-yellow-400 flex flex-col justify-between py-0.5 bg-black/40 rounded-xs" title="Agility Speed Ladder">
+                <div className="h-0.5 w-full bg-yellow-400" />
+                <div className="h-0.5 w-full bg-yellow-400" />
+                <div className="h-0.5 w-full bg-yellow-400" />
+                <div className="h-0.5 w-full bg-yellow-400" />
+              </div>
+            )}
+            {eq.type === "passing_gate" && (
+              <div className="flex items-center gap-1.5" title="Cone Passing Gate">
+                <div className="size-2.5 bg-red-500 rounded-full border border-white" />
+                <div className="w-5 h-0.5 border-t border-dashed border-amber-300" />
+                <div className="size-2.5 bg-red-500 rounded-full border border-white" />
+              </div>
+            )}
+            {eq.type === "rebounder_board" && (
+              <div className="w-7 h-2.5 bg-zinc-800 border-2 border-amber-400 rounded-xs shadow-md flex items-center justify-center" title="Wall Rebounder Board">
+                <span className="text-[7px] text-amber-400 font-bold tracking-tighter">WALL</span>
+              </div>
+            )}
+            {eq.type === "ball_cart" && (
+              <div className="size-5 rounded-full border border-white bg-blue-600/80 shadow-md flex items-center justify-center" title="Ball Supply Cart">
+                <div className="size-2 rounded-full bg-white border border-black" />
+              </div>
             )}
           </div>
         );
@@ -415,13 +648,13 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
         }`}
         title="Soccer Ball"
       >
-        {/* Realistic soccer ball pentagon pattern */}
         <div className="size-2 sm:size-2.5 bg-black clip-polygon rounded-full" />
       </div>
 
       {/* Player Tokens */}
       {players.map((p) => {
         const isSelected = selectedPlayerId === p.id;
+        const isMultiSelected = selectedPlayerIds.includes(p.id);
         const isGK = p.team === "gk_home" || p.team === "gk_away";
         const isHome = p.team === "home" || p.team === "gk_home";
         const isNeutral = p.team === "neutral";
@@ -436,19 +669,25 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
           <div
             key={p.id}
             onPointerDown={(e) => startDragPlayer(e, p.id)}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setQuickEditPlayer(p);
+            }}
             style={{
               left: `${p.position.x}%`,
               top: `${p.position.y}%`,
               transform: "translate(-50%, -50%)",
             }}
-            className={`absolute z-10 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-[box-shadow] ${
+            className={`absolute z-10 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing transition-[box-shadow,transform] ${
               isReadOnly ? "pointer-events-none" : "touch-none"
             }`}
           >
             {/* Player Circular Token (Touch target minimum 34px-40px with ring) */}
             <div
               className={`relative size-7 sm:size-8 rounded-full border-2 shadow-lg flex items-center justify-center font-bold text-xs font-mono transition-transform ${bgColor} ${
-                isSelected
+                isMultiSelected
+                  ? "ring-4 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-primary/30"
+                  : isSelected
                   ? "ring-4 ring-yellow-400 ring-offset-1 scale-110"
                   : "hover:scale-105"
               }`}
@@ -472,6 +711,30 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
           </div>
         );
       })}
+
+      {/* Inline Touch Quick-Edit Popover */}
+      {quickEditPlayer && (
+        <PlayerQuickPopover
+          player={quickEditPlayer}
+          hasBall={Boolean(ball.attachedPlayerId === quickEditPlayer.id)}
+          onClose={() => setQuickEditPlayer(null)}
+          onUpdatePlayer={(upd) => {
+            onUpdatePlayers(players.map((pl) => (pl.id === upd.id ? upd : pl)));
+            setQuickEditPlayer(upd);
+          }}
+          onDeletePlayer={(pid) => {
+            if (onDeletePlayer) {
+              onDeletePlayer(pid);
+            } else {
+              onUpdatePlayers(players.filter((pl) => pl.id !== pid));
+            }
+            setQuickEditPlayer(null);
+          }}
+          onToggleBallPossession={(pid) => {
+            onToggleBallPossession?.(pid);
+          }}
+        />
+      )}
     </div>
   );
 };

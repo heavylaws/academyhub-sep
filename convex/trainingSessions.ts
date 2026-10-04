@@ -26,9 +26,11 @@ export const createSession = mutation({
     durationMinutes: v.number(),
     location: v.optional(v.string()),
     notes: v.optional(v.string()),
+    tacticalPlanId: v.optional(v.id("tacticalPlans")),
+    drillIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -54,6 +56,8 @@ export const createSession = mutation({
       durationMinutes: args.durationMinutes,
       location: args.location,
       notes: args.notes,
+      tacticalPlanId: args.tacticalPlanId,
+      drillIds: args.drillIds,
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
@@ -69,9 +73,11 @@ export const updateSession = mutation({
     durationMinutes: v.number(),
     location: v.optional(v.string()),
     notes: v.optional(v.string()),
+    tacticalPlanId: v.optional(v.id("tacticalPlans")),
+    drillIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const { sessionId, ...updates } = args;
     const session = await ctx.db.get("trainingSessions", sessionId);
     if (!session) {
@@ -89,6 +95,37 @@ export const updateSession = mutation({
     }
     await ctx.db.patch("trainingSessions", sessionId, updates);
     return null;
+  },
+});
+
+/** Link a tactical plan directly to a training session */
+export const linkTacticalPlanToSession = mutation({
+  args: {
+    sessionId: v.id("trainingSessions"),
+    tacticalPlanId: v.optional(v.id("tacticalPlans")),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const session = await ctx.db.get("trainingSessions", args.sessionId);
+    if (!session) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
+    }
+    await requireAcademyMember(ctx, session.academyId);
+
+    if (args.tacticalPlanId) {
+      const plan = await ctx.db.get("tacticalPlans", args.tacticalPlanId);
+      if (!plan || plan.academyId !== session.academyId) {
+        throw new ConvexError({
+          code: "BAD_REQUEST",
+          message: "Tactical plan not found in your academy",
+        });
+      }
+    }
+
+    await ctx.db.patch("trainingSessions", args.sessionId, {
+      tacticalPlanId: args.tacticalPlanId,
+    });
+    return args.sessionId;
   },
 });
 
@@ -194,6 +231,7 @@ export const getSessionWithAttendance = query({
     session: Doc<"trainingSessions">;
     roster: Doc<"athletes">[];
     attendance: Doc<"attendanceRecords">[];
+    tacticalPlan: Doc<"tacticalPlans"> | null;
   }> => {
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
@@ -217,7 +255,12 @@ export const getSessionWithAttendance = query({
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .collect();
 
-    return { session, roster, attendance };
+    let tacticalPlan: Doc<"tacticalPlans"> | null = null;
+    if (session.tacticalPlanId) {
+      tacticalPlan = await ctx.db.get("tacticalPlans", session.tacticalPlanId);
+    }
+
+    return { session, roster, attendance, tacticalPlan };
   },
 });
 

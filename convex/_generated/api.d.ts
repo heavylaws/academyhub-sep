@@ -28,6 +28,8 @@ import type * as lib_email from "../lib/email.js";
 import type * as lib_onboarding from "../lib/onboarding.js";
 import type * as messages from "../messages.js";
 import type * as resetAndSeedSuperuser from "../resetAndSeedSuperuser.js";
+import type * as tacticalAi from "../tacticalAi.js";
+import type * as tacticalPlans from "../tacticalPlans.js";
 import type * as schema_academies from "../schema/academies.js";
 import type * as schema_announcements from "../schema/announcements.js";
 import type * as schema_assessments from "../schema/assessments.js";
@@ -90,6 +92,8 @@ declare const fullApi: ApiFromModules<{
   "schema/trainingSessions": typeof schema_trainingSessions;
   "schema/videoAnalyses": typeof schema_videoAnalyses;
   seed: typeof seed;
+  tacticalAi: typeof tacticalAi;
+  tacticalPlans: typeof tacticalPlans;
   teams: typeof teams;
   trainingPlans: typeof trainingPlans;
   trainingSessions: typeof trainingSessions;

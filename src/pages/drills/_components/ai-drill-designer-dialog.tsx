@@ -43,10 +43,9 @@ import {
 } from "@/services/tactical-ai-service.ts";
 import { TacticalBoard } from "@/components/tactical-board/tactical-board.tsx";
 import { toast } from "sonner";
-import { useMutation } from "convex/react";
+import { useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
-import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 
 interface AiDrillDesignerDialogProps {
   open: boolean;
@@ -62,6 +61,8 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
   const navigate = useNavigate();
   const { user } = useCurrentUser();
   const createDrillMutation = useMutation(api.drills.createDrill);
+  const saveTacticalPlanMutation = useMutation(api.tacticalPlans.saveTacticalPlan);
+  const generateDrillAction = useAction(api.tacticalAi.generateTacticalDrillAction);
 
   // Form input state
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("U13-U14");
@@ -81,49 +82,72 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
 
   const handleGenerate = async () => {
     setIsGenerating(true);
-    setGenerationStep("Analyzing tactical constraints & age group requirements...");
+    setGenerationStep("Querying versioned tactical cache & AI Tactical Engine...");
 
-    setTimeout(() => {
-      setGenerationStep("Synthesizing pitch coordinates, player roles & ball trajectories...");
-    }, 400);
+    try {
+      const response = await generateDrillAction({
+        ageGroup,
+        category,
+        difficulty,
+        targetAttribute,
+        promptNotes: promptNotes.trim() || undefined,
+      });
 
-    setTimeout(() => {
-      setGenerationStep("Validating tactical domain model & phase bounds...");
-    }, 800);
+      const plan = response.tacticalPlan as unknown as TacticalGenerationResponse["tacticalPlan"];
+      const valResult = {
+        valid: response.validationResult.valid,
+        errors: response.validationResult.errors,
+        warnings: response.validationResult.warnings,
+        normalizedPlan: plan,
+      };
 
-    setTimeout(() => {
+      setResult({
+        drill: response.drill,
+        tacticalPlan: plan,
+        validationResult: valResult,
+        engineUsed: response.engineUsed as TacticalGenerationResponse["engineUsed"],
+      });
+
+      setActiveTab("preview");
+
+      if (response.isCacheHit) {
+        toast.info("Retrieved from Versioned Tactical Cache", {
+          description: `Key: ${response.cacheKey.slice(0, 28)}...`,
+        });
+      } else {
+        toast.success("Tactical drill synthesized successfully!", {
+          description: response.engineUsed,
+        });
+      }
+    } catch (err) {
+      console.warn("Backend tactical generation failed, using local pitch-side synthesis:", err);
       try {
-        const response = synthesizeTacticalDrill({
+        const localFallback = synthesizeTacticalDrill({
           ageGroup,
           category,
           difficulty,
           targetAttribute,
           promptNotes: promptNotes.trim() || undefined,
         });
-
-        if (!response.validationResult.valid) {
-          toast.warning("Tactical plan generated with minor warnings, auto-normalized.");
-        }
-
-        setResult(response);
+        setResult(localFallback);
         setActiveTab("preview");
-        setIsGenerating(false);
-        setGenerationStep("");
-        toast.success("Tactical drill synthesized successfully!");
+        toast.success("Synthesized via CoachTactics Pitch-Side Engine");
       } catch {
-        setIsGenerating(false);
-        setGenerationStep("");
-        toast.error("Failed to synthesize tactical drill");
+        toast.error("Failed to generate tactical drill");
       }
-    }, 1200);
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
   };
 
   const handleSaveToPlaybook = async () => {
     if (!result) return;
     setIsSaving(true);
     try {
+      let createdDrillId: string | undefined;
       if (user?.academyId) {
-        await createDrillMutation({
+        createdDrillId = await createDrillMutation({
           title: result.drill.title,
           ageGroup: result.drill.ageGroup,
           birthYears: result.drill.birthYears,
@@ -149,15 +173,17 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
         });
       }
 
-      // Persist tactical plan to Firestore under academy
-      if (result.tacticalPlan) {
-        await academyFirestoreService
-          .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
-          .catch((err) => {
-            console.error("Could not save tactical plan to Firestore:", err);
-            toast.error("Cloud sync failed: tactical plan could not be saved to Firestore.");
-            throw err;
-          });
+      // Persist tactical plan to Convex as sole authoritative store
+      if (result.tacticalPlan && user?.academyId) {
+        await saveTacticalPlanMutation({
+          title: result.drill.title,
+          drillId: createdDrillId,
+          category: result.drill.category,
+          pitchType: result.tacticalPlan.pitchType || "full",
+          gridDimensions: result.drill.gridDimensions,
+          coachingPoints: result.drill.coachingPoints || [],
+          planData: JSON.stringify(result.tacticalPlan),
+        });
       }
 
       toast.success("Drill and Tactical Plan saved to academy playbook!");
@@ -170,15 +196,21 @@ export const AiDrillDesignerDialog: React.FC<AiDrillDesignerDialogProps> = ({
     }
   };
 
-  const handleOpenInTacticalBoard = () => {
+  const handleOpenInTacticalBoard = async () => {
     if (!result) return;
-    if (result.tacticalPlan) {
-      academyFirestoreService
-        .saveTacticalBoard(user?.academyId || "acad_hercules", result.tacticalPlan)
-        .catch((err) => {
-          console.error("Could not save tactical plan to Firestore:", err);
-          toast.error("Cloud sync failed: tactical plan could not be saved to Firestore.");
+    if (result.tacticalPlan && user?.academyId) {
+      try {
+        await saveTacticalPlanMutation({
+          title: result.drill.title,
+          category: result.drill.category,
+          pitchType: result.tacticalPlan.pitchType || "full",
+          gridDimensions: result.drill.gridDimensions,
+          coachingPoints: result.drill.coachingPoints || [],
+          planData: JSON.stringify(result.tacticalPlan),
         });
+      } catch (err) {
+        console.warn("Could not pre-save tactical plan to Convex:", err);
+      }
     }
     onOpenChange(false);
     navigate(`/tactical-board?drillTitle=${encodeURIComponent(result.drill.title)}`);

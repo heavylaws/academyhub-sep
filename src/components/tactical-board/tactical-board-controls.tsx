@@ -17,6 +17,9 @@ import {
   Shield,
   Target,
   Goal,
+  Layers,
+  Flag,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -27,8 +30,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu.tsx";
 import type { BoardInteractionMode } from "./tactical-board-canvas.tsx";
-import type { PitchType, TacticalPhase } from "@/domain/tactics/tactical-domain.ts";
+import type { EquipmentType, PitchType, TacticalPhase } from "@/domain/tactics/tactical-domain.ts";
 
 interface TacticalBoardControlsProps {
   mode: BoardInteractionMode;
@@ -50,7 +61,9 @@ interface TacticalBoardControlsProps {
   onToggleHeatmap: () => void;
   onClearAnnotations: () => void;
   onAddPlayer: (team: "home" | "away" | "neutral" | "gk_home") => void;
-  onAddEquipment: (type: "cone" | "mannequin" | "mini_goal") => void;
+  onAddEquipment: (type: EquipmentType) => void;
+  selectedCount?: number;
+  onClearSelection?: () => void;
 }
 
 const PALETTE = [
@@ -82,6 +95,8 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
   onClearAnnotations,
   onAddPlayer,
   onAddEquipment,
+  selectedCount = 0,
+  onClearSelection,
 }) => {
   return (
     <div className="flex flex-col gap-3 w-full bg-card/60 backdrop-blur-md border border-border/80 rounded-xl p-3 shadow-xs">
@@ -94,11 +109,17 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
               <SelectValue placeholder="Pitch type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="full">Full Pitch (105×68)</SelectItem>
-              <SelectItem value="attacking_half">Attacking Half</SelectItem>
-              <SelectItem value="defending_half">Defending Half</SelectItem>
-              <SelectItem value="penalty_box">18-Yard Box</SelectItem>
-              <SelectItem value="rondo_grid">Rondo / Grid</SelectItem>
+              <SelectItem value="full">⚽ Full Pitch (105×68)</SelectItem>
+              <SelectItem value="attacking_half">⚽ Attacking Half</SelectItem>
+              <SelectItem value="defending_half">⚽ Defending Half</SelectItem>
+              <SelectItem value="penalty_box">⚽ 18-Yard Box</SelectItem>
+              <SelectItem value="rondo_grid">⚽ Rondo / Grid</SelectItem>
+              <SelectItem value="basketball_half">🏀 Basketball Half Court</SelectItem>
+              <SelectItem value="basketball_full">🏀 Basketball Full Court</SelectItem>
+              <SelectItem value="futsal_court">⚡ Futsal Court</SelectItem>
+              <SelectItem value="handball_court">🤾 Handball Court</SelectItem>
+              <SelectItem value="volleyball_court">🏐 Volleyball Court</SelectItem>
+              <SelectItem value="rugby_pitch">🏉 Rugby Pitch</SelectItem>
             </SelectContent>
           </Select>
 
@@ -191,7 +212,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
         </div>
       </div>
 
-      {/* Bottom Bar: Drawing Tools, Color Picker, and Quick Add Pieces */}
+      {/* Bottom Bar: Drawing Tools, Color Palette, and Quick Add Pieces */}
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         {/* Interaction / Drawing Tool Buttons */}
         <div className="flex flex-wrap items-center gap-1 bg-muted/40 p-1 rounded-lg border">
@@ -199,18 +220,48 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant={mode === "select" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("select")}
-            className="h-8 px-2.5 text-xs gap-1.5 font-medium"
-            title="Move / Drag Players & Ball"
+            className="h-9 sm:h-8 px-3 sm:px-2.5 text-xs gap-1.5 font-medium touch-manipulation"
+            title="Move / Drag Single Player or Ball"
           >
             <MousePointer className="size-3.5" />
             <span>Move</span>
           </Button>
 
           <Button
+            variant={mode === "lasso" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onSetMode("lasso")}
+            className={`h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation ${
+              mode === "lasso" ? "bg-primary/20 text-primary border border-primary/50 font-bold" : ""
+            }`}
+            title="Lasso Multi-Select to move units (e.g. back 4 or midfield) together"
+          >
+            <LayoutGrid className="size-3.5 text-primary" />
+            <span>Lasso Unit</span>
+          </Button>
+
+          {selectedCount > 0 && (
+            <div className="flex items-center gap-1 bg-primary/10 border border-primary/40 rounded-lg px-2 py-0.5 text-xs">
+              <span className="font-semibold text-primary text-[10px]">
+                {selectedCount} in unit
+              </span>
+              {onClearSelection && (
+                <button
+                  type="button"
+                  onClick={onClearSelection}
+                  className="text-[9px] text-muted-foreground hover:text-foreground underline ml-0.5"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
+          <Button
             variant={mode === "pass_line" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("pass_line")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Passing Line (Dashed Arrow)"
           >
             <ArrowRight className="size-3.5 text-blue-400 stroke-dasharray" />
@@ -221,7 +272,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant={mode === "run_arrow" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("run_arrow")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Player Run (Solid Arrow)"
           >
             <TrendingUp className="size-3.5 text-emerald-400" />
@@ -232,7 +283,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant={mode === "dribble_wave" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("dribble_wave")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Dribble Trajectory"
           >
             <ArrowRight className="size-3.5 text-amber-400" />
@@ -243,7 +294,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant={mode === "press_zone" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("press_zone")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Pressing / Tactical Zone"
           >
             <CircleDot className="size-3.5 text-red-400" />
@@ -251,10 +302,32 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
           </Button>
 
           <Button
+            variant={mode === "cover_shadow" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onSetMode("cover_shadow")}
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
+            title="Pressing Cover Shadow Sector"
+          >
+            <Shield className="size-3.5 text-purple-400" />
+            <span>Shadow</span>
+          </Button>
+
+          <Button
+            variant={mode === "defensive_block" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onSetMode("defensive_block")}
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
+            title="Defensive Unit Block Contour"
+          >
+            <Layers className="size-3.5 text-blue-400" />
+            <span>Block</span>
+          </Button>
+
+          <Button
             variant={mode === "freehand" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("freehand")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Freehand Sketch"
           >
             <Pencil className="size-3.5" />
@@ -265,7 +338,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant={mode === "eraser" ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onSetMode("eraser")}
-            className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 text-muted-foreground hover:text-destructive touch-manipulation"
             title="Erase Annotation"
           >
             <Eraser className="size-3.5" />
@@ -275,13 +348,13 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
 
         {/* Color Palette */}
         {mode !== "select" && mode !== "eraser" && (
-          <div className="flex items-center gap-1.5 bg-muted/40 p-1 rounded-lg border">
+          <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-lg border">
             {PALETTE.map((c) => (
               <button
                 key={c.value}
                 type="button"
                 onClick={() => onSetColor(c.value)}
-                className={`size-6 rounded-full ${c.bg} border transition-transform ${
+                className={`size-7 sm:size-6 rounded-full ${c.bg} border transition-transform touch-manipulation ${
                   activeColor === c.value
                     ? "ring-2 ring-primary ring-offset-1 scale-110"
                     : "opacity-80 hover:opacity-100"
@@ -293,20 +366,20 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
               variant="ghost"
               size="sm"
               onClick={onClearAnnotations}
-              className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive ml-1"
+              className="h-7 px-2 text-[10px] text-muted-foreground hover:text-destructive ml-1 touch-manipulation"
             >
               Clear All
             </Button>
           </div>
         )}
 
-        {/* Quick Add Elements */}
+        {/* Quick Add Elements & Apparatus */}
         <div className="flex flex-wrap items-center gap-1.5 ml-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={() => onAddPlayer("home")}
-            className="h-8 px-2 text-xs font-semibold gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs font-semibold gap-1 touch-manipulation"
           >
             <Plus className="size-3 text-blue-500" />
             <span className="text-blue-600 dark:text-blue-400">Home</span>
@@ -316,7 +389,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onAddPlayer("away")}
-            className="h-8 px-2 text-xs font-semibold gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs font-semibold gap-1 touch-manipulation"
           >
             <Plus className="size-3 text-red-500" />
             <span className="text-red-600 dark:text-red-400">Away</span>
@@ -326,7 +399,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onAddPlayer("neutral")}
-            className="h-8 px-2 text-xs font-semibold gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs font-semibold gap-1 touch-manipulation"
           >
             <Plus className="size-3 text-orange-500" />
             <span className="text-orange-600 dark:text-orange-400">Wall/Joker</span>
@@ -336,7 +409,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onAddEquipment("cone")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Add Cone"
           >
             <Target className="size-3 text-amber-500" />
@@ -347,7 +420,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onAddEquipment("mannequin")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Add Defender Mannequin"
           >
             <Shield className="size-3 text-amber-600" />
@@ -358,12 +431,50 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
             variant="outline"
             size="sm"
             onClick={() => onAddEquipment("mini_goal")}
-            className="h-8 px-2 text-xs gap-1"
+            className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation"
             title="Add Target Mini Goal"
           >
             <Goal className="size-3 text-red-500" />
             <span>Goal</span>
           </Button>
+
+          {/* Expanded Apparatus Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 sm:h-8 px-2.5 sm:px-2 text-xs gap-1 touch-manipulation font-medium border-dashed"
+                title="More Training Equipment"
+              >
+                <span>Apparatus</span>
+                <ChevronDown className="size-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuLabel className="text-[10px] font-bold uppercase text-muted-foreground">
+                Training Field Apparatus
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => onAddEquipment("agility_pole")}>
+                🚩 Slalom Agility Pole
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddEquipment("hurdle")}>
+                🏃 Speed Hurdle
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddEquipment("speed_ladder")}>
+                🪜 Agility Speed Ladder
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddEquipment("passing_gate")}>
+                ⭕ Cone Passing Gate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddEquipment("rebounder_board")}>
+                🧱 Wall Rebounder Board
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onAddEquipment("ball_cart")}>
+                ⚽ Ball Supply Cart
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

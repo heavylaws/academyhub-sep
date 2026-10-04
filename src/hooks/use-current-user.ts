@@ -33,7 +33,26 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
     convexIsAuth ? {} : "skip",
   );
 
-  // If Firebase user is present
+  // 1. Authoritative Convex user if authenticated
+  if (convexIsAuth) {
+    if (convexUser === undefined) {
+      return {
+        user: undefined,
+        isLoading: true,
+      };
+    }
+    if (convexUser) {
+      return {
+        user: {
+          ...convexUser,
+          emailVerified: true,
+        } as unknown as CurrentUser,
+        isLoading: false,
+      };
+    }
+  }
+
+  // 2. Authoritative Firebase user if present
   if (firebaseUser) {
     if (isEmailUnverified) {
       return {
@@ -56,15 +75,15 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
       };
     }
 
-    const localUser = localMockStore.getCurrentUser();
-    const effectiveRole = localUser?.role || membership?.role || undefined;
-    const effectiveAcademyId = localUser?.academyId || membership?.academyId || undefined;
-    const effectiveName = localUser?.name || firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User";
-    const effectiveEmail = localUser?.email || firebaseUser.email || undefined;
+    // Server-verified membership role
+    const effectiveRole = membership?.role || undefined;
+    const effectiveAcademyId = membership?.academyId || undefined;
+    const effectiveName = firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User";
+    const effectiveEmail = firebaseUser.email || undefined;
 
     return {
       user: {
-        _id: (localUser?._id || firebaseUser.uid) as Id<"users">,
+        _id: firebaseUser.uid as Id<"users">,
         name: effectiveName,
         email: effectiveEmail,
         role: effectiveRole,
@@ -75,32 +94,13 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
     };
   }
 
-  // Fallback to localMockStore user if authenticated locally
+  // 3. Fallback to localMockStore user only when not authenticated via cloud providers
   const localUser = localMockStore.getCurrentUser();
   if (localUser) {
     return {
       user: localUser as unknown as CurrentUser,
       isLoading: false,
     };
-  }
-
-  // Fallback to Convex user if authenticated
-  if (convexIsAuth) {
-    if (convexUser === undefined) {
-      return {
-        user: undefined,
-        isLoading: true,
-      };
-    }
-    if (convexUser) {
-      return {
-        user: {
-          ...convexUser,
-          emailVerified: true,
-        } as unknown as CurrentUser,
-        isLoading: false,
-      };
-    }
   }
 
   return {

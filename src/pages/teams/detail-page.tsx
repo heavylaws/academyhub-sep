@@ -15,6 +15,10 @@ import {
   UserRound,
   UserRoundPlus,
   Users,
+  Compass,
+  Shield,
+  Shirt,
+  LayoutTemplate,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
@@ -22,6 +26,7 @@ import { Button } from "@/components/ui/button.tsx";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card.tsx";
@@ -69,6 +74,8 @@ import EditTeamDialog from "./_components/edit-team-dialog.tsx";
 import ManageRosterDialog from "./_components/manage-roster-dialog.tsx";
 import ScheduleSessionDialog from "./_components/schedule-session-dialog.tsx";
 import SessionCalendar from "./_components/session-calendar.tsx";
+import AssignTacticalRoleDialog from "./_components/assign-tactical-role-dialog.tsx";
+import EditTeamTacticsDialog from "./_components/edit-team-tactics-dialog.tsx";
 
 export default function TeamDetail() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -92,6 +99,15 @@ export default function TeamDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [tacticsOpen, setTacticsOpen] = useState(false);
+  const [roleAthlete, setRoleAthlete] = useState<{
+    _id: Id<"athletes">;
+    firstName: string;
+    lastName: string;
+    jerseyNumber?: number;
+    tacticalPosition?: string;
+    tacticalRole?: string;
+  } | null>(null);
   const [sessionView, setSessionView] = useState<"calendar" | "list">(
     "calendar",
   );
@@ -213,10 +229,84 @@ export default function TeamDetail() {
         )}
       </div>
 
+      {/* Team Tactical Architecture & Formation Card */}
+      <Card className="border border-border/80">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Compass className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Tactical Architecture</CardTitle>
+                <CardDescription>
+                  Playing shape, tactical formation, and primary playbook routine for {team.name}.
+                </CardDescription>
+              </div>
+            </div>
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTacticsOpen(true)}
+                className="h-9 gap-1.5 text-xs font-semibold"
+              >
+                <LayoutTemplate className="size-4" />
+                <span>Configure Tactics</span>
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Formation */}
+            <div className="p-3 rounded-lg border bg-muted/30 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs text-muted-foreground font-medium">Base Formation</span>
+                <p className="font-semibold text-sm">
+                  {team.preferredFormation || "4-3-3 (Standard)"}
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs font-mono border-primary/40 text-primary">
+                {team.preferredFormation || "4-3-3"}
+              </Badge>
+            </div>
+
+            {/* Active Tactical Routine */}
+            <div className="p-3 rounded-lg border bg-muted/30 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs text-muted-foreground font-medium">Playbook Routine</span>
+                <p className="font-semibold text-sm truncate max-w-[200px]">
+                  {data.activeTacticalPlan?.title || "No linked playbook routine"}
+                </p>
+              </div>
+              {data.activeTacticalPlan ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate(`/tactical-board?planId=${data.activeTacticalPlan!._id}`)}
+                  className="h-7 text-xs gap-1"
+                >
+                  <Compass className="size-3.5" />
+                  <span>Launch</span>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate("/tactical-board")}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Create
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Roster</CardTitle>
+            <CardTitle className="text-base">Roster & Tactical Positions</CardTitle>
             {canManage && (
               <Button
                 variant="secondary"
@@ -257,13 +347,15 @@ export default function TeamDetail() {
             <div>
               {/* Mobile View: High-ergonomics cards */}
               <div className="flex flex-col divide-y sm:hidden -mx-2">
-                {roster.map((athlete: Doc<"athletes">) => (
-                  <Link
+                {roster.map((athlete) => (
+                  <div
                     key={athlete._id}
-                    to={`/athletes/${athlete._id}`}
-                    className="flex items-center justify-between p-3 active:bg-muted/60 transition-colors"
+                    className="flex items-center justify-between p-3"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <Link
+                      to={`/athletes/${athlete._id}`}
+                      className="flex items-center gap-3 min-w-0 flex-1"
+                    >
                       <Avatar className="size-10 shrink-0">
                         <AvatarFallback className="bg-secondary text-xs font-semibold">
                           {athlete.firstName[0]}
@@ -271,18 +363,49 @@ export default function TeamDetail() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col min-w-0">
-                        <span className="font-semibold text-sm text-foreground truncate">
-                          {athlete.firstName} {athlete.lastName}
-                        </span>
-                        <span className="text-xs text-muted-foreground mt-0.5">
-                          {athlete.sport || "Soccer"}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {athlete.jerseyNumber !== undefined && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
+                              #{athlete.jerseyNumber}
+                            </Badge>
+                          )}
+                          <span className="font-semibold text-sm text-foreground truncate">
+                            {athlete.firstName} {athlete.lastName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          {athlete.tacticalPosition ? (
+                            <span className="font-semibold text-primary">{athlete.tacticalPosition}</span>
+                          ) : (
+                            <span>{athlete.sport || "Soccer"}</span>
+                          )}
+                          {athlete.tacticalRole && (
+                            <span>• {athlete.tacticalRole}</span>
+                          )}
+                        </div>
                       </div>
+                    </Link>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setRoleAthlete(athlete)}
+                          className="h-8 px-2 text-xs"
+                          title="Assign Position & Role"
+                        >
+                          <Shield className="size-3.5 text-primary" />
+                          <span>Role</span>
+                        </Button>
+                      )}
+                      <Link to={`/athletes/${athlete._id}`}>
+                        <Badge variant="outline" className="text-[10px]">
+                          Profile
+                        </Badge>
+                      </Link>
                     </div>
-                    <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
-                      Profile
-                    </Badge>
-                  </Link>
+                  </div>
                 ))}
               </div>
 
@@ -291,17 +414,23 @@ export default function TeamDetail() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16">No.</TableHead>
                       <TableHead>Athlete</TableHead>
-                      <TableHead>Sport</TableHead>
+                      <TableHead>Tactical Position</TableHead>
+                      <TableHead>Tactical Role</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {roster.map((athlete: Doc<"athletes">) => (
+                    {roster.map((athlete) => (
                       <TableRow key={athlete._id}>
+                        <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
+                          {athlete.jerseyNumber !== undefined ? `#${athlete.jerseyNumber}` : "—"}
+                        </TableCell>
                         <TableCell>
                           <Link
                             to={`/athletes/${athlete._id}`}
-                            className="flex items-center gap-3"
+                            className="flex items-center gap-3 hover:underline"
                           >
                             <Avatar className="size-8">
                               <AvatarFallback className="bg-secondary text-xs">
@@ -314,8 +443,30 @@ export default function TeamDetail() {
                             </span>
                           </Link>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {athlete.sport ?? "—"}
+                        <TableCell>
+                          {athlete.tacticalPosition ? (
+                            <Badge variant="outline" className="font-semibold text-xs border-primary/40 text-primary">
+                              {athlete.tacticalPosition}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Unassigned</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {athlete.tacticalRole ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canManage && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setRoleAthlete(athlete)}
+                              className="h-8 text-xs gap-1"
+                            >
+                              <Shield className="size-3.5 text-primary" />
+                              <span>Assign Role</span>
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -459,6 +610,19 @@ export default function TeamDetail() {
             open={scheduleOpen}
             onOpenChange={setScheduleOpen}
             teamId={team._id}
+          />
+          <EditTeamTacticsDialog
+            open={tacticsOpen}
+            onOpenChange={setTacticsOpen}
+            teamId={team._id}
+            currentFormation={team.preferredFormation}
+            currentPlanId={team.activeTacticalPlanId}
+          />
+          <AssignTacticalRoleDialog
+            open={Boolean(roleAthlete)}
+            onOpenChange={(open) => !open && setRoleAthlete(null)}
+            teamId={team._id}
+            athlete={roleAthlete}
           />
         </>
       )}

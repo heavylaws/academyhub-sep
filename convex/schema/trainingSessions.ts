@@ -10,6 +10,8 @@ export const trainingSessions = defineTable({
   durationMinutes: v.number(),
   location: v.optional(v.string()),
   notes: v.optional(v.string()),
+  tacticalPlanId: v.optional(v.id("tacticalPlans")),
+  drillIds: v.optional(v.array(v.string())),
   createdBy: v.id("users"),
   createdAt: v.string(),
 })

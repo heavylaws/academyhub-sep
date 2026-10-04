@@ -13,13 +13,17 @@ import {
   Trash2,
   XCircle,
   TabletSmartphone,
+  Compass,
+  BookOpen,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { Badge } from "@/components/ui/badge.tsx";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card.tsx";
@@ -95,6 +99,7 @@ export default function SessionDetail() {
   );
   const setAttendance = useMutation(api.trainingSessions.setAttendance);
   const deleteSession = useMutation(api.trainingSessions.deleteSession);
+  const linkTacticalPlan = useMutation(api.trainingSessions.linkTacticalPlanToSession);
   const [editOpen, setEditOpen] = useState(false);
 
   const handleSetStatus = async (
@@ -272,6 +277,113 @@ export default function SessionDetail() {
             </p>
           </CardContent>
         )}
+      </Card>
+
+      {/* Tactical Routine & Tactical Board Link Card */}
+      <Card className="border border-border/80">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Compass className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Tactical Routine & Drills</CardTitle>
+                <CardDescription>
+                  Pitch layout, passing patterns, and tactical concepts assigned to this session.
+                </CardDescription>
+              </div>
+            </div>
+            {data.tacticalPlan && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/tactical-board`)}
+                className="h-9 gap-1.5 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <Compass className="size-4" />
+                <span>Open in Tactical Board</span>
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {data.tacticalPlan ? (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-muted/30">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm">{data.tacticalPlan.title}</span>
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                    {data.tacticalPlan.pitchType.replace(/_/g, " ")}
+                  </Badge>
+                  {data.tacticalPlan.category && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {data.tacticalPlan.category}
+                    </Badge>
+                  )}
+                </div>
+                {data.tacticalPlan.coachingPoints && data.tacticalPlan.coachingPoints.length > 0 && (
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    🎯 Coaching Points: {data.tacticalPlan.coachingPoints.join(" • ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => navigate("/tactical-board")}
+                  className="h-8 text-xs font-medium gap-1"
+                >
+                  <Compass className="size-3.5" />
+                  <span>Launch Board</span>
+                </Button>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      await linkTacticalPlan({
+                        sessionId: session._id,
+                        tacticalPlanId: undefined,
+                      });
+                      toast.success("Tactical plan unlinked from session");
+                    }}
+                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    Unlink
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl border border-dashed text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <BookOpen className="size-4 text-muted-foreground" />
+                <span>No tactical routine linked to this session yet.</span>
+              </div>
+              {canManage && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/tactical-board")}
+                    className="h-8 text-xs gap-1"
+                  >
+                    <Compass className="size-3.5" />
+                    <span>Create Tactical Routine</span>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate("/drills")}
+                    className="h-8 text-xs gap-1"
+                  >
+                    <span>Browse Drill Catalog</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       <Card>

@@ -53,6 +53,23 @@ export interface MockFeeSchedule {
   createdAt: string;
 }
 
+export interface MockTacticalPlan {
+  _id: string;
+  academyId: string;
+  title: string;
+  drillId?: string;
+  category?: string;
+  pitchType: string;
+  gridDimensions?: string;
+  coachingPoints: string[];
+  planData: string;
+  createdBy: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MockDatabase {
   academies: MockAcademy[];
   users: MockUser[];
@@ -74,6 +91,7 @@ export interface MockDatabase {
   conversations: MockConversation[];
   messages: MockMessage[];
   drills: MockDrill[];
+  tacticalPlans: MockTacticalPlan[];
 }
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
@@ -92,6 +110,7 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "feePayments",
   "invoices",
   "drills",
+  "tacticalPlans",
   "announcements",
   "conversations",
   "messages",
@@ -138,6 +157,7 @@ function getInitialDb(): MockDatabase {
     conversations: [...SEED_CONVERSATIONS],
     messages: [...SEED_MESSAGES],
     drills: [...SEED_DRILLS],
+    tacticalPlans: [],
   };
 }
 
@@ -263,6 +283,7 @@ class LocalMockStore {
       conversations: [],
       messages: [],
       drills: [],
+      tacticalPlans: [],
     };
     this.currentUserId = null;
     if (typeof window !== "undefined") {
@@ -1483,6 +1504,22 @@ class LocalMockStore {
         });
       }
 
+      case "tacticalPlans:listTacticalPlans": {
+        const plans = this.db.tacticalPlans || [];
+        const drillId = args.drillId as string | undefined;
+        return plans.filter((p) => {
+          if (academyId && p.academyId !== academyId) return false;
+          if (drillId && p.drillId !== drillId) return false;
+          return true;
+        });
+      }
+
+      case "tacticalPlans:getTacticalPlan": {
+        const planId = args.id as string;
+        const plans = this.db.tacticalPlans || [];
+        return plans.find((p) => p._id === planId) || null;
+      }
+
       case "assessments:listAssessmentsForSession": {
         const sessionId = args.sessionId as string;
         let records = this.db.assessments.filter((ass) => ass.sessionId === sessionId);
@@ -2550,6 +2587,65 @@ class LocalMockStore {
         }
 
         return null;
+      }
+
+      case "tacticalPlans:saveTacticalPlan": {
+        if (!user) throw new Error("Unauthorized");
+        const planId = args.planId as string | undefined;
+        const nowIso = new Date().toISOString();
+        this.db.tacticalPlans = this.db.tacticalPlans || [];
+
+        if (planId) {
+          const idx = this.db.tacticalPlans.findIndex((p) => p._id === planId);
+          if (idx !== -1) {
+            this.db.tacticalPlans[idx] = {
+              ...this.db.tacticalPlans[idx],
+              title: args.title as string,
+              drillId: args.drillId as string | undefined,
+              category: args.category as string | undefined,
+              pitchType: args.pitchType as string,
+              gridDimensions: args.gridDimensions as string | undefined,
+              coachingPoints: (args.coachingPoints as string[]) || [],
+              planData: args.planData as string,
+              updatedAt: nowIso,
+            };
+            this.saveDb();
+            this.notifyAll();
+            return planId;
+          }
+        }
+
+        const newId = `tp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const newPlan: MockTacticalPlan = {
+          _id: newId,
+          academyId: academyId || "acad_0qbqv4w",
+          title: args.title as string,
+          drillId: args.drillId as string | undefined,
+          category: args.category as string | undefined,
+          pitchType: args.pitchType as string,
+          gridDimensions: args.gridDimensions as string | undefined,
+          coachingPoints: (args.coachingPoints as string[]) || [],
+          planData: args.planData as string,
+          createdBy: user._id,
+          createdByName: user.name,
+          createdByRole: user.role,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        this.db.tacticalPlans.unshift(newPlan);
+        this.saveDb();
+        this.notifyAll();
+        return newId;
+      }
+
+      case "tacticalPlans:deleteTacticalPlan": {
+        if (!user) throw new Error("Unauthorized");
+        const planId = args.id as string;
+        this.db.tacticalPlans = (this.db.tacticalPlans || []).filter((p) => p._id !== planId);
+        this.saveDb();
+        this.notifyAll();
+        return { success: true };
       }
 
       case "assessments:recordAssessment":

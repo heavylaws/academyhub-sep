@@ -131,7 +131,17 @@ export const getTeam = query({
   handler: async (
     ctx,
     args,
-  ): Promise<{ team: Doc<"teams">; roster: Doc<"athletes">[] }> => {
+  ): Promise<{
+    team: Doc<"teams">;
+    roster: Array<
+      Doc<"athletes"> & {
+        jerseyNumber?: number;
+        tacticalPosition?: string;
+        tacticalRole?: string;
+      }
+    >;
+    activeTacticalPlan?: Doc<"tacticalPlans"> | null;
+  }> => {
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -142,9 +152,18 @@ export const getTeam = query({
       .query("teamMembers")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .collect();
-    const roster = (
+    const membersByAthleteId = new Map(
+      members.map((m) => [m.athleteId, m]),
+    );
+
+    const rawAthletes = (
       await Promise.all(members.map((m) => ctx.db.get("athletes", m.athleteId)))
     ).filter((a): a is Doc<"athletes"> => a !== null);
+
+    let activeTacticalPlan: Doc<"tacticalPlans"> | null = null;
+    if (team.activeTacticalPlanId) {
+      activeTacticalPlan = await ctx.db.get("tacticalPlans", team.activeTacticalPlanId);
+    }
 
     // Teammates (athletes, guardians) only see names; contact details, birth
     // dates, notes and check-in PINs are staff-only.
@@ -153,10 +172,11 @@ export const getTeam = query({
       user.role === "academy_admin" ||
       user.role === "coach" ||
       user.role === "accounting";
-    if (!isStaff) {
-      return {
-        team,
-        roster: roster.map((a) => ({
+
+    const roster = rawAthletes.map((a) => {
+      const member = membersByAthleteId.get(a._id);
+      if (!isStaff) {
+        return {
           _id: a._id,
           _creationTime: a._creationTime,
           academyId: a.academyId,
@@ -166,10 +186,98 @@ export const getTeam = query({
           status: a.status,
           createdBy: a.createdBy,
           createdAt: a.createdAt,
-        })),
+          jerseyNumber: member?.jerseyNumber,
+          tacticalPosition: member?.tacticalPosition,
+          tacticalRole: member?.tacticalRole,
+        } as unknown as Doc<"athletes"> & {
+          jerseyNumber?: number;
+          tacticalPosition?: string;
+          tacticalRole?: string;
+        };
+      }
+      return {
+        ...a,
+        jerseyNumber: member?.jerseyNumber,
+        tacticalPosition: member?.tacticalPosition,
+        tacticalRole: member?.tacticalRole,
       };
+    });
+
+    return { team, roster, activeTacticalPlan };
+  },
+});
+
+/** Academy admin/coach: update team tactical formation and active playbook routine */
+export const updateTeamTacticalSetup = mutation({
+  args: {
+    teamId: v.id("teams"),
+    preferredFormation: v.optional(v.string()),
+    activeTacticalPlanId: v.optional(v.id("tacticalPlans")),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const team = await ctx.db.get("teams", args.teamId);
+    if (!team) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
-    return { team, roster };
+    await requireAcademyMember(ctx, team.academyId);
+
+    if (args.activeTacticalPlanId) {
+      const plan = await ctx.db.get("tacticalPlans", args.activeTacticalPlanId);
+      if (!plan || plan.academyId !== team.academyId) {
+        throw new ConvexError({
+          code: "BAD_REQUEST",
+          message: "Invalid tactical plan for this academy",
+        });
+      }
+    }
+
+    await ctx.db.patch("teams", args.teamId, {
+      preferredFormation: args.preferredFormation,
+      activeTacticalPlanId: args.activeTacticalPlanId,
+    });
+    return args.teamId;
+  },
+});
+
+/** Academy admin/coach: assign jersey number, tactical position, and role to a team athlete */
+export const assignAthleteTacticalRole = mutation({
+  args: {
+    teamId: v.id("teams"),
+    athleteId: v.id("athletes"),
+    jerseyNumber: v.optional(v.number()),
+    tacticalPosition: v.optional(v.string()),
+    tacticalRole: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const team = await ctx.db.get("teams", args.teamId);
+    if (!team) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
+    }
+    await requireAcademyMember(ctx, team.academyId);
+
+    const membership = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team_and_athlete", (q) =>
+        q.eq("teamId", args.teamId).eq("athleteId", args.athleteId),
+      )
+      .first();
+
+    if (!membership) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Athlete is not a member of this team",
+      });
+    }
+
+    await ctx.db.patch("teamMembers", membership._id, {
+      jerseyNumber: args.jerseyNumber,
+      tacticalPosition: args.tacticalPosition,
+      tacticalRole: args.tacticalRole,
+    });
+
+    return membership._id;
   },
 });
 
