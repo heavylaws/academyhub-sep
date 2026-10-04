@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { Scrypt } from "lucia";
 import type { Id } from "./_generated/dataModel.d.ts";
 
+
 const TABLES_TO_CLEAR = [
   "announcementReads",
   "announcements",
@@ -279,6 +280,21 @@ export const createSingleAcademyAdmin = mutation({
           "admincedars",
         ],
       },
+      badems: {
+        shortcut: "badems",
+        username: "AdminBadEMS",
+        password: "badems2026!",
+        aliases: [
+          "adminbadems@academieshub.com",
+          "admin.badems@academieshub.com",
+          "adminbadems@gmail.com",
+          "admin.badems@gmail.com",
+          "admin@badems.com",
+          "adminbadems@academy.com",
+          "adminbadems",
+          "badems",
+        ],
+      },
     };
 
     const config = academyConfigs[academy.slug] || {
@@ -292,11 +308,10 @@ export const createSingleAcademyAdmin = mutation({
     const secret = await scrypt.hash(config.password);
 
     // 1. Find or create User document
-    const academyUsers = await ctx.db
+    let user = await ctx.db
       .query("users")
-      .withIndex("by_academy", (q) => q.eq("academyId", academy._id))
-      .collect();
-    let user = academyUsers.find((u) => u.role === "academy_admin") ?? null;
+      .withIndex("email", (q) => q.eq("email", primaryEmail))
+      .first();
 
     if (!user) {
       const userId = await ctx.db.insert("users", {
@@ -400,6 +415,9 @@ export const createCustomAcademyAdmin = mutation({
           if (search === "alhakkani" || search === "hakkani") {
             return a.slug === "al-hakkani" || aSlug.includes("hakkani") || aName.includes("hakkani");
           }
+          if (search === "badems" || search === "badem") {
+            return a.slug === "badems" || aSlug.includes("badem") || aName.includes("badem");
+          }
           return aSlug === search || aName === search || aSlug.includes(search) || aName.includes(search);
         }) ?? null;
     }
@@ -439,8 +457,34 @@ export const createCustomAcademyAdmin = mutation({
       });
     }
 
-    // 2. AuthAccount for all case variations
-    const identifiers = Array.from(new Set([normalizedEmail, rawEmail]));
+    // 2. Mark any pending invites as accepted
+    const pendingInvites = await ctx.db
+      .query("invites")
+      .withIndex("by_email_and_status", (q) =>
+        q.eq("email", normalizedEmail).eq("status", "pending"),
+      )
+      .collect();
+    for (const invite of pendingInvites) {
+      await ctx.db.patch(invite._id, {
+        status: "accepted",
+        acceptedAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. AuthAccount for all case variations and username
+    const emailPrefix = normalizedEmail.split("@")[0];
+    const rawPrefix = rawEmail.split("@")[0];
+    const identifiers = Array.from(
+      new Set([
+        normalizedEmail,
+        rawEmail,
+        args.name,
+        args.name.toLowerCase(),
+        emailPrefix,
+        rawPrefix,
+      ]),
+    );
+
     for (const identifier of identifiers) {
       const existingAuth = await ctx.db
         .query("authAccounts")
@@ -477,6 +521,186 @@ export const createCustomAcademyAdmin = mutation({
     };
   },
 });
+
+export const provisionBademsAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const scrypt = new Scrypt();
+    const academy = await ctx.db
+      .query("academies")
+      .withIndex("by_slug", (q) => q.eq("slug", "badems"))
+      .first();
+
+    if (!academy) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Academy BadEMS not found",
+      });
+    }
+
+    const email = "c00ldude@badems.com";
+    const password = "badems2026!";
+    const name = "c00ldude";
+    const secret = await scrypt.hash(password);
+
+    // 1. Provision user document
+    let user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .first();
+
+    if (!user) {
+      const userId = await ctx.db.insert("users", {
+        name,
+        email,
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: Date.now(),
+      });
+      user = (await ctx.db.get(userId))!;
+    } else {
+      await ctx.db.patch(user._id, {
+        name,
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: user.emailVerificationTime ?? Date.now(),
+      });
+    }
+
+    // 2. Mark pending invites accepted
+    const pendingInvites = await ctx.db
+      .query("invites")
+      .withIndex("by_email_and_status", (q) =>
+        q.eq("email", email).eq("status", "pending"),
+      )
+      .collect();
+
+    for (const invite of pendingInvites) {
+      await ctx.db.patch(invite._id, {
+        status: "accepted",
+        acceptedAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. Create authAccounts for email and username variations
+    const identifiers = [
+      "c00ldude@badems.com",
+      "C00ldude@badems.com",
+      "c00ldude",
+      "C00ldude",
+    ];
+
+    for (const identifier of identifiers) {
+      const existingAuth = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", identifier),
+        )
+        .first();
+
+      if (existingAuth) {
+        await ctx.db.patch(existingAuth._id, {
+          secret,
+          userId: user._id,
+          emailVerified: identifier,
+        });
+      } else {
+        await ctx.db.insert("authAccounts", {
+          userId: user._id,
+          provider: "password",
+          providerAccountId: identifier,
+          secret,
+          emailVerified: identifier,
+        });
+      }
+    }
+
+    // 4. Also ensure standard AdminBadEMS account exists
+    const adminEmail = "adminbadems@academieshub.com";
+    const adminUsername = "AdminBadEMS";
+    let adminUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", adminEmail))
+      .first();
+
+    if (!adminUser) {
+      const adminUserId = await ctx.db.insert("users", {
+        name: "AdminBadEMS (BadEMS)",
+        email: adminEmail,
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: Date.now(),
+      });
+      adminUser = (await ctx.db.get(adminUserId))!;
+    } else {
+      await ctx.db.patch(adminUser._id, {
+        name: "AdminBadEMS (BadEMS)",
+        role: "academy_admin",
+        academyId: academy._id,
+        emailVerificationTime: adminUser.emailVerificationTime ?? Date.now(),
+      });
+    }
+
+    const adminIdentifiers = [
+      adminEmail,
+      adminUsername,
+      adminUsername.toLowerCase(),
+      "admin.badems@academieshub.com",
+      "admin@badems.com",
+      "adminbadems",
+      "badems",
+    ];
+
+    for (const identifier of adminIdentifiers) {
+      const existingAuth = await ctx.db
+        .query("authAccounts")
+        .withIndex("providerAndAccountId", (q) =>
+          q.eq("provider", "password").eq("providerAccountId", identifier),
+        )
+        .first();
+
+      if (existingAuth) {
+        await ctx.db.patch(existingAuth._id, {
+          secret,
+          userId: adminUser._id,
+          emailVerified: identifier,
+        });
+      } else {
+        await ctx.db.insert("authAccounts", {
+          userId: adminUser._id,
+          provider: "password",
+          providerAccountId: identifier,
+          secret,
+          emailVerified: identifier,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      academyName: academy.name,
+      academySlug: academy.slug,
+      academyId: academy._id,
+      c00ldude: {
+        userId: user._id,
+        name,
+        email,
+        role: "academy_admin",
+        identifiers,
+        password,
+      },
+      adminBadems: {
+        userId: adminUser._id,
+        name: "AdminBadEMS (BadEMS)",
+        email: adminEmail,
+        role: "academy_admin",
+        identifiers: adminIdentifiers,
+        password,
+      },
+    };
+  },
+});
+
 
 
 
