@@ -1463,7 +1463,15 @@
   </div>
 
   <script>
-    const APPLET_URL = "https://academieshub.ai.studio/";
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    const APPLET_URL = isLocal ? (window.location.origin + "/") : "https://academieshub.ai.studio/";
+
+    // Update portal links on load
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll(".card-footer a.btn-secondary").forEach(a => {
+        a.href = APPLET_URL;
+      });
+    });
 
     function showToast(message) {
       const toast = document.getElementById("toast");
