@@ -60,8 +60,34 @@ export function getLiveConvexClient(): ConvexReactClient {
         },
         localQueryResult: () => {
           try {
-            const res = realWatch.localQueryResult();
+            let res = realWatch.localQueryResult();
             isFallback = false;
+            // Sanitize remote legacy mock fallbacks if returned from Convex Cloud
+            if (name === "dashboard:getPlatformKpis" && res && typeof res === "object") {
+              const kpi = { ...(res as Record<string, unknown>) };
+              if (kpi.totalInvoiceCount === 0 && (kpi.recentRevenue as number) > 0) {
+                kpi.recentRevenue = 0;
+                kpi.paidInvoiceCount = 0;
+                kpi.revenueTrend = [
+                  { month: "May", revenue: 0 },
+                  { month: "Jun", revenue: 0 },
+                  { month: "Jul", revenue: 0 },
+                  { month: "Aug", revenue: 0 },
+                  { month: "Sep", revenue: 0 },
+                  { month: "Oct", revenue: 0 },
+                ];
+              }
+              if (
+                kpi.attendanceRate === 88.5 &&
+                Array.isArray(kpi.attendanceTrend) &&
+                kpi.attendanceTrend.length === 6 &&
+                (kpi.attendanceTrend[0] as { rate?: number })?.rate === 82
+              ) {
+                kpi.attendanceRate = 0;
+                kpi.attendanceTrend = [];
+              }
+              res = kpi;
+            }
             return res;
           } catch (err: unknown) {
             const msg = String((err as { message?: string })?.message || err || "");

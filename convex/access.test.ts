@@ -537,3 +537,105 @@ describe("drills", () => {
     expect(await as(t, staffId).query(api.drills.listDrills, { academyId })).toEqual([]);
   });
 });
+
+describe("dashboard access and scoping", () => {
+  it("academy admin only sees their academy metrics and no platform stats", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, academyId } = await seed(t);
+
+    const data = await as(t, staffId).query(api.dashboard.getDashboardData, {});
+    expect(data.role).toBe("academy_admin");
+    if ("athleteCount" in data) {
+      expect(data.athleteCount).toBeGreaterThanOrEqual(1);
+    }
+
+    const kpis = await as(t, staffId).query(api.dashboard.getPlatformKpis, {});
+    expect(kpis?.scope).toBe("academy");
+    expect(kpis?.role).toBe("academy_admin");
+    expect(kpis?.academyCount).toBeUndefined();
+    expect(kpis?.showFinancials).toBe(true);
+  });
+
+  it("coaches do not receive financial figures in dashboard KPIs", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId } = await seed(t);
+    const coachId = await t.run(async (ctx) => {
+      return await ctx.db.insert("users", {
+        email: "coach@academy.test",
+        emailVerificationTime: 1,
+        role: "coach",
+        academyId,
+      });
+    });
+
+    const kpis = await as(t, coachId).query(api.dashboard.getPlatformKpis, {});
+    expect(kpis?.scope).toBe("coach");
+    expect(kpis?.role).toBe("coach");
+    expect(kpis?.recentRevenue).toBe(0);
+    expect(kpis?.showFinancials).toBe(false);
+  });
+
+  it("athletes and guardians receive null for platform KPIs and only personal data", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId } = await seed(t);
+    const athleteUserId = await t.run(async (ctx) => {
+      const uId = await ctx.db.insert("users", {
+        email: "athlete@academy.test",
+        emailVerificationTime: 1,
+        role: "athlete",
+        academyId,
+      });
+      await ctx.db.insert("athletes", {
+        academyId,
+        userId: uId,
+        firstName: "Leo",
+        lastName: "Messi",
+        status: "active",
+        createdBy: uId,
+        createdAt: now,
+      });
+      return uId;
+    });
+
+    const kpis = await as(t, athleteUserId).query(api.dashboard.getPlatformKpis, {});
+    expect(kpis).toBeNull();
+
+    const data = await as(t, athleteUserId).query(api.dashboard.getDashboardData, {});
+    expect(data.role).toBe("athlete");
+  });
+
+  it("empty academy with zero athletes displays 0 athletes, 0 attendance, and 0 revenue", async () => {
+    const t = convexTest(schema, modules);
+    const { emptyAdminId } = await t.run(async (ctx) => {
+      const emptyAcademyId = await ctx.db.insert("academies", {
+        name: "Badems Academy",
+        slug: "badems",
+        status: "active",
+        createdAt: now,
+      });
+      const emptyAdminId = await ctx.db.insert("users", {
+        email: "c00ldude@badems.com",
+        emailVerificationTime: 1,
+        role: "academy_admin",
+        academyId: emptyAcademyId,
+      });
+      return { emptyAdminId };
+    });
+
+    const data = await as(t, emptyAdminId).query(api.dashboard.getDashboardData, {});
+    expect(data.role).toBe("academy_admin");
+    if ("athleteCount" in data) {
+      expect(data.athleteCount).toBe(0);
+      expect(data.teamCount).toBe(0);
+      expect(data.upcomingSessionCount).toBe(0);
+    }
+
+    const kpis = await as(t, emptyAdminId).query(api.dashboard.getPlatformKpis, {});
+    expect(kpis?.scope).toBe("academy");
+    expect(kpis?.totalActiveAthletes).toBe(0);
+    expect(kpis?.attendanceRate).toBe(0);
+    expect(kpis?.recentRevenue).toBe(0);
+    expect(kpis?.paidInvoiceCount).toBe(0);
+    expect(kpis?.totalInvoiceCount).toBe(0);
+  });
+});

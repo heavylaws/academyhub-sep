@@ -811,10 +811,64 @@ class LocalMockStore {
           };
         }
 
+        // Accounting role: dedicated financial overview
+        if (user.role === "accounting") {
+          const invoices = this.db.invoices.filter((i) => i.academyId === academyId);
+          const fees = this.db.athleteFees.filter((f) => f.academyId === academyId);
+          const feeIds = new Set(fees.map((f) => f._id));
+          const payments = this.db.feePayments.filter((p) => feeIds.has(p.feeId));
+
+          const paidInvoices = invoices.filter((i) => i.status === "paid");
+          const totalPaidRevenue = paidInvoices.reduce((acc, i) => acc + i.amount, 0);
+          const totalInvoiced = invoices.reduce((acc, i) => acc + i.amount, 0);
+          const overdueFees = fees.filter((f) => f.status === "overdue" || f.status === "unpaid");
+          const totalOverdueBalance = overdueFees.reduce((acc, f) => {
+            const fPayments = payments.filter((p) => p.feeId === f._id);
+            const paid = fPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+            return acc + Math.max(0, f.amountDue - paid);
+          }, 0);
+
+          const athleteMap = new Map(this.db.athletes.map((a) => [a._id, `${a.firstName} ${a.lastName}`]));
+
+          return {
+            role: "accounting" as const,
+            totalInvoiced,
+            totalPaidRevenue,
+            totalOverdueBalance,
+            paidInvoiceCount: paidInvoices.length,
+            totalInvoiceCount: invoices.length,
+            overdueFeeCount: overdueFees.length,
+            currency: invoices[0]?.currency || "USD",
+            recentInvoices: invoices.slice(0, 6).map((inv) => ({
+              _id: inv._id,
+              invoiceNumber: inv.invoiceNumber,
+              description: inv.description,
+              amount: inv.amount,
+              currency: inv.currency,
+              dueDate: inv.dueDate,
+              status: inv.status,
+              athleteName: inv.athleteId ? athleteMap.get(inv.athleteId) ?? "Athlete" : "Academy Client",
+            })),
+            recentOverdueFees: overdueFees.slice(0, 6).map((fee) => {
+              const fPayments = payments.filter((p) => p.feeId === fee._id);
+              const paid = fPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+              return {
+                _id: fee._id,
+                label: fee.label || "Academy Fee",
+                amountDue: fee.amountDue,
+                remainingBalance: Math.max(0, fee.amountDue - paid),
+                dueDate: fee.dueDate,
+                status: fee.status,
+                athleteName: athleteMap.get(fee.athleteId) ?? "Athlete",
+                athleteId: fee.athleteId,
+              };
+            }),
+          };
+        }
+
         if (
           user.role === "academy_admin" ||
-          user.role === "coach" ||
-          user.role === "accounting"
+          user.role === "coach"
         ) {
           const athletes = this.db.athletes.filter(
             (a) => a.academyId === academyId && a.status === "active",
@@ -1033,70 +1087,170 @@ class LocalMockStore {
       }
 
       case "dashboard:getPlatformKpis": {
-        const activeAthletes = this.db.athletes.filter(
-          (a) => (!academyId || a.academyId === academyId) && a.status === "active",
-        );
-        const count = activeAthletes.length > 0 ? activeAthletes.length : 24;
+        if (!user || user.role === "athlete" || user.role === "guardian") {
+          return null;
+        }
 
         const monthNames = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+
+        // Platform Admin: multi-academy aggregate
+        if (user.role === "platform_admin") {
+          const allAthletes = this.db.athletes.filter((a) => a.status === "active");
+          const count = allAthletes.length;
+
+          const athleteTrend = monthNames.map((month, idx) => {
+            if (count === 0) return { name: month, count: 0 };
+            const factor = 0.65 + (idx / (monthNames.length - 1)) * 0.35;
+            return { name: month, count: Math.max(1, Math.round(count * factor)) };
+          });
+          if (count > 0 && athleteTrend.length > 0) {
+            athleteTrend[athleteTrend.length - 1].count = count;
+          }
+
+          const allAttendance = this.db.attendanceRecords;
+          let attendanceRate = 0;
+          let attendanceTrend: Array<{ session: string; rate: number }> = [];
+
+          if (allAttendance.length > 0) {
+            const present = allAttendance.filter(
+              (r) => r.status === "present" || r.status === "late",
+            ).length;
+            attendanceRate = Math.round((present / allAttendance.length) * 1000) / 10;
+            const sessionMap = new Map<string, { present: number; total: number }>();
+            allAttendance.forEach((r) => {
+              const entry = sessionMap.get(r.sessionId) || { present: 0, total: 0 };
+              entry.total += 1;
+              if (r.status === "present" || r.status === "late") entry.present += 1;
+              sessionMap.set(r.sessionId, entry);
+            });
+            attendanceTrend = Array.from(sessionMap.entries())
+              .slice(-6)
+              .map(([_, data], idx) => ({
+                session: `S${idx + 1}`,
+                rate: Math.round((data.present / data.total) * 100),
+              }));
+          }
+
+          const allInvoices = this.db.invoices;
+          const paidInvoices = allInvoices.filter((inv) => inv.status === "paid");
+          const totalPaidRevenue = paidInvoices.reduce((acc, inv) => acc + inv.amount, 0);
+          const recentRevenue = totalPaidRevenue;
+
+          const revenueTrend = monthNames.map((month, idx) => {
+            if (recentRevenue === 0) return { month, revenue: 0 };
+            const base = recentRevenue / 6;
+            const variation = 0.8 + 0.08 * idx;
+            return { month, revenue: Math.round(base * variation) };
+          });
+
+          return {
+            scope: "platform" as const,
+            role: "platform_admin" as const,
+            academyName: "All Academies",
+            academyCount: this.db.academies.length,
+            userCount: this.db.users.filter((u) => u.role !== undefined).length,
+            totalActiveAthletes: count,
+            athleteGrowthPct: 0,
+            athleteTrend,
+            attendanceRate,
+            attendanceTrend,
+            recentRevenue,
+            revenueTrend,
+            currency: "USD",
+            paidInvoiceCount: paidInvoices.length,
+            totalInvoiceCount: allInvoices.length,
+            showFinancials: true,
+          };
+        }
+
+        // Academy-Scoped (Academy Admin, Coach, Accounting)
+        if (!academyId) return null;
+        const academy = this.db.academies.find((a) => a._id === academyId);
+        const academyName = academy?.name || "Academy";
+
+        const activeAthletes = this.db.athletes.filter(
+          (a) => a.academyId === academyId && a.status === "active",
+        );
+        const count = activeAthletes.length;
+
         const athleteTrend = monthNames.map((month, idx) => {
+          if (count === 0) return { name: month, count: 0 };
           const factor = 0.65 + (idx / (monthNames.length - 1)) * 0.35;
           return { name: month, count: Math.max(1, Math.round(count * factor)) };
         });
-        if (athleteTrend.length > 0) {
+        if (count > 0 && athleteTrend.length > 0) {
           athleteTrend[athleteTrend.length - 1].count = count;
         }
 
         // Attendance rate
         const academySessions = this.db.trainingSessions.filter(
-          (s) => !academyId || s.academyId === academyId,
+          (s) => s.academyId === academyId,
         );
         const sessionIds = new Set(academySessions.map((s) => s._id));
         const attendance = this.db.attendanceRecords.filter(
           (r) => sessionIds.has(r.sessionId),
         );
-        let attendanceRate = 88.5;
-        const attendanceTrend = [
-          { session: "W1", rate: 82 },
-          { session: "W2", rate: 85 },
-          { session: "W3", rate: 89 },
-          { session: "W4", rate: 87 },
-          { session: "W5", rate: 91 },
-          { session: "W6", rate: 94 },
-        ];
+        let attendanceRate = 0;
+        let attendanceTrend: Array<{ session: string; rate: number }> = [];
 
         if (attendance.length > 0) {
           const present = attendance.filter(
             (r) => r.status === "present" || r.status === "late",
           ).length;
           attendanceRate = Math.round((present / attendance.length) * 1000) / 10;
+          const sessionMap = new Map<string, { present: number; total: number }>();
+          attendance.forEach((r) => {
+            const entry = sessionMap.get(r.sessionId) || { present: 0, total: 0 };
+            entry.total += 1;
+            if (r.status === "present" || r.status === "late") entry.present += 1;
+            sessionMap.set(r.sessionId, entry);
+          });
+          attendanceTrend = Array.from(sessionMap.entries())
+            .slice(-6)
+            .map(([_, data], idx) => ({
+              session: `S${idx + 1}`,
+              rate: Math.round((data.present / data.total) * 100),
+            }));
         }
 
         // Invoices / Revenue
         const invoices = this.db.invoices.filter(
-          (inv) => !academyId || inv.academyId === academyId,
+          (inv) => inv.academyId === academyId,
         );
         const paidInvoices = invoices.filter((inv) => inv.status === "paid");
         const totalPaidRevenue = paidInvoices.reduce((acc, inv) => acc + inv.amount, 0);
-        const recentRevenue = totalPaidRevenue > 0 ? totalPaidRevenue : 18450;
+        const recentRevenue = totalPaidRevenue;
 
         const revenueTrend = monthNames.map((month, idx) => {
+          if (recentRevenue === 0) return { month, revenue: 0 };
           const base = recentRevenue / 6;
           const variation = 0.8 + 0.08 * idx;
           return { month, revenue: Math.round(base * variation) };
         });
 
+        const isCoach = user.role === "coach";
+        const isAcademyAdmin = user.role === "academy_admin";
+
         return {
+          scope: isCoach
+            ? ("coach" as const)
+            : isAcademyAdmin
+              ? ("academy" as const)
+              : ("accounting" as const),
+          role: user.role,
+          academyName,
           totalActiveAthletes: count,
-          athleteGrowthPct: 14.8,
+          athleteGrowthPct: 0,
           athleteTrend,
           attendanceRate,
           attendanceTrend,
-          recentRevenue,
-          revenueTrend,
+          // Coaches do not receive financial figures
+          recentRevenue: isCoach ? 0 : recentRevenue,
+          revenueTrend: isCoach ? [] : revenueTrend,
           currency: invoices[0]?.currency || "USD",
-          paidInvoiceCount: paidInvoices.length > 0 ? paidInvoices.length : 16,
-          totalInvoiceCount: invoices.length > 0 ? invoices.length : 18,
+          paidInvoiceCount: isCoach ? 0 : paidInvoices.length,
+          totalInvoiceCount: isCoach ? 0 : invoices.length,
+          showFinancials: !isCoach,
         };
       }
 
