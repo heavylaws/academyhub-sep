@@ -280,7 +280,7 @@ export const SEED_ACADEMIES: MockAcademy[] = [
   },
 ];
 
-// Platform admin comes only from /admins/{uid} in Firebase Firestore
+// Clean user list for mock authentication
 export const SEED_USERS: MockUser[] = [];
 
 // All other collections wiped clean for testing

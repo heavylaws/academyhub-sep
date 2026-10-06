@@ -205,7 +205,7 @@ Where each phase in phases contains:
 - Specific Notes: ${args.promptNotes || "None"}`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
+          model: "gemini-2.0-flash",
           contents: [
             { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
           ],
@@ -221,7 +221,7 @@ Where each phase in phases contains:
           if (parsed && typeof parsed === "object") {
             generatedDrill = parsed.drill;
             generatedPlan = parsed.tacticalPlan;
-            engineUsed = "CoachTactics Cloud AI (Gemini 3.8 Flash)";
+            engineUsed = "CoachTactics Cloud AI (Gemini 2.0 Flash)";
           }
         }
       } catch (aiErr) {

@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
+import { Compass } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
@@ -26,6 +27,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 
 const formSchema = z.object({
@@ -34,6 +42,7 @@ const formSchema = z.object({
   durationMinutes: z.string().min(1, "Duration is required"),
   location: z.string(),
   notes: z.string(),
+  tacticalPlanId: z.string().optional(),
 });
 
 /** Converts an ISO UTC string to the format expected by datetime-local inputs (YYYY-MM-DDTHH:mm). */
@@ -53,6 +62,7 @@ export default function EditSessionDialog({
   session: Doc<"trainingSessions">;
 }) {
   const updateSession = useMutation(api.trainingSessions.updateSession);
+  const tacticalPlans = useQuery(api.tacticalPlans.listTacticalPlans, open ? {} : "skip");
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -63,6 +73,7 @@ export default function EditSessionDialog({
       durationMinutes: String(session.durationMinutes),
       location: session.location ?? "",
       notes: session.notes ?? "",
+      tacticalPlanId: session.tacticalPlanId ? String(session.tacticalPlanId) : "none",
     },
   });
 
@@ -75,6 +86,7 @@ export default function EditSessionDialog({
         durationMinutes: String(session.durationMinutes),
         location: session.location ?? "",
         notes: session.notes ?? "",
+        tacticalPlanId: session.tacticalPlanId ? String(session.tacticalPlanId) : "none",
       });
     }
   }, [open, session, form]);
@@ -83,6 +95,11 @@ export default function EditSessionDialog({
     setSubmitting(true);
     try {
       const startsAt = new Date(values.startsAtLocal).toISOString();
+      const planId =
+        values.tacticalPlanId && values.tacticalPlanId !== "none"
+          ? (values.tacticalPlanId as Id<"tacticalPlans">)
+          : undefined;
+
       await updateSession({
         sessionId: session._id,
         title: values.title,
@@ -90,6 +107,8 @@ export default function EditSessionDialog({
         durationMinutes: Number(values.durationMinutes),
         location: values.location || undefined,
         notes: values.notes || undefined,
+        tacticalPlanId: planId,
+        drillIds: session.drillIds,
       });
       toast.success("Session updated");
       onOpenChange(false);
@@ -172,6 +191,39 @@ export default function EditSessionDialog({
                 )}
               />
             </div>
+            {/* Tactical Plan Selector */}
+            <FormField
+              control={form.control}
+              name="tacticalPlanId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <Compass className="size-3.5 text-primary" />
+                    <span>Tactical Routine / Playbook Plan (Optional)</span>
+                  </FormLabel>
+                  <Select
+                    value={field.value || "none"}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-11 sm:h-10 text-sm">
+                        <SelectValue placeholder="Choose a tactical plan" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No tactical plan</SelectItem>
+                      {(tacticalPlans || []).map((p) => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p.title} ({p.pitchType.replace(/_/g, " ")})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="location"

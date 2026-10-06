@@ -21,15 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-
-const FORMATIONS = [
-  { value: "4-3-3", label: "4-3-3 (Positional & High Press)" },
-  { value: "4-2-3-1", label: "4-2-3-1 (Double Pivot & Playmaker)" },
-  { value: "3-5-2", label: "3-5-2 (Wingbacks & Twin Strikers)" },
-  { value: "4-4-2", label: "4-4-2 (Compact Medium Block)" },
-  { value: "3-4-3", label: "3-4-3 (Diamond Overload & High Lines)" },
-  { value: "4-1-4-1", label: "4-1-4-1 (Defensive Anchor & Counter)" },
-];
+import { FORMATIONS } from "@/domain/tactics/tactical-domain.ts";
 
 interface EditTeamTacticsDialogProps {
   open: boolean;

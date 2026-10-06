@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowUpRight,
   CalendarClock,
   CalendarDays,
   List,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  UserMinus,
   UserRound,
   UserRoundPlus,
   Users,
@@ -19,6 +21,10 @@ import {
   Shield,
   Shirt,
   LayoutTemplate,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
@@ -68,8 +74,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { cn } from "@/lib/utils.ts";
+import { TacticalPitchSvg } from "@/components/tactical-board/tactical-pitch-svg.tsx";
+import {
+  FORMATIONS,
+  calculateSquadPositionalDepth,
+  getPositionCategory,
+  type PositionCategory,
+} from "@/domain/tactics/tactical-domain.ts";
 import EditTeamDialog from "./_components/edit-team-dialog.tsx";
 import ManageRosterDialog from "./_components/manage-roster-dialog.tsx";
 import ScheduleSessionDialog from "./_components/schedule-session-dialog.tsx";
@@ -95,6 +115,7 @@ export default function TeamDetail() {
     teamId ? { teamId: teamId as Id<"teams"> } : "skip",
   );
   const deleteTeam = useMutation(api.teams.deleteTeam);
+  const removeTeamMember = useMutation(api.teams.removeTeamMember);
 
   const [editOpen, setEditOpen] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(false);
@@ -108,9 +129,108 @@ export default function TeamDetail() {
     tacticalPosition?: string;
     tacticalRole?: string;
   } | null>(null);
+  const [athleteToRemove, setAthleteToRemove] = useState<{
+    _id: Id<"athletes">;
+    firstName: string;
+    lastName: string;
+  } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [rosterSort, setRosterSort] = useState<"position" | "jersey" | "name">("position");
+  const [showPitchPreview, setShowPitchPreview] = useState(true);
   const [sessionView, setSessionView] = useState<"calendar" | "list">(
     "calendar",
   );
+
+  const roster = useMemo(() => data?.roster ?? [], [data?.roster]);
+  const team = data?.team;
+
+  const positionalDepth = useMemo(
+    () => calculateSquadPositionalDepth(roster),
+    [roster],
+  );
+
+  const formationPreset = useMemo(() => {
+    return (
+      FORMATIONS.find((f) => f.value === team?.preferredFormation) ||
+      FORMATIONS[0]
+    );
+  }, [team?.preferredFormation]);
+
+  // Compute sorted roster
+  const sortedRoster = useMemo(() => {
+    const list = [...roster];
+    const categoryOrder: Record<PositionCategory, number> = {
+      GK: 0,
+      DEF: 1,
+      MID: 2,
+      FWD: 3,
+      OTHER: 4,
+    };
+
+    if (rosterSort === "position") {
+      return list.sort((a, b) => {
+        const catA = getPositionCategory(a.tacticalPosition);
+        const catB = getPositionCategory(b.tacticalPosition);
+        if (categoryOrder[catA] !== categoryOrder[catB]) {
+          return categoryOrder[catA] - categoryOrder[catB];
+        }
+        if (a.jerseyNumber !== undefined && b.jerseyNumber !== undefined) {
+          return a.jerseyNumber - b.jerseyNumber;
+        }
+        return a.firstName.localeCompare(b.firstName);
+      });
+    } else if (rosterSort === "jersey") {
+      return list.sort((a, b) => {
+        if (a.jerseyNumber === undefined) return 1;
+        if (b.jerseyNumber === undefined) return -1;
+        return a.jerseyNumber - b.jerseyNumber;
+      });
+    } else {
+      return list.sort((a, b) => a.firstName.localeCompare(b.firstName));
+    }
+  }, [roster, rosterSort]);
+
+  // Match roster athletes to formation slots for the mini-pitch preview
+  const lineupSlots = useMemo(() => {
+    const slots = formationPreset.slots;
+    const remainingAthletes = [...roster];
+    const assigned: Array<{
+      slot: { role: string; x: number; y: number };
+      athlete?: (typeof roster)[0];
+    }> = [];
+
+    // First pass: try matching exact or category role
+    slots.forEach((slot) => {
+      const matchIdx = remainingAthletes.findIndex((ath) => {
+        const pos = ath.tacticalPosition?.toUpperCase();
+        return (
+          pos === slot.role ||
+          (pos && getPositionCategory(pos) === getPositionCategory(slot.role))
+        );
+      });
+
+      if (matchIdx !== -1) {
+        assigned.push({ slot, athlete: remainingAthletes[matchIdx] });
+        remainingAthletes.splice(matchIdx, 1);
+      } else {
+        assigned.push({ slot });
+      }
+    });
+
+    // Second pass: fill empty slots with remaining players
+    let remIdx = 0;
+    for (
+      let i = 0;
+      i < assigned.length && remIdx < remainingAthletes.length;
+      i++
+    ) {
+      if (!assigned[i].athlete) {
+        assigned[i].athlete = remainingAthletes[remIdx++];
+      }
+    }
+
+    return assigned;
+  }, [formationPreset, roster]);
 
   const handleDeleteTeam = async () => {
     if (!teamId) return;
@@ -127,6 +247,29 @@ export default function TeamDetail() {
     }
   };
 
+  const handleRemoveAthlete = async () => {
+    if (!athleteToRemove || !teamId) return;
+    setIsRemoving(true);
+    try {
+      await removeTeamMember({
+        teamId: teamId as Id<"teams">,
+        athleteId: athleteToRemove._id,
+      });
+      toast.success(
+        `Removed ${athleteToRemove.firstName} ${athleteToRemove.lastName} from squad`,
+      );
+      setAthleteToRemove(null);
+    } catch (error) {
+      toast.error(
+        error instanceof ConvexError
+          ? String((error.data as { message?: string })?.message || error.message)
+          : "Failed to remove athlete",
+      );
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
   if (data === undefined) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -136,7 +279,7 @@ export default function TeamDetail() {
     );
   }
 
-  if (data === null) {
+  if (data === null || !team) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <ErrorState>
@@ -159,8 +302,6 @@ export default function TeamDetail() {
     );
   }
 
-  const { team, roster } = data;
-
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <Button
@@ -181,13 +322,22 @@ export default function TeamDetail() {
             </h1>
             {team.sport && <Badge variant="secondary">{team.sport}</Badge>}
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {roster.length} {roster.length === 1 ? "athlete" : "athletes"} on
-            this team
+            this team • Playing Base {team.preferredFormation || "4-3-3"}
           </p>
         </div>
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/tactical-board?teamId=${team._id}`)}
+              className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
+              title="Launch Tactical Board with this squad pre-deployed"
+            >
+              <Compass className="size-4 text-primary" />
+              <span>Deploy to Board</span>
+            </Button>
             <Button
               variant="secondary"
               onClick={() => setEditOpen(true)}
@@ -229,44 +379,146 @@ export default function TeamDetail() {
         )}
       </div>
 
-      {/* Team Tactical Architecture & Formation Card */}
-      <Card className="border border-border/80">
-        <CardHeader className="pb-3">
+      {/* Squad Positional Depth Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Goalkeepers
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-bold font-mono">
+              {positionalDepth.gk}
+            </span>
+            {positionalDepth.gk === 0 ? (
+              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                Missing GK
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] text-primary">
+                Covered
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Defenders
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-bold font-mono">
+              {positionalDepth.def}
+            </span>
+            <Badge variant="secondary" className="text-[10px]">
+              Backline
+            </Badge>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Midfielders
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-bold font-mono">
+              {positionalDepth.mid}
+            </span>
+            <Badge variant="secondary" className="text-[10px]">
+              Engine
+            </Badge>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Forwards
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-bold font-mono">
+              {positionalDepth.fwd}
+            </span>
+            <Badge variant="secondary" className="text-[10px]">
+              Attack
+            </Badge>
+          </div>
+        </div>
+
+        <div className="col-span-2 sm:col-span-1 rounded-xl border bg-muted/40 p-3 flex flex-col justify-between">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Squad Total
+          </span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-bold font-mono">
+              {positionalDepth.total}
+            </span>
+            <span className="text-xs text-muted-foreground">athletes</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Team Tactical Architecture & Visual Lineup Card */}
+      <Card className="border border-border/80 overflow-hidden">
+        <CardHeader className="pb-3 bg-muted/20">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Compass className="size-5 text-primary" />
               <div>
-                <CardTitle className="text-base">Tactical Architecture</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">Tactical Architecture</CardTitle>
+                  <Badge variant="outline" className="font-mono text-xs border-primary/40 text-primary">
+                    {team.preferredFormation || "4-3-3"}
+                  </Badge>
+                </div>
                 <CardDescription>
-                  Playing shape, tactical formation, and primary playbook routine for {team.name}.
+                  Playing shape, starting slots, and primary playbook routine for {team.name}.
                 </CardDescription>
               </div>
             </div>
-            {canManage && (
+            <div className="flex items-center gap-1.5 flex-wrap">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => setTacticsOpen(true)}
-                className="h-9 gap-1.5 text-xs font-semibold"
+                onClick={() => setShowPitchPreview(!showPitchPreview)}
+                className="h-8 text-xs gap-1"
               >
-                <LayoutTemplate className="size-4" />
-                <span>Configure Tactics</span>
+                {showPitchPreview ? (
+                  <>
+                    <EyeOff className="size-3.5 text-muted-foreground" />
+                    <span>Hide Pitch</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="size-3.5 text-muted-foreground" />
+                    <span>Show Pitch</span>
+                  </>
+                )}
               </Button>
-            )}
+              {canManage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTacticsOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold"
+                >
+                  <LayoutTemplate className="size-3.5" />
+                  <span>Configure</span>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Formation */}
+            {/* Formation Summary */}
             <div className="p-3 rounded-lg border bg-muted/30 flex items-center justify-between">
               <div className="space-y-0.5">
-                <span className="text-xs text-muted-foreground font-medium">Base Formation</span>
+                <span className="text-xs text-muted-foreground font-medium">Base Shape</span>
                 <p className="font-semibold text-sm">
-                  {team.preferredFormation || "4-3-3 (Standard)"}
+                  {formationPreset.label}
                 </p>
               </div>
-              <Badge variant="outline" className="text-xs font-mono border-primary/40 text-primary">
-                {team.preferredFormation || "4-3-3"}
+              <Badge variant="secondary" className="text-xs">
+                {formationPreset.category}
               </Badge>
             </div>
 
@@ -275,14 +527,14 @@ export default function TeamDetail() {
               <div className="space-y-0.5">
                 <span className="text-xs text-muted-foreground font-medium">Playbook Routine</span>
                 <p className="font-semibold text-sm truncate max-w-[200px]">
-                  {data.activeTacticalPlan?.title || "No linked playbook routine"}
+                  {data.activeTacticalPlan?.title || "No linked routine"}
                 </p>
               </div>
               {data.activeTacticalPlan ? (
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => navigate(`/tactical-board?planId=${data.activeTacticalPlan!._id}`)}
+                  onClick={() => navigate(`/tactical-board?planId=${data.activeTacticalPlan!._id}&teamId=${team._id}`)}
                   className="h-7 text-xs gap-1"
                 >
                   <Compass className="size-3.5" />
@@ -292,7 +544,7 @@ export default function TeamDetail() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => navigate("/tactical-board")}
+                  onClick={() => navigate(`/tactical-board?teamId=${team._id}`)}
                   className="h-7 text-xs text-muted-foreground hover:text-foreground"
                 >
                   Create
@@ -300,23 +552,117 @@ export default function TeamDetail() {
               )}
             </div>
           </div>
+
+          {/* Interactive Lineup Pitch Preview */}
+          {showPitchPreview && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                <span className="font-medium">
+                  Projected Starting Lineup ({formationPreset.slots.length} Slots)
+                </span>
+                <span className="text-[11px]">
+                  Attacking Right →
+                </span>
+              </div>
+
+              <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden border border-border/80 shadow-inner bg-slate-950">
+                <TacticalPitchSvg pitchType="full" />
+
+                {/* Slot markers & Athletes */}
+                {lineupSlots.map((item, idx) => {
+                  const isGK = item.slot.role === "GK";
+                  const athlete = item.athlete;
+
+                  return (
+                    <div
+                      key={idx}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-auto transition-transform hover:scale-110 z-10"
+                      style={{
+                        left: `${item.slot.x}%`,
+                        top: `${item.slot.y}%`,
+                      }}
+                      title={athlete ? `${athlete.firstName} ${athlete.lastName} (${athlete.tacticalRole || item.slot.role})` : `Vacant slot: ${item.slot.role}`}
+                    >
+                      {athlete ? (
+                        <div className="flex flex-col items-center group cursor-pointer">
+                          <div
+                            className={cn(
+                              "size-7 sm:size-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border-2 border-white/90 text-white transition-all",
+                              isGK
+                                ? "bg-amber-500 hover:bg-amber-400"
+                                : "bg-blue-600 hover:bg-blue-500",
+                            )}
+                          >
+                            {athlete.jerseyNumber !== undefined
+                              ? athlete.jerseyNumber
+                              : idx + 1}
+                          </div>
+                          <span className="mt-0.5 max-w-[70px] truncate text-[9px] sm:text-[10px] font-semibold text-white px-1 rounded bg-black/70 backdrop-blur-xs leading-tight">
+                            {athlete.lastName || athlete.firstName}
+                          </span>
+                          <span className="text-[8px] font-mono text-emerald-300 font-bold leading-none">
+                            {athlete.tacticalPosition || item.slot.role}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center opacity-70 hover:opacity-100">
+                          <div className="size-6 sm:size-7 rounded-full flex items-center justify-center font-bold text-[10px] border-2 border-dashed border-white/60 bg-black/40 text-white/80">
+                            {item.slot.role}
+                          </div>
+                          <span className="text-[8px] text-white/70 font-mono mt-0.5">
+                            Vacant
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* Roster & Tactical Positions Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Roster & Tactical Positions</CardTitle>
-            {canManage && (
-              <Button
-                variant="secondary"
-                onClick={() => setRosterOpen(true)}
-                className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
-              >
-                <UserRoundPlus className="size-4" />
-                <span>Manage roster</span>
-              </Button>
-            )}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Roster & Tactical Positions</CardTitle>
+              <CardDescription>
+                Assign squad jersey numbers, positions, and tactical duties.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Sort selector */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <SlidersHorizontal className="size-3.5" />
+                <Select
+                  value={rosterSort}
+                  onValueChange={(val) => setRosterSort(val as "position" | "jersey" | "name")}
+                >
+                  <SelectTrigger className="h-8 text-xs w-[120px]">
+                    <SelectValue placeholder="Sort roster" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="position">By Position</SelectItem>
+                    <SelectItem value="jersey">By Jersey #</SelectItem>
+                    <SelectItem value="name">By Name</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {canManage && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setRosterOpen(true)}
+                  className="h-8 text-xs font-semibold gap-1.5"
+                >
+                  <UserRoundPlus className="size-3.5" />
+                  <span>Manage roster</span>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -347,7 +693,7 @@ export default function TeamDetail() {
             <div>
               {/* Mobile View: High-ergonomics cards */}
               <div className="flex flex-col divide-y sm:hidden -mx-2">
-                {roster.map((athlete) => (
+                {sortedRoster.map((athlete) => (
                   <div
                     key={athlete._id}
                     className="flex items-center justify-between p-3"
@@ -365,7 +711,7 @@ export default function TeamDetail() {
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {athlete.jerseyNumber !== undefined && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono">
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 font-mono font-bold">
                               #{athlete.jerseyNumber}
                             </Badge>
                           )}
@@ -386,24 +732,30 @@ export default function TeamDetail() {
                       </div>
                     </Link>
 
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
                       {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setRoleAthlete(athlete)}
-                          className="h-8 px-2 text-xs"
-                          title="Assign Position & Role"
-                        >
-                          <Shield className="size-3.5 text-primary" />
-                          <span>Role</span>
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRoleAthlete(athlete)}
+                            className="h-8 px-2 text-xs"
+                            title="Assign Position & Role"
+                          >
+                            <Shield className="size-3.5 text-primary" />
+                            <span className="sr-only sm:not-sr-only">Role</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAthleteToRemove(athlete)}
+                            className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
+                            title="Remove from squad"
+                          >
+                            <UserMinus className="size-3.5" />
+                          </Button>
+                        </>
                       )}
-                      <Link to={`/athletes/${athlete._id}`}>
-                        <Badge variant="outline" className="text-[10px]">
-                          Profile
-                        </Badge>
-                      </Link>
                     </div>
                   </div>
                 ))}
@@ -422,7 +774,7 @@ export default function TeamDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {roster.map((athlete) => (
+                    {sortedRoster.map((athlete) => (
                       <TableRow key={athlete._id}>
                         <TableCell className="font-mono text-xs font-semibold text-muted-foreground">
                           {athlete.jerseyNumber !== undefined ? `#${athlete.jerseyNumber}` : "—"}
@@ -457,15 +809,26 @@ export default function TeamDetail() {
                         </TableCell>
                         <TableCell className="text-right">
                           {canManage && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setRoleAthlete(athlete)}
-                              className="h-8 text-xs gap-1"
-                            >
-                              <Shield className="size-3.5 text-primary" />
-                              <span>Assign Role</span>
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setRoleAthlete(athlete)}
+                                className="h-8 text-xs gap-1"
+                              >
+                                <Shield className="size-3.5 text-primary" />
+                                <span>Assign Role</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setAthleteToRemove(athlete)}
+                                className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                                title="Remove athlete from squad"
+                              >
+                                <UserMinus className="size-3.5" />
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -624,6 +987,33 @@ export default function TeamDetail() {
             teamId={team._id}
             athlete={roleAthlete}
           />
+          <AlertDialog
+            open={Boolean(athleteToRemove)}
+            onOpenChange={(open) => !open && setAthleteToRemove(null)}
+          >
+            <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove athlete from squad?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to remove{" "}
+                  <span className="font-semibold text-foreground">
+                    {athleteToRemove?.firstName} {athleteToRemove?.lastName}
+                  </span>{" "}
+                  from this squad? Their profile and academy records will not be deleted.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={handleRemoveAthlete}
+                  disabled={isRemoving}
+                >
+                  {isRemoving ? "Removing..." : "Remove from squad"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </div>

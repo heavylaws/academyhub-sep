@@ -4,7 +4,7 @@ import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { KeyRound, Shield, Compass, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 type Step =
   | { kind: "signIn" }
@@ -15,25 +15,11 @@ type Step =
 
 const DEMO_PRESETS = [
   {
-    label: "Super Admin",
-    email: "ah.baalbaki@gmail.com",
-    password: "A!t3r3g0",
-    icon: Shield,
-    badge: "Platform",
-  },
-  {
-    label: "Head Coach",
-    email: "adminhajali@academieshub.com",
-    password: "hajali2026!",
-    icon: Compass,
-    badge: "Coach",
-  },
-  {
-    label: "Hercules Coach",
+    label: "Hercules Academy Coach",
     email: "adminhercules@academieshub.com",
     password: "hercules2026!",
     icon: Sparkles,
-    badge: "Academy",
+    badge: "Hercules Academy",
   },
 ];
 
@@ -44,7 +30,7 @@ function errorMessage(err: unknown, fallback: string): string {
   }
   // Convex Auth deliberately reports sign-in failures without details.
   if (/InvalidSecret|InvalidAccountId/i.test(msg)) {
-    return "Incorrect email or password. You can use one of the quick sign-in credentials below.";
+    return "Incorrect email or password.";
   }
   return fallback;
 }
@@ -153,7 +139,7 @@ export function PasswordAuthForm() {
         <h2 className="text-lg font-semibold">{title}</h2>
         {step.kind === "signIn" && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            Enter your credentials or choose a quick role below.
+            Enter your credentials or sign in with Hercules Academy below.
           </p>
         )}
       </div>
@@ -177,7 +163,7 @@ export function PasswordAuthForm() {
             onChange={(e) => setEmailVal(e.target.value)}
             placeholder={
               step.kind === "signIn"
-                ? "Email (e.g. adminhajali@academieshub.com)"
+                ? "Email (e.g. adminhercules@academieshub.com)"
                 : "name@domain.com"
             }
             autoComplete="email"
@@ -231,13 +217,13 @@ export function PasswordAuthForm() {
         </Button>
       </form>
 
-      {/* Quick Sign-In Presets for Coach / Admin testing */}
+      {/* Quick Sign-In Preset for Hercules Academy */}
       {step.kind === "signIn" && (
         <div className="pt-2 border-t border-border/60 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <KeyRound className="size-3 text-primary" />
-              <span>Quick Role Sign-In</span>
+              <Sparkles className="size-3 text-primary" />
+              <span>Hercules Academy Sign-In</span>
             </span>
             <span className="text-[10px] text-muted-foreground">1-Tap Fill & Sign In</span>
           </div>

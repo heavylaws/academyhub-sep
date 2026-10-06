@@ -72,7 +72,6 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
-import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import InviteStaffDialog from "./_components/invite-staff-dialog.tsx";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -138,14 +137,6 @@ export default function Staff() {
         newRole: targetRole as "academy_admin" | "coach" | "accounting" | "athlete",
       });
 
-      if (user?.academyId && selectedMember._id) {
-        try {
-          await firebaseAuthService.updateMember(user.academyId, selectedMember._id, { role: targetRole });
-        } catch (fsErr) {
-          console.warn("Firestore member update notice:", fsErr);
-        }
-      }
-
       toast.success("Role updated successfully");
       setEditRoleOpen(false);
     } catch (error) {
@@ -164,14 +155,6 @@ export default function Staff() {
     setIsSubmitting(true);
     try {
       await removeMember({ targetUserId: selectedMember._id });
-
-      if (user?.academyId && selectedMember._id) {
-        try {
-          await firebaseAuthService.deleteMember(user.academyId, selectedMember._id);
-        } catch (fsErr) {
-          console.warn("Firestore member delete notice:", fsErr);
-        }
-      }
 
       toast.success("Member removed from academy");
       setRemoveOpen(false);

@@ -21,6 +21,10 @@ import {
   UserRound,
   Weight,
   MessageSquare,
+  Compass,
+  Shirt,
+  Users,
+  Shield,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
@@ -37,6 +41,7 @@ import {
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card.tsx";
@@ -93,6 +98,10 @@ export default function AthleteDetail() {
 
   const athlete = useQuery(
     api.athletes.getAthlete,
+    athleteId ? { athleteId: athleteId as Id<"athletes"> } : "skip",
+  );
+  const athleteTeams = useQuery(
+    api.teams.listTeamsForAthlete,
     athleteId ? { athleteId: athleteId as Id<"athletes"> } : "skip",
   );
   const plans = useQuery(

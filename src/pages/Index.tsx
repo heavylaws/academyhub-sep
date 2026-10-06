@@ -1,9 +1,7 @@
 import { Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
-import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
 import { PasswordAuthForm } from "@/components/auth/password-auth-form.tsx";
-import { EmailVerificationScreen } from "@/components/auth/email-verification-screen.tsx";
 import PendingAccess from "./PendingAccess.tsx";
 import Dashboard from "./Dashboard.tsx";
 import AppLayout from "@/components/layout/app-layout.tsx";
@@ -20,7 +18,7 @@ function LandingScreen() {
           CoachTactics
         </h1>
         <p className="max-w-md text-sm text-muted-foreground text-balance">
-          The soccer coaching and tactical planning platform. Sign in with your verified academy account or register below:
+          The soccer coaching and tactical planning platform. Sign in with your academy account or register below:
         </p>
       </div>
 
@@ -31,35 +29,10 @@ function LandingScreen() {
 }
 
 export default function Index() {
-  const {
-    firebaseUser,
-    isEmailUnverified,
-    isResolvingMembership,
-    refreshMembership,
-    signOut,
-    bypassEmailVerification,
-    signInWithGoogle,
-  } = useFirebaseAuth();
   const { user, isLoading } = useCurrentUser();
 
-  // 1. If signed into Firebase Auth but email is not verified yet
-  if (isEmailUnverified) {
-    return (
-      <EmailVerificationScreen
-        email={firebaseUser?.email}
-        onVerified={refreshMembership}
-        onSignOut={async () => {
-          await signOut();
-          window.location.href = "/";
-        }}
-        onDevBypass={bypassEmailVerification}
-        onSignInWithGoogle={signInWithGoogle}
-      />
-    );
-  }
-
-  // 2. Loading state while authentication or membership is being checked
-  if (isResolvingMembership || (firebaseUser && isLoading)) {
+  // 1. Loading state while authentication is being resolved
+  if (isLoading) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-background p-6">
         <div className="flex flex-col items-center gap-3">
@@ -69,9 +42,9 @@ export default function Index() {
     );
   }
 
-  // 3. User is signed in and email is verified
-  if (user && user.emailVerified) {
-    // If user has no academy role assigned
+  // 2. User is signed in
+  if (user) {
+    // If user has no academy role assigned yet
     if (!user.role) {
       return <PendingAccess />;
     }
@@ -84,15 +57,6 @@ export default function Index() {
     );
   }
 
-  // 4. Fallback for mock/test users if active
-  if (user && user.role) {
-    return (
-      <AppLayout>
-        <Dashboard />
-      </AppLayout>
-    );
-  }
-
-  // 5. Unauthenticated visitor: show landing screen with email/password auth form
+  // 3. Unauthenticated visitor: show landing screen with email/password auth form
   return <LandingScreen />;
 }

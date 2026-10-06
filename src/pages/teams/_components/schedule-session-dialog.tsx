@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
+import { Compass, Timer } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -26,7 +27,15 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
+import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
 
 const formSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
@@ -34,6 +43,8 @@ const formSchema = z.object({
   durationMinutes: z.string().min(1, "Duration is required"),
   location: z.string(),
   notes: z.string(),
+  tacticalPlanId: z.string().optional(),
+  initialDrillId: z.string().optional(),
 });
 
 export default function ScheduleSessionDialog({
@@ -46,6 +57,7 @@ export default function ScheduleSessionDialog({
   teamId: Id<"teams">;
 }) {
   const createSession = useMutation(api.trainingSessions.createSession);
+  const tacticalPlans = useQuery(api.tacticalPlans.listTacticalPlans, open ? {} : "skip");
   const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -56,6 +68,8 @@ export default function ScheduleSessionDialog({
       durationMinutes: "60",
       location: "",
       notes: "",
+      tacticalPlanId: "none",
+      initialDrillId: "none",
     },
   });
 
@@ -64,6 +78,15 @@ export default function ScheduleSessionDialog({
     try {
       // Local datetime-local input has no timezone; interpret as the browser's local time and store as UTC ISO.
       const startsAt = new Date(values.startsAtLocal).toISOString();
+      const planId =
+        values.tacticalPlanId && values.tacticalPlanId !== "none"
+          ? (values.tacticalPlanId as Id<"tacticalPlans">)
+          : undefined;
+      const drillIds =
+        values.initialDrillId && values.initialDrillId !== "none"
+          ? [values.initialDrillId]
+          : undefined;
+
       await createSession({
         teamId,
         title: values.title,
@@ -71,6 +94,8 @@ export default function ScheduleSessionDialog({
         durationMinutes: Number(values.durationMinutes),
         location: values.location || undefined,
         notes: values.notes || undefined,
+        tacticalPlanId: planId,
+        drillIds,
       });
       toast.success("Session scheduled");
       form.reset({
@@ -79,6 +104,8 @@ export default function ScheduleSessionDialog({
         durationMinutes: "60",
         location: "",
         notes: "",
+        tacticalPlanId: "none",
+        initialDrillId: "none",
       });
       onOpenChange(false);
     } catch (error) {
@@ -103,6 +130,7 @@ export default function ScheduleSessionDialog({
             durationMinutes: "60",
             location: "",
             notes: "",
+            tacticalPlanId: "none",
           });
         }
         onOpenChange(next);
@@ -174,6 +202,73 @@ export default function ScheduleSessionDialog({
                 )}
               />
             </div>
+
+            {/* Tactical Plan Selector */}
+            <FormField
+              control={form.control}
+              name="tacticalPlanId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <Compass className="size-3.5 text-primary" />
+                    <span>Tactical Routine / Playbook Plan (Optional)</span>
+                  </FormLabel>
+                  <Select
+                    value={field.value || "none"}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-11 sm:h-10 text-sm">
+                        <SelectValue placeholder="Choose a tactical plan" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No tactical plan</SelectItem>
+                      {(tacticalPlans || []).map((p) => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p.title} ({p.pitchType.replace(/_/g, " ")})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Starter Drill Selector */}
+            <FormField
+              control={form.control}
+              name="initialDrillId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <Timer className="size-3.5 text-primary" />
+                    <span>Starter Drill / Rondo (Optional)</span>
+                  </FormLabel>
+                  <Select
+                    value={field.value || "none"}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="h-11 sm:h-10 text-sm">
+                        <SelectValue placeholder="Choose a starter drill" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value="none">No drill attached</SelectItem>
+                      {SOCCER_DRILLS.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.title} ({d.durationMinutes}m • {d.categoryLabel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="location"

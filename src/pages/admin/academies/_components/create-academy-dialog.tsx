@@ -26,7 +26,6 @@ import {
   FormMessage,
 } from "@/components/ui/form.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
-import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 
 const formSchema = z.object({
   name: z.string().trim().min(2, "Enter a name with at least 2 characters"),
@@ -54,11 +53,6 @@ export default function CreateAcademyDialog({
       const newId = await createAcademy({ name: values.name });
       if (newId) {
         await setActiveAcademy({ academyId: newId as Id<"academies"> });
-      }
-      try {
-        await firebaseAuthService.createAcademy(values.name, "Soccer");
-      } catch (fsErr) {
-        console.warn("Firestore academy sync notice:", fsErr);
       }
       toast.success(`Academy "${values.name}" created and set as active workspace`);
       form.reset();

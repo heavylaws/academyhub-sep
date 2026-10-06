@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/form.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { localMockStore } from "@/lib/local-mock-store.ts";
-import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import {
   CredentialsSuccessDialog,
   type GeneratedCredentials,
@@ -63,16 +62,7 @@ export default function InviteAcademyAdminDialog({
         role: "academy_admin",
       });
 
-      try {
-        await firebaseAuthService.createInvite(academy.id, values.email, "academy_admin");
-      } catch (fsErr) {
-        console.warn("Firestore invite sync notice:", fsErr);
-      }
-
       const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
-      if (generatedPassword) {
-        await firebaseAuthService.provisionUserAccount(values.email, generatedPassword);
-      }
       form.reset();
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

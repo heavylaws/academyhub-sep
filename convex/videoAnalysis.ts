@@ -1,6 +1,5 @@
 "use node";
 
-import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server.js";
@@ -43,80 +42,32 @@ export const runAiAnalysis = internalAction({
         args.context ? `\nContext from coach: ${args.context}` : ""
       }\n\nAnalyse the ${args.frames.length} video frame(s) above and provide structured performance feedback.`;
 
-      if (process.env.GEMINI_API_KEY) {
-        // Preferred: Google Gemini via @google/genai (Google AI Studio Free Tier friendly)
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const primaryModel = process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite";
-
-        const imageParts = args.frames.map((frame) => ({
-          inlineData: {
-            mimeType: "image/jpeg",
-            data: frame,
-          },
-        }));
-
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: primaryModel,
-            contents: [...imageParts, userText],
-            config: {
-              systemInstruction: SYSTEM_PROMPT,
-              responseMimeType: "application/json",
-            },
-          });
-        } catch (genError) {
-          // If the primary model hits high demand (503), fall back to ultra-reliable gemini-3.5-flash-lite
-          if (primaryModel !== "gemini-3.5-flash-lite") {
-            response = await ai.models.generateContent({
-              model: "gemini-3.5-flash-lite",
-              contents: [...imageParts, userText],
-              config: {
-                systemInstruction: SYSTEM_PROMPT,
-                responseMimeType: "application/json",
-              },
-            });
-          } else {
-            throw genError;
-          }
-        }
-
-        raw = response.text ?? "{}";
-      } else if (process.env.OPENAI_API_KEY) {
-        // Fallback: OpenAI
-        const openai = new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-          baseURL: process.env.OPENAI_BASE_URL || undefined,
-        });
-
-        const imageContent: OpenAI.ChatCompletionContentPart[] = args.frames.map(
-          (frame) => ({
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${frame}`,
-              detail: "low",
-            },
-          }),
-        );
-
-        const response = await openai.chat.completions.create({
-          model: process.env.OPENAI_VISION_MODEL || "gpt-4o",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [...imageContent, { type: "text", text: userText }],
-            },
-          ],
-          response_format: { type: "json_object" },
-        });
-
-        raw = response.choices[0]?.message?.content ?? "{}";
-      } else {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
         throw new Error(
-          "Neither GEMINI_API_KEY nor OPENAI_API_KEY is configured in the environment. Set GEMINI_API_KEY for free-tier Google AI Studio inference.",
+          "GEMINI_API_KEY is not configured in the environment. Set GEMINI_API_KEY for Google AI Studio inference.",
         );
       }
+
+      // Route AI analysis solely through the Gemini API using gemini-2.0-flash
+      const ai = new GoogleGenAI({ apiKey });
+      const imageParts = args.frames.map((frame) => ({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: frame,
+        },
+      }));
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: [...imageParts, userText],
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: "application/json",
+        },
+      });
+
+      raw = response.text ?? "{}";
 
       type FeedbackShape = {
         summary?: unknown;

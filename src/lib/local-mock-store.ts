@@ -36,8 +36,15 @@ import {
   type MockMessage,
   type MockDrill,
 } from "./local-mock-data.ts";
-import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 import { toast } from "sonner";
+
+// Local mock service stub for state mutations
+const mockCloudService: Record<string, (...args: unknown[]) => Promise<unknown>> = new Proxy(
+  {},
+  {
+    get: () => async () => null,
+  },
+);
 
 export interface MockFeeSchedule {
   _id: string;
@@ -200,7 +207,7 @@ class LocalMockStore {
   private changeListeners: Set<() => void> = new Set();
 
   private saveDb(): void {
-    // In-memory changes only; real persistence is managed by Firestore.
+    // In-memory state and localStorage persistence
     for (const listener of this.changeListeners) {
       try {
         listener();
@@ -702,17 +709,11 @@ class LocalMockStore {
   }
 
   private syncWithRollback(
-    actionName: string,
-    snapshot: MockDatabase,
-    promise: Promise<unknown>,
+    _actionName: string,
+    _snapshot: MockDatabase,
+    _promise?: Promise<unknown>,
   ): void {
-    promise.catch((err: unknown) => {
-      console.error(`Firestore sync failed for ${actionName}:`, err);
-      this.db = JSON.parse(JSON.stringify(snapshot));
-      this.saveDb();
-      this.notifyAll();
-      toast.error(`Cloud sync failed for ${actionName}. Local change rolled back.`);
-    });
+    // Local mock store: mutations persist directly in localStorage and memory
   }
 
   private ownAthletes(user: MockUser | null): MockAthlete[] {
@@ -2198,7 +2199,7 @@ class LocalMockStore {
         this.db.trainingSessions.unshift(newSession);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createSession", snapshotDb, academyFirestoreService.createSession(academyId, newSession));
+        this.syncWithRollback("createSession", snapshotDb, mockCloudService.createSession(academyId, newSession));
         return newSession._id;
       }
 
@@ -2215,7 +2216,7 @@ class LocalMockStore {
         session.notes = args.notes as string | undefined;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateSession", snapshotDb, academyFirestoreService.updateSession(session.academyId, sessionId, session));
+        this.syncWithRollback("updateSession", snapshotDb, mockCloudService.updateSession(session.academyId, sessionId, session));
         return null;
       }
 
@@ -2231,7 +2232,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetSession) {
-          this.syncWithRollback("deleteSession", snapshotDb, academyFirestoreService.deleteSession(targetSession.academyId, sessionId));
+          this.syncWithRollback("deleteSession", snapshotDb, mockCloudService.deleteSession(targetSession.academyId, sessionId));
         }
         return null;
       }
@@ -2265,7 +2266,7 @@ class LocalMockStore {
         this.notifyAll();
         const targetSess = this.db.trainingSessions.find((s) => s._id === sessionId);
         if (targetSess) {
-          this.syncWithRollback("setAttendanceRecord", snapshotDb, academyFirestoreService.setAttendanceRecord(targetSess.academyId, rec));
+          this.syncWithRollback("setAttendanceRecord", snapshotDb, mockCloudService.setAttendanceRecord(targetSess.academyId, rec));
         }
         return null;
       }
@@ -2283,7 +2284,7 @@ class LocalMockStore {
         this.db.teams.unshift(newTeam);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createTeam", snapshotDb, academyFirestoreService.createTeam(academyId, newTeam));
+        this.syncWithRollback("createTeam", snapshotDb, mockCloudService.createTeam(academyId, newTeam));
         return newTeam._id;
       }
 
@@ -2295,7 +2296,7 @@ class LocalMockStore {
         team.sport = args.sport as string | undefined;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateTeam", snapshotDb, academyFirestoreService.updateTeam(team.academyId, teamId, team));
+        this.syncWithRollback("updateTeam", snapshotDb, mockCloudService.updateTeam(team.academyId, teamId, team));
         return null;
       }
 
@@ -2320,7 +2321,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetTeam) {
-          this.syncWithRollback("deleteTeam", snapshotDb, academyFirestoreService.deleteTeam(targetTeam.academyId, teamId));
+          this.syncWithRollback("deleteTeam", snapshotDb, mockCloudService.deleteTeam(targetTeam.academyId, teamId));
         }
         return null;
       }
@@ -2346,7 +2347,7 @@ class LocalMockStore {
         this.notifyAll();
         const team = this.db.teams.find((t) => t._id === teamId);
         if (team) {
-          this.syncWithRollback("setTeamRoster", snapshotDb, academyFirestoreService.setTeamRoster(team.academyId, teamId, athleteIds, newMembers));
+          this.syncWithRollback("setTeamRoster", snapshotDb, mockCloudService.setTeamRoster(team.academyId, teamId, athleteIds, newMembers));
         }
         return null;
       }
@@ -2427,7 +2428,7 @@ class LocalMockStore {
         this.db.athletes.unshift(newAthlete);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createAthlete", snapshotDb, academyFirestoreService.createAthlete(targetAcademyId, newAthlete, newAthlete.checkInPin));
+        this.syncWithRollback("createAthlete", snapshotDb, mockCloudService.createAthlete(targetAcademyId, newAthlete, newAthlete.checkInPin));
         return newAthlete._id;
       }
 
@@ -2454,7 +2455,7 @@ class LocalMockStore {
         });
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateAthlete", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, athlete));
+        this.syncWithRollback("updateAthlete", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, athlete));
         return null;
       }
 
@@ -2463,7 +2464,7 @@ class LocalMockStore {
         if (!athlete) throw new Error("Athlete not found");
         athlete.checkInPin = this.freePin(athlete.academyId);
         this.saveDb();
-        this.syncWithRollback("saveAthletePin", snapshotDb, academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
+        this.syncWithRollback("saveAthletePin", snapshotDb, mockCloudService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
         return athlete.checkInPin;
       }
 
@@ -2473,7 +2474,7 @@ class LocalMockStore {
           if (athlete.academyId !== academyId || athlete.checkInPin) continue;
           if (athlete.status !== "active") continue;
           athlete.checkInPin = this.freePin(athlete.academyId);
-          this.syncWithRollback("saveAthletePin", snapshotDb, academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
+          this.syncWithRollback("saveAthletePin", snapshotDb, mockCloudService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
           assigned++;
         }
         this.saveDb();
@@ -2487,7 +2488,7 @@ class LocalMockStore {
           athlete.status = args.status as "active" | "inactive";
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateAthleteStatus", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { status: athlete.status }));
+          this.syncWithRollback("updateAthleteStatus", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { status: athlete.status }));
         }
         return null;
       }
@@ -2512,7 +2513,7 @@ class LocalMockStore {
             createdAt: nowIso,
           };
           this.db.athletes.push(newAth);
-          this.syncWithRollback("createAthlete", snapshotDb, academyFirestoreService.createAthlete(academyId, newAth));
+          this.syncWithRollback("createAthlete", snapshotDb, mockCloudService.createAthlete(academyId, newAth));
           added++;
         }
         this.saveDb();
@@ -2540,7 +2541,7 @@ class LocalMockStore {
         targetUser.academyId = athlete.academyId;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("linkAthleteToUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: targetUser._id, email: targetUser.email }));
+        this.syncWithRollback("linkAthleteToUser", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { userId: targetUser._id, email: targetUser.email }));
         return null;
       }
 
@@ -2551,7 +2552,7 @@ class LocalMockStore {
           athlete.userId = undefined;
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("unlinkAthleteUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: undefined }));
+          this.syncWithRollback("unlinkAthleteUser", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { userId: undefined }));
         }
         return null;
       }
@@ -2578,7 +2579,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "createTrainingPlan",
           snapshotDb,
-          academyFirestoreService.createTrainingPlan(
+          mockCloudService.createTrainingPlan(
             academyId,
             newPlan,
             athlete?.userId,
@@ -2606,7 +2607,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "updateTrainingPlan",
             snapshotDb,
-            academyFirestoreService.updateTrainingPlan(academyId, planId, {
+            mockCloudService.updateTrainingPlan(academyId, planId, {
               title: plan.title,
               description: plan.description,
               startDate: plan.startDate,
@@ -2634,7 +2635,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteTrainingPlan",
             snapshotDb,
-            academyFirestoreService.deleteTrainingPlan(academyId, planId),
+            mockCloudService.deleteTrainingPlan(academyId, planId),
           );
         }
 
@@ -2665,7 +2666,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "createPlanItem",
             snapshotDb,
-            academyFirestoreService.createPlanItem(
+            mockCloudService.createPlanItem(
               academyId,
               newItem,
               athlete?.userId,
@@ -2695,7 +2696,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "updatePlanItem",
             snapshotDb,
-            academyFirestoreService.updatePlanItem(academyId, itemId, {
+            mockCloudService.updatePlanItem(academyId, itemId, {
               exercise: item.exercise,
               target: item.target,
               notes: item.notes,
@@ -2718,7 +2719,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deletePlanItem",
             snapshotDb,
-            academyFirestoreService.deletePlanItem(academyId, itemId),
+            mockCloudService.deletePlanItem(academyId, itemId),
           );
         }
 
@@ -2780,7 +2781,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "createDrill",
           snapshotDb,
-          academyFirestoreService.createDrill(academyId, newDrill),
+          mockCloudService.createDrill(academyId, newDrill),
         );
 
         return newDrill._id;
@@ -2804,7 +2805,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteDrill",
             snapshotDb,
-            academyFirestoreService.deleteDrill(academyId, drillId),
+            mockCloudService.deleteDrill(academyId, drillId),
           );
         }
 
@@ -2894,7 +2895,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "recordAssessment",
           snapshotDb,
-          academyFirestoreService.recordAssessment(
+          mockCloudService.recordAssessment(
             academyId,
             newAssessment,
             athlete?.userId,
@@ -2936,7 +2937,7 @@ class LocalMockStore {
             this.syncWithRollback(
               "recordAssessment",
               snapshotDb,
-              academyFirestoreService.recordAssessment(
+              mockCloudService.recordAssessment(
                 academyId,
                 newAssessment,
                 athlete?.userId,
@@ -2962,7 +2963,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteAssessment",
             snapshotDb,
-            academyFirestoreService.deleteAssessment(academyId, assessmentId),
+            mockCloudService.deleteAssessment(academyId, assessmentId),
           );
         }
 
@@ -3009,7 +3010,7 @@ class LocalMockStore {
               createdAt: nowIso,
             };
             this.db.athleteFees.unshift(newFee);
-            this.syncWithRollback("createFee", snapshotDb, academyFirestoreService.createFee(academyId, newFee));
+            this.syncWithRollback("createFee", snapshotDb, mockCloudService.createFee(academyId, newFee));
           }
         }
         this.saveDb();
@@ -3063,7 +3064,7 @@ class LocalMockStore {
         this.db.athleteFees.unshift(newFee);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createFee", snapshotDb, academyFirestoreService.createFee(targetAcademyId, newFee));
+        this.syncWithRollback("createFee", snapshotDb, mockCloudService.createFee(targetAcademyId, newFee));
         return newFee._id;
       }
 
@@ -3099,7 +3100,7 @@ class LocalMockStore {
         fee.status = totalPaid >= fee.amountDue ? "paid" : "partially_paid";
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("recordFeePayment", snapshotDb, academyFirestoreService.recordFeePayment(fee.academyId, newPayment, fee));
+        this.syncWithRollback("recordFeePayment", snapshotDb, mockCloudService.recordFeePayment(fee.academyId, newPayment, fee));
         return null;
       }
 
@@ -3119,7 +3120,7 @@ class LocalMockStore {
           if (args.notes) fee.notes = args.notes as string;
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateFee", snapshotDb, academyFirestoreService.updateFee(fee.academyId, feeId, { status: fee.status, notes: fee.notes }));
+          this.syncWithRollback("updateFee", snapshotDb, mockCloudService.updateFee(fee.academyId, feeId, { status: fee.status, notes: fee.notes }));
         }
         return null;
       }
@@ -3144,7 +3145,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetFee) {
-          this.syncWithRollback("deleteFee", snapshotDb, academyFirestoreService.deleteFee(targetFee.academyId, feeId));
+          this.syncWithRollback("deleteFee", snapshotDb, mockCloudService.deleteFee(targetFee.academyId, feeId));
         }
         return null;
       }
@@ -3186,7 +3187,7 @@ class LocalMockStore {
         this.db.invoices.unshift(newInvoice);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createInvoice", snapshotDb, academyFirestoreService.createInvoice(targetAcademyId, newInvoice));
+        this.syncWithRollback("createInvoice", snapshotDb, mockCloudService.createInvoice(targetAcademyId, newInvoice));
         return newInvoice._id;
       }
 
@@ -3208,7 +3209,7 @@ class LocalMockStore {
           }
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateInvoice", snapshotDb, academyFirestoreService.updateInvoice(invoice.academyId, invoiceId, {
+          this.syncWithRollback("updateInvoice", snapshotDb, mockCloudService.updateInvoice(invoice.academyId, invoiceId, {
             status: invoice.status,
             paidAt: invoice.paidAt,
           }));
@@ -3223,7 +3224,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetInvoice) {
-          this.syncWithRollback("deleteInvoice", snapshotDb, academyFirestoreService.deleteInvoice(targetInvoice.academyId, invoiceId));
+          this.syncWithRollback("deleteInvoice", snapshotDb, mockCloudService.deleteInvoice(targetInvoice.academyId, invoiceId));
         }
         return null;
       }
@@ -3259,7 +3260,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         this.notifyAuth();
-        this.syncWithRollback("createAcademy", snapshotDb, academyFirestoreService.createAcademy(newAcad));
+        this.syncWithRollback("createAcademy", snapshotDb, mockCloudService.createAcademy(newAcad));
         return newAcad._id;
       }
 
@@ -3331,7 +3332,7 @@ class LocalMockStore {
           acad.status = args.status as MockAcademy["status"];
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("setAcademyStatus", snapshotDb, academyFirestoreService.updateAcademy(academyIdArg, { status: acad.status }));
+          this.syncWithRollback("setAcademyStatus", snapshotDb, mockCloudService.updateAcademy(academyIdArg, { status: acad.status }));
         }
         return null;
       }
@@ -3343,7 +3344,7 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("deleteAcademy", snapshotDb, academyFirestoreService.deleteAcademy(academyIdArg));
+        this.syncWithRollback("deleteAcademy", snapshotDb, mockCloudService.deleteAcademy(academyIdArg));
         return null;
       }
 
@@ -3436,7 +3437,7 @@ class LocalMockStore {
         this.db.announcements.unshift(newAnn);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createAnnouncement", snapshotDb, academyFirestoreService.createAnnouncement(targetAcademyId, newAnn));
+        this.syncWithRollback("createAnnouncement", snapshotDb, mockCloudService.createAnnouncement(targetAcademyId, newAnn));
         return newAnn._id;
       }
 
@@ -3452,7 +3453,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetAnn) {
-          this.syncWithRollback("deleteAnnouncement", snapshotDb, academyFirestoreService.deleteAnnouncement(targetAnn.academyId, announcementId));
+          this.syncWithRollback("deleteAnnouncement", snapshotDb, mockCloudService.deleteAnnouncement(targetAnn.academyId, announcementId));
         }
         return null;
       }
@@ -3533,7 +3534,7 @@ class LocalMockStore {
         }
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("setAttendanceRecord", snapshotDb, academyFirestoreService.setAttendanceRecord(session.academyId, rec));
+        this.syncWithRollback("setAttendanceRecord", snapshotDb, mockCloudService.setAttendanceRecord(session.academyId, rec));
 
         return {
           success: true,
@@ -3561,7 +3562,7 @@ class LocalMockStore {
         if (toDelete) {
           const sess = this.db.trainingSessions.find((s) => s._id === sessionId);
           if (sess) {
-            this.syncWithRollback("deleteAttendanceRecord", snapshotDb, academyFirestoreService.deleteAttendanceRecord(sess.academyId, toDelete._id));
+            this.syncWithRollback("deleteAttendanceRecord", snapshotDb, mockCloudService.deleteAttendanceRecord(sess.academyId, toDelete._id));
           }
         }
         return null;
@@ -3602,7 +3603,7 @@ class LocalMockStore {
 
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(conv.academyId, conversationId, newMsg));
+        this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(conv.academyId, conversationId, newMsg));
         return newMsg._id;
       }
 
@@ -3648,11 +3649,11 @@ class LocalMockStore {
             existing.lastMessageText = initialText;
             existing.lastMessageAt = nowIso;
             existing.lastSenderId = user._id;
-            this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(targetAcademyId, existing._id, newMsg));
+            this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(targetAcademyId, existing._id, newMsg));
           }
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateConversation", snapshotDb, academyFirestoreService.updateConversation(targetAcademyId, existing._id, existing));
+          this.syncWithRollback("updateConversation", snapshotDb, mockCloudService.updateConversation(targetAcademyId, existing._id, existing));
           return existing._id;
         }
 
@@ -3678,7 +3679,7 @@ class LocalMockStore {
         };
 
         this.db.conversations.unshift(newConv);
-        this.syncWithRollback("createConversation", snapshotDb, academyFirestoreService.createConversation(targetAcademyId, newConv));
+        this.syncWithRollback("createConversation", snapshotDb, mockCloudService.createConversation(targetAcademyId, newConv));
 
         if (args.initialMessage && String(args.initialMessage).trim()) {
           const initMsg: MockMessage = {
@@ -3691,7 +3692,7 @@ class LocalMockStore {
             createdAt: nowIso,
           };
           this.db.messages.push(initMsg);
-          this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(targetAcademyId, newConv._id, initMsg));
+          this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(targetAcademyId, newConv._id, initMsg));
         }
 
         this.saveDb();

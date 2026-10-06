@@ -19,7 +19,7 @@ describe("Clean Database & Single Source of Identity", () => {
     expect(db.drills.length).toBe(0);
   });
 
-  it("contains 0 mock users by default since Firebase is the single source of identity", () => {
+  it("contains 0 mock users by default in fresh clean state", () => {
     const db = localMockStore.getDb();
     expect(db.users.length).toBe(0);
   });

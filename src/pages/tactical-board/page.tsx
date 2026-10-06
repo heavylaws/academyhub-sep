@@ -14,6 +14,7 @@ import {
   createVolleyballTacticalPlan,
   createRugbyTacticalPlan,
   validateTacticalPlan,
+  buildSquadPlayerNodes,
 } from "@/domain/tactics/tactical-domain.ts";
 import { cn } from "@/lib/utils.ts";
 import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
@@ -225,6 +226,7 @@ export default function TacticalBoardPage() {
   const navigate = useNavigate();
   const drillId = searchParams.get("drillId");
   const planId = searchParams.get("planId");
+  const teamId = searchParams.get("teamId");
   const { user } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
 
@@ -232,6 +234,10 @@ export default function TacticalBoardPage() {
   const cloudPlans = useQuery(
     api.tacticalPlans.listTacticalPlans,
     isAuthenticated && user?.academyId ? { academyId: user.academyId } : "skip",
+  );
+  const directTeamData = useQuery(
+    api.teams.getTeam,
+    teamId ? { teamId: teamId as Id<"teams"> } : "skip",
   );
   const saveTacticalPlan = useMutation(api.tacticalPlans.saveTacticalPlan);
   const deleteTacticalPlan = useMutation(api.tacticalPlans.deleteTacticalPlan);
@@ -320,6 +326,30 @@ export default function TacticalBoardPage() {
       return { ...prev, phases };
     });
   };
+
+  // Auto-deploy squad from teamId parameter
+  const deployedTeamIdRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      teamId &&
+      directTeamData &&
+      directTeamData.roster.length > 0 &&
+      deployedTeamIdRef.current !== teamId
+    ) {
+      deployedTeamIdRef.current = teamId;
+      const formation = directTeamData.team.preferredFormation || "4-3-3";
+      const deployed = buildSquadPlayerNodes(
+        directTeamData.team.name,
+        formation,
+        directTeamData.roster,
+        activePlan.pitchType,
+      );
+      handleDeploySquad(deployed);
+      toast.success(
+        `Deployed ${deployed.length} athletes from ${directTeamData.team.name} in ${formation} formation!`,
+      );
+    }
+  }, [teamId, directTeamData, activePlan.pitchType]);
 
   const exportDrillFallback = useMemo(() => {
     return {

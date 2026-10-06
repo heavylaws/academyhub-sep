@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Building2, Mail, ShieldCheck, Users, RefreshCw, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase.ts";
 import {
   Empty,
   EmptyContent,
@@ -19,24 +17,54 @@ import {
 } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
-import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
+import { localMockStore } from "@/lib/local-mock-store.ts";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 /** Shown to a signed-in user with no role/academy assignment yet. */
 export default function PendingAccess() {
   const { user } = useCurrentUser();
-  const { refreshMembership, signOut } = useFirebaseAuth();
+  const { signOut } = useAuthActions();
   const [checking, setChecking] = useState(false);
 
   const handleCheckInvites = async () => {
     setChecking(true);
     try {
-      await refreshMembership();
       toast.info("Checked for pending invitations.");
     } catch {
       toast.error("Could not refresh invitations at this time.");
     } finally {
       setChecking(false);
     }
+  };
+
+  const handleEnterAcademy = () => {
+    setChecking(true);
+    try {
+      localMockStore.setCurrentUser({
+        _id: user?._id || "usr_coach",
+        name: user?.name || "Coach",
+        email: user?.email || "coach@hercules.local",
+        role: "coach",
+        academyId: "acad_hercules",
+      });
+      toast.success("Welcome to Hercules Academy!");
+      window.location.href = "/";
+    } catch {
+      toast.error("Could not assign academy access.");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch {
+      // Ignored
+    }
+    localMockStore.setPersona(null);
+    localMockStore.wipe();
+    window.location.href = "/";
   };
 
   return (
@@ -84,37 +112,12 @@ export default function PendingAccess() {
 
               <div className="flex flex-col gap-2 w-full mt-4">
                 <Button
-                  onClick={async () => {
-                    setChecking(true);
-                    try {
-                      if (auth.currentUser) {
-                        const memberRef = doc(db, "academies", "acad_hercules", "members", auth.currentUser.uid);
-                        await setDoc(
-                          memberRef,
-                          {
-                            uid: auth.currentUser.uid,
-                            academyId: "acad_hercules",
-                            email: auth.currentUser.email || "",
-                            name: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Coach",
-                            role: "coach",
-                            createdAt: new Date().toISOString(),
-                          },
-                          { merge: true },
-                        );
-                        await refreshMembership();
-                        toast.success("Welcome to CoachTactics Academy!");
-                      }
-                    } catch {
-                      toast.error("Could not assign academy access.");
-                    } finally {
-                      setChecking(false);
-                    }
-                  }}
+                  onClick={handleEnterAcademy}
                   disabled={checking}
                   className="w-full gap-2 font-semibold bg-primary text-primary-foreground shadow-sm"
                 >
                   <Building2 className="size-4" />
-                  Enter CoachTactics Academy
+                  Enter Hercules Academy
                 </Button>
 
                 <Button
@@ -129,10 +132,7 @@ export default function PendingAccess() {
 
                 <Button
                   variant="outline"
-                  onClick={async () => {
-                    await signOut();
-                    window.location.href = "/";
-                  }}
+                  onClick={handleSignOut}
                   className="w-full gap-2 text-muted-foreground hover:text-foreground"
                 >
                   <LogOut className="size-4" />

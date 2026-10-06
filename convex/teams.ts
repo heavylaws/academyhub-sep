@@ -3,12 +3,17 @@ import { mutation, query } from "./_generated/server.js";
 import { requireAcademyMember, requireRole, requireUser } from "./lib/auth.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
-/** Academy admin/coach: create a new team/group in their academy. */
+/** Academy admin/coach/platform_admin: create a new team/group in their academy. */
 export const createTeam = mutation({
-  args: { name: v.string(), sport: v.optional(v.string()) },
+  args: {
+    name: v.string(),
+    sport: v.optional(v.string()),
+    academyId: v.optional(v.id("academies")),
+  },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
-    if (!user.academyId) {
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const targetAcademyId = args.academyId ?? user.academyId;
+    if (!targetAcademyId) {
       throw new ConvexError({
         code: "FORBIDDEN",
         message: "You are not part of an academy",
@@ -21,7 +26,7 @@ export const createTeam = mutation({
       });
     }
     return await ctx.db.insert("teams", {
-      academyId: user.academyId,
+      academyId: targetAcademyId,
       name: args.name.trim(),
       sport: args.sport,
       createdBy: user._id,
@@ -30,7 +35,7 @@ export const createTeam = mutation({
   },
 });
 
-/** Academy admin/coach: update a team's name/sport. */
+/** Academy admin/coach/platform_admin: update a team's name/sport. */
 export const updateTeam = mutation({
   args: {
     teamId: v.id("teams"),
@@ -38,7 +43,7 @@ export const updateTeam = mutation({
     sport: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -58,11 +63,11 @@ export const updateTeam = mutation({
   },
 });
 
-/** Academy admin/coach: delete a team along with its memberships. */
+/** Academy admin/coach/platform_admin: delete a team along with its memberships. */
 export const deleteTeam = mutation({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -271,6 +276,29 @@ export const assignAthleteTacticalRole = mutation({
       });
     }
 
+    // Enforce unique jersey numbers per team
+    if (args.jerseyNumber !== undefined) {
+      const allMembers = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+        .collect();
+
+      const duplicate = allMembers.find(
+        (m) => m.athleteId !== args.athleteId && m.jerseyNumber === args.jerseyNumber,
+      );
+
+      if (duplicate) {
+        const dupAthlete = await ctx.db.get("athletes", duplicate.athleteId);
+        const name = dupAthlete
+          ? `${dupAthlete.firstName} ${dupAthlete.lastName}`
+          : "another player";
+        throw new ConvexError({
+          code: "BAD_REQUEST",
+          message: `Jersey #${args.jerseyNumber} is already assigned to ${name} on this squad`,
+        });
+      }
+    }
+
     await ctx.db.patch("teamMembers", membership._id, {
       jerseyNumber: args.jerseyNumber,
       tacticalPosition: args.tacticalPosition,
@@ -281,11 +309,39 @@ export const assignAthleteTacticalRole = mutation({
   },
 });
 
-/** Academy admin/coach: replace a team's roster with the given athlete IDs. */
+/** Academy admin/coach/platform_admin: remove an individual athlete from a squad */
+export const removeTeamMember = mutation({
+  args: {
+    teamId: v.id("teams"),
+    athleteId: v.id("athletes"),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const team = await ctx.db.get("teams", args.teamId);
+    if (!team) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
+    }
+    await requireAcademyMember(ctx, team.academyId);
+
+    const membership = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team_and_athlete", (q) =>
+        q.eq("teamId", args.teamId).eq("athleteId", args.athleteId),
+      )
+      .first();
+
+    if (membership) {
+      await ctx.db.delete("teamMembers", membership._id);
+    }
+    return null;
+  },
+});
+
+/** Academy admin/coach/platform_admin: replace a team's roster with the given athlete IDs. */
 export const setTeamRoster = mutation({
   args: { teamId: v.id("teams"), athleteIds: v.array(v.id("athletes")) },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -326,10 +382,21 @@ export const setTeamRoster = mutation({
   },
 });
 
-/** Lists the team IDs a given athlete belongs to (used by athlete self-view). */
+/** Lists the teams and tactical roles a given athlete belongs to. */
 export const listTeamsForAthlete = query({
   args: { athleteId: v.id("athletes") },
-  handler: async (ctx, args): Promise<Doc<"teams">[]> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    Array<
+      Doc<"teams"> & {
+        jerseyNumber?: number;
+        tacticalPosition?: string;
+        tacticalRole?: string;
+      }
+    >
+  > => {
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({
@@ -344,11 +411,18 @@ export const listTeamsForAthlete = query({
       .collect();
     const teams = (
       await Promise.all(
-        memberships.map((m: { teamId: Id<"teams"> }) =>
-          ctx.db.get("teams", m.teamId),
-        ),
+        memberships.map(async (m) => {
+          const team = await ctx.db.get("teams", m.teamId);
+          if (!team) return null;
+          return {
+            ...team,
+            jerseyNumber: m.jerseyNumber,
+            tacticalPosition: m.tacticalPosition,
+            tacticalRole: m.tacticalRole,
+          };
+        }),
       )
-    ).filter((t): t is Doc<"teams"> => t !== null);
+    ).filter((t): t is NonNullable<typeof t> => t !== null);
     return teams;
   },
 });

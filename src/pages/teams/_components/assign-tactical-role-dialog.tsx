@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Shield, Shirt } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
@@ -22,39 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-
-const SOCCER_POSITIONS = [
-  { value: "GK", label: "GK — Goalkeeper" },
-  { value: "CB", label: "CB — Center Back" },
-  { value: "LB", label: "LB — Left Back" },
-  { value: "RB", label: "RB — Right Back" },
-  { value: "LWB", label: "LWB — Left Wing Back" },
-  { value: "RWB", label: "RWB — Right Wing Back" },
-  { value: "DM", label: "DM — Defensive Midfielder" },
-  { value: "CM", label: "CM — Central Midfielder" },
-  { value: "AM", label: "AM — Attacking Midfielder" },
-  { value: "LW", label: "LW — Left Winger" },
-  { value: "RW", label: "RW — Right Winger" },
-  { value: "ST", label: "ST — Striker / Center Forward" },
-];
-
-const SOCCER_ROLES = [
-  "Sweeper Keeper",
-  "Ball-Playing Defender",
-  "Traditional Stopper",
-  "Inverted Fullback",
-  "Attacking Wingback",
-  "Deep-Lying Playmaker (Regista)",
-  "Box-to-Box Midfielder (Mezzala)",
-  "Central Anchor (Pivot)",
-  "Advanced Playmaker (Trequartista)",
-  "Inverted Winger / Inside Forward",
-  "Touchline Winger",
-  "Target Man",
-  "Poacher",
-  "False Nine",
-  "Pressing Forward",
-];
+import {
+  SOCCER_POSITIONS,
+  SOCCER_ROLES,
+} from "@/domain/tactics/tactical-domain.ts";
 
 interface AssignTacticalRoleDialogProps {
   open: boolean;
@@ -106,8 +78,12 @@ function AssignRoleForm({
 
       toast.success(`Tactical role updated for ${athlete.firstName} ${athlete.lastName}`);
       onClose();
-    } catch {
-      toast.error("Failed to update tactical role");
+    } catch (error) {
+      toast.error(
+        error instanceof ConvexError
+          ? String((error.data as { message?: string })?.message || error.message)
+          : "Failed to update tactical role",
+      );
     } finally {
       setIsSubmitting(false);
     }
