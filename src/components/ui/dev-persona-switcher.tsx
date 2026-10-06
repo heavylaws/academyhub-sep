@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
-import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { toast } from "sonner";
@@ -78,11 +77,6 @@ export function DevPersonaSwitcher() {
   const handleSignOut = async () => {
     try {
       await convexSignOut();
-    } catch {
-      // Ignored
-    }
-    try {
-      await firebaseAuthService.signOut();
     } catch {
       // Ignored
     }

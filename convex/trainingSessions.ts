@@ -129,11 +129,57 @@ export const linkTacticalPlanToSession = mutation({
   },
 });
 
-/** Academy admin/coach: delete a training session and its attendance records. */
+/** Link a drill from the playbook directly into a training session itinerary */
+export const linkDrillToSession = mutation({
+  args: {
+    sessionId: v.id("trainingSessions"),
+    drillId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const session = await ctx.db.get("trainingSessions", args.sessionId);
+    if (!session) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
+    }
+    await requireAcademyMember(ctx, session.academyId);
+
+    const existingDrillIds = session.drillIds ?? [];
+    if (!existingDrillIds.includes(args.drillId)) {
+      await ctx.db.patch("trainingSessions", args.sessionId, {
+        drillIds: [...existingDrillIds, args.drillId],
+      });
+    }
+    return args.sessionId;
+  },
+});
+
+/** Remove a drill from a training session itinerary */
+export const removeDrillFromSession = mutation({
+  args: {
+    sessionId: v.id("trainingSessions"),
+    drillId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const session = await ctx.db.get("trainingSessions", args.sessionId);
+    if (!session) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
+    }
+    await requireAcademyMember(ctx, session.academyId);
+
+    const existingDrillIds = session.drillIds ?? [];
+    await ctx.db.patch("trainingSessions", args.sessionId, {
+      drillIds: existingDrillIds.filter((id) => id !== args.drillId),
+    });
+    return args.sessionId;
+  },
+});
+
+/** Academy admin/coach/platform_admin: delete a training session and its attendance records. */
 export const deleteSession = mutation({
   args: { sessionId: v.id("trainingSessions") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({
@@ -232,6 +278,7 @@ export const getSessionWithAttendance = query({
     roster: Doc<"athletes">[];
     attendance: Doc<"attendanceRecords">[];
     tacticalPlan: Doc<"tacticalPlans"> | null;
+    resolvedDrills: Doc<"drills">[];
   }> => {
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
@@ -260,7 +307,20 @@ export const getSessionWithAttendance = query({
       tacticalPlan = await ctx.db.get("tacticalPlans", session.tacticalPlanId);
     }
 
-    return { session, roster, attendance, tacticalPlan };
+    const resolvedDrills: Array<Doc<"drills">> = [];
+    if (session.drillIds && session.drillIds.length > 0) {
+      for (const drillId of session.drillIds) {
+        const normalized = ctx.db.normalizeId("drills", drillId);
+        if (normalized) {
+          const doc = await ctx.db.get("drills", normalized);
+          if (doc) {
+            resolvedDrills.push(doc);
+          }
+        }
+      }
+    }
+
+    return { session, roster, attendance, tacticalPlan, resolvedDrills };
   },
 });
 
@@ -493,7 +553,7 @@ export const getAcademyAttendanceLeaderboard = query({
   },
 });
 
-/** Academy admin/coach: record or update an athlete's attendance status for a session. */
+/** Academy admin/coach/platform_admin: record or update an athlete's attendance status for a session. */
 export const setAttendance = mutation({
   args: {
     sessionId: v.id("trainingSessions"),
@@ -501,7 +561,7 @@ export const setAttendance = mutation({
     status: attendanceStatusValidator,
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({

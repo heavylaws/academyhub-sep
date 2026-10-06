@@ -851,3 +851,349 @@ export function createRugbyTacticalPlan(title = "Rugby 3-Man Forward Pod & Backl
     updatedAt: now,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Canonical Soccer Squad Tactical Taxonomies, Formations & Positioning Models
+// ---------------------------------------------------------------------------
+
+export type PositionCategory = "GK" | "DEF" | "MID" | "FWD" | "OTHER";
+
+export interface SoccerPositionDefinition {
+  value: string;
+  label: string;
+  category: PositionCategory;
+}
+
+export const SOCCER_POSITIONS: SoccerPositionDefinition[] = [
+  { value: "GK", label: "GK — Goalkeeper", category: "GK" },
+  { value: "CB", label: "CB — Center Back", category: "DEF" },
+  { value: "LB", label: "LB — Left Back", category: "DEF" },
+  { value: "RB", label: "RB — Right Back", category: "DEF" },
+  { value: "LWB", label: "LWB — Left Wing Back", category: "DEF" },
+  { value: "RWB", label: "RWB — Right Wing Back", category: "DEF" },
+  { value: "SW", label: "SW — Sweeper", category: "DEF" },
+  { value: "DM", label: "DM — Defensive Midfielder", category: "MID" },
+  { value: "CM", label: "CM — Central Midfielder", category: "MID" },
+  { value: "AM", label: "AM — Attacking Midfielder", category: "MID" },
+  { value: "LM", label: "LM — Left Midfielder", category: "MID" },
+  { value: "RM", label: "RM — Right Midfielder", category: "MID" },
+  { value: "LW", label: "LW — Left Winger", category: "FWD" },
+  { value: "RW", label: "RW — Right Winger", category: "FWD" },
+  { value: "ST", label: "ST — Striker / Center Forward", category: "FWD" },
+  { value: "CF", label: "CF — Center Forward", category: "FWD" },
+  { value: "SS", label: "SS — Second Striker", category: "FWD" },
+];
+
+export const SOCCER_ROLES = [
+  "Sweeper Keeper",
+  "Ball-Playing Defender",
+  "Traditional Stopper",
+  "Inverted Fullback",
+  "Attacking Wingback",
+  "Deep-Lying Playmaker (Regista)",
+  "Box-to-Box Midfielder (Mezzala)",
+  "Central Anchor (Pivot)",
+  "Advanced Playmaker (Trequartista)",
+  "Inverted Winger / Inside Forward",
+  "Touchline Winger",
+  "Target Man",
+  "Poacher",
+  "False Nine",
+  "Pressing Forward",
+];
+
+export interface FormationPreset {
+  value: string;
+  label: string;
+  category: "11v11" | "9v9" | "7v7";
+  slots: Array<{ role: string; x: number; y: number }>;
+}
+
+export const FORMATIONS: FormationPreset[] = [
+  {
+    value: "4-3-3",
+    label: "4-3-3 (Positional & High Press)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "LB", x: 24, y: 18 },
+      { role: "CB", x: 22, y: 38 },
+      { role: "CB", x: 22, y: 62 },
+      { role: "RB", x: 24, y: 82 },
+      { role: "DM", x: 36, y: 50 },
+      { role: "CM", x: 48, y: 34 },
+      { role: "CM", x: 48, y: 66 },
+      { role: "LW", x: 68, y: 18 },
+      { role: "ST", x: 80, y: 50 },
+      { role: "RW", x: 68, y: 82 },
+    ],
+  },
+  {
+    value: "4-2-3-1",
+    label: "4-2-3-1 (Double Pivot & Playmaker)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "LB", x: 24, y: 18 },
+      { role: "CB", x: 22, y: 38 },
+      { role: "CB", x: 22, y: 62 },
+      { role: "RB", x: 24, y: 82 },
+      { role: "DM", x: 36, y: 38 },
+      { role: "DM", x: 36, y: 62 },
+      { role: "AM", x: 55, y: 50 },
+      { role: "LW", x: 62, y: 18 },
+      { role: "RW", x: 62, y: 82 },
+      { role: "ST", x: 80, y: 50 },
+    ],
+  },
+  {
+    value: "3-5-2",
+    label: "3-5-2 (Wingbacks & Twin Strikers)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "CB", x: 22, y: 28 },
+      { role: "CB", x: 20, y: 50 },
+      { role: "CB", x: 22, y: 72 },
+      { role: "LWB", x: 40, y: 14 },
+      { role: "DM", x: 36, y: 50 },
+      { role: "CM", x: 48, y: 36 },
+      { role: "CM", x: 48, y: 64 },
+      { role: "RWB", x: 40, y: 86 },
+      { role: "ST", x: 78, y: 40 },
+      { role: "ST", x: 78, y: 60 },
+    ],
+  },
+  {
+    value: "4-4-2",
+    label: "4-4-2 (Compact Medium Block)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "LB", x: 24, y: 18 },
+      { role: "CB", x: 22, y: 38 },
+      { role: "CB", x: 22, y: 62 },
+      { role: "RB", x: 24, y: 82 },
+      { role: "LM", x: 46, y: 18 },
+      { role: "CM", x: 46, y: 38 },
+      { role: "CM", x: 46, y: 62 },
+      { role: "RM", x: 46, y: 82 },
+      { role: "ST", x: 78, y: 40 },
+      { role: "ST", x: 78, y: 60 },
+    ],
+  },
+  {
+    value: "3-4-3",
+    label: "3-4-3 (Diamond Overload & High Lines)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "CB", x: 22, y: 28 },
+      { role: "CB", x: 20, y: 50 },
+      { role: "CB", x: 22, y: 72 },
+      { role: "LM", x: 44, y: 16 },
+      { role: "CM", x: 44, y: 40 },
+      { role: "CM", x: 44, y: 60 },
+      { role: "RM", x: 44, y: 84 },
+      { role: "LW", x: 70, y: 20 },
+      { role: "ST", x: 80, y: 50 },
+      { role: "RW", x: 70, y: 80 },
+    ],
+  },
+  {
+    value: "4-1-4-1",
+    label: "4-1-4-1 (Defensive Anchor & Counter)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "LB", x: 24, y: 18 },
+      { role: "CB", x: 22, y: 38 },
+      { role: "CB", x: 22, y: 62 },
+      { role: "RB", x: 24, y: 82 },
+      { role: "DM", x: 34, y: 50 },
+      { role: "LM", x: 50, y: 18 },
+      { role: "CM", x: 50, y: 38 },
+      { role: "CM", x: 50, y: 62 },
+      { role: "RM", x: 50, y: 82 },
+      { role: "ST", x: 80, y: 50 },
+    ],
+  },
+  {
+    value: "5-3-2",
+    label: "5-3-2 (Solid Low Block & Quick Breaks)",
+    category: "11v11",
+    slots: [
+      { role: "GK", x: 8, y: 50 },
+      { role: "LWB", x: 26, y: 14 },
+      { role: "CB", x: 20, y: 30 },
+      { role: "CB", x: 18, y: 50 },
+      { role: "CB", x: 20, y: 70 },
+      { role: "RWB", x: 26, y: 86 },
+      { role: "CM", x: 44, y: 32 },
+      { role: "DM", x: 40, y: 50 },
+      { role: "CM", x: 44, y: 68 },
+      { role: "ST", x: 76, y: 40 },
+      { role: "ST", x: 76, y: 60 },
+    ],
+  },
+  {
+    value: "2-3-1",
+    label: "2-3-1 (Youth 7v7 Standard)",
+    category: "7v7",
+    slots: [
+      { role: "GK", x: 10, y: 50 },
+      { role: "CB", x: 28, y: 35 },
+      { role: "CB", x: 28, y: 65 },
+      { role: "LM", x: 52, y: 22 },
+      { role: "CM", x: 50, y: 50 },
+      { role: "RM", x: 52, y: 78 },
+      { role: "ST", x: 78, y: 50 },
+    ],
+  },
+  {
+    value: "3-3-2",
+    label: "3-3-2 (Youth 9v9 Balanced)",
+    category: "9v9",
+    slots: [
+      { role: "GK", x: 9, y: 50 },
+      { role: "LB", x: 26, y: 22 },
+      { role: "CB", x: 24, y: 50 },
+      { role: "RB", x: 26, y: 78 },
+      { role: "LM", x: 50, y: 24 },
+      { role: "CM", x: 48, y: 50 },
+      { role: "RM", x: 50, y: 76 },
+      { role: "ST", x: 76, y: 38 },
+      { role: "ST", x: 76, y: 62 },
+    ],
+  },
+];
+
+export const POSITION_COORDINATES: Record<string, { x: number; y: number }> = {
+  GK: { x: 8, y: 50 },
+  LB: { x: 24, y: 18 },
+  CB: { x: 22, y: 40 },
+  RB: { x: 24, y: 82 },
+  LWB: { x: 38, y: 15 },
+  RWB: { x: 38, y: 85 },
+  SW: { x: 16, y: 50 },
+  DM: { x: 36, y: 50 },
+  CM: { x: 48, y: 36 },
+  LM: { x: 48, y: 18 },
+  RM: { x: 48, y: 82 },
+  AM: { x: 62, y: 50 },
+  LW: { x: 70, y: 18 },
+  RW: { x: 70, y: 82 },
+  ST: { x: 82, y: 50 },
+  CF: { x: 80, y: 50 },
+  SS: { x: 74, y: 50 },
+};
+
+/**
+ * Returns the position category for a given position code.
+ */
+export function getPositionCategory(position?: string): PositionCategory {
+  if (!position) return "OTHER";
+  const upper = position.toUpperCase().trim();
+  const match = SOCCER_POSITIONS.find((p) => p.value === upper);
+  if (match) return match.category;
+  if (upper.includes("GK") || upper.includes("GOAL")) return "GK";
+  if (upper.includes("B") || upper.includes("DEF") || upper.includes("BACK")) return "DEF";
+  if (upper.includes("M") || upper.includes("MID")) return "MID";
+  if (upper.includes("W") || upper.includes("ST") || upper.includes("FWD") || upper.includes("ATT")) return "FWD";
+  return "OTHER";
+}
+
+export interface SquadPositionalDepth {
+  gk: number;
+  def: number;
+  mid: number;
+  fwd: number;
+  other: number;
+  total: number;
+}
+
+/**
+ * Calculates squad positional breakdown counts (GK, DEF, MID, FWD, OTHER).
+ */
+export function calculateSquadPositionalDepth(
+  roster: Array<{ tacticalPosition?: string }>,
+): SquadPositionalDepth {
+  const depth: SquadPositionalDepth = {
+    gk: 0,
+    def: 0,
+    mid: 0,
+    fwd: 0,
+    other: 0,
+    total: roster.length,
+  };
+
+  for (const athlete of roster) {
+    const cat = getPositionCategory(athlete.tacticalPosition);
+    if (cat === "GK") depth.gk++;
+    else if (cat === "DEF") depth.def++;
+    else if (cat === "MID") depth.mid++;
+    else if (cat === "FWD") depth.fwd++;
+    else depth.other++;
+  }
+
+  return depth;
+}
+
+/**
+ * Builds normalized tactical PlayerNodes for a squad roster according to base formation
+ */
+export function buildSquadPlayerNodes(
+  _teamName: string,
+  formation: string,
+  roster: Array<{
+    _id: string;
+    firstName: string;
+    lastName: string;
+    jerseyNumber?: number;
+    tacticalPosition?: string;
+    tacticalRole?: string;
+  }>,
+  pitchType: PitchType = "full",
+): PlayerNode[] {
+  const foundFormation = FORMATIONS.find((f) => f.value === formation) || FORMATIONS[0];
+  const slots = foundFormation.slots;
+
+  let defaultX = 25;
+  let defaultY = 20;
+
+  return roster.map((athlete, idx) => {
+    const posCode = athlete.tacticalPosition?.toUpperCase() || "";
+    
+    // Check if there's a slot in the formation that matches this athlete's role
+    let baseCoord: { x: number; y: number } | undefined;
+    if (idx < slots.length) {
+      baseCoord = slots[idx];
+    } else if (posCode && POSITION_COORDINATES[posCode]) {
+      baseCoord = POSITION_COORDINATES[posCode];
+    } else {
+      baseCoord = {
+        x: defaultX + (idx % 4) * 15,
+        y: defaultY + Math.floor(idx / 4) * 20,
+      };
+    }
+
+    const finalX =
+      pitchType === "attacking_half"
+        ? 50 + baseCoord.x / 2
+        : pitchType === "defending_half"
+        ? baseCoord.x / 2
+        : baseCoord.x;
+
+    return {
+      id: `ath_${athlete._id}`,
+      team: athlete.tacticalPosition?.toUpperCase() === "GK" ? "gk_home" : "home",
+      number: athlete.jerseyNumber ?? idx + 1,
+      role: athlete.tacticalPosition || slots[idx]?.role || "CM",
+      label: `${athlete.firstName} ${athlete.lastName[0] ? athlete.lastName[0] + "." : ""}`,
+      position: {
+        x: Math.min(95, Math.max(5, finalX)),
+        y: Math.min(95, Math.max(5, baseCoord.y)),
+      },
+    };
+  });
+}

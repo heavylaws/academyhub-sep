@@ -22,23 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-import type { PlayerNode, TacticalPlan } from "@/domain/tactics/tactical-domain.ts";
-
-const POSITION_COORDINATES: Record<string, { x: number; y: number }> = {
-  GK: { x: 8, y: 50 },
-  LB: { x: 24, y: 18 },
-  CB: { x: 22, y: 40 },
-  RB: { x: 24, y: 82 },
-  LWB: { x: 38, y: 15 },
-  RWB: { x: 38, y: 85 },
-  DM: { x: 36, y: 50 },
-  CM: { x: 48, y: 36 },
-  AM: { x: 62, y: 50 },
-  LW: { x: 70, y: 18 },
-  RW: { x: 70, y: 82 },
-  ST: { x: 82, y: 50 },
-  CF: { x: 80, y: 50 },
-};
+import {
+  type PlayerNode,
+  type TacticalPlan,
+  buildSquadPlayerNodes,
+} from "@/domain/tactics/tactical-domain.ts";
 
 interface LoadSquadDialogProps {
   open: boolean;
@@ -67,34 +55,12 @@ export default function LoadSquadDialog({
       return;
     }
 
-    let defaultX = 30;
-    let defaultY = 20;
-
-    const deployedPlayers: PlayerNode[] = teamData.roster.map((athlete, idx) => {
-      const posCode = athlete.tacticalPosition?.toUpperCase() || "";
-      const baseCoord = POSITION_COORDINATES[posCode] || {
-        x: defaultX + (idx % 4) * 15,
-        y: defaultY + Math.floor(idx / 4) * 25,
-      };
-
-      // In attacking half pitch, adjust coordinates
-      const finalX =
-        activePlan.pitchType === "attacking_half"
-          ? 50 + (baseCoord.x / 2)
-          : baseCoord.x;
-
-      return {
-        id: `ath_${athlete._id}`,
-        team: "home",
-        number: athlete.jerseyNumber ?? idx + 1,
-        role: athlete.tacticalPosition || "CM",
-        label: `${athlete.firstName} ${athlete.lastName[0]}.`,
-        position: {
-          x: Math.min(95, Math.max(5, finalX)),
-          y: Math.min(95, Math.max(5, baseCoord.y)),
-        },
-      };
-    });
+    const deployedPlayers = buildSquadPlayerNodes(
+      teamData.team.name,
+      teamData.team.preferredFormation || "4-3-3",
+      teamData.roster,
+      activePlan.pitchType,
+    );
 
     onDeploySquad(deployedPlayers);
     toast.success(`Deployed ${deployedPlayers.length} athletes from ${teamData.team.name} onto board!`);

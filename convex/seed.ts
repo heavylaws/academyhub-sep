@@ -306,7 +306,7 @@ export const seedDatabase = mutation({
   },
 });
 
-export const seedUserFirestoreAcademies = mutation({
+export const seedUserInitialAcademies = mutation({
   args: {},
   handler: async (ctx) => {
     const adminUser = await ctx.db

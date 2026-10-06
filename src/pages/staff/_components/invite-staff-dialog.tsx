@@ -38,7 +38,6 @@ import { Spinner } from "@/components/ui/spinner.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { isLocalDev } from "@/lib/env.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
-import { firebaseAuthService } from "@/services/firebase-auth-service.ts";
 import {
   CredentialsSuccessDialog,
   type GeneratedCredentials,
@@ -86,17 +85,8 @@ export default function InviteStaffDialog({
         role: values.role as "academy_admin" | "coach" | "athlete" | "accounting",
       });
 
-      try {
-        await firebaseAuthService.createInvite(targetAcademyId, values.email, values.role);
-      } catch (fsErr) {
-        console.warn("Firestore invite sync notice:", fsErr);
-      }
-
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
       const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
-      if (generatedPassword) {
-        await firebaseAuthService.provisionUserAccount(values.email, generatedPassword);
-      }
       form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 
-describe("Academy Announcements & Coach-Athlete Messaging Firestore Architecture", () => {
+describe("Academy Announcements & Coach-Athlete Messaging Architecture", () => {
   const academyId = "acad_hercules";
 
   beforeEach(() => {

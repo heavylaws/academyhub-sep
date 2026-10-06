@@ -2,7 +2,6 @@ import { Navigate } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import AppLayout from "@/components/layout/app-layout.tsx";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
-import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
 
 function LoadingScreen() {
   return (
@@ -20,14 +19,13 @@ export default function ProtectedRoute({
   children: React.ReactNode;
   allow: UserRole[];
 }) {
-  const { firebaseUser, isResolvingMembership } = useFirebaseAuth();
   const { user, isLoading } = useCurrentUser();
 
-  if (isLoading || isResolvingMembership || (firebaseUser && user === undefined)) {
+  if (isLoading || user === undefined) {
     return <LoadingScreen />;
   }
 
-  if (!firebaseUser && !user) {
+  if (!user) {
     return <Navigate to="/" replace />;
   }
 

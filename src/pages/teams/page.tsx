@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useConvexAuth, useQuery } from "convex/react";
-import { Link } from "react-router-dom";
-import { Plus, Shield, Users } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Compass, Plus, Search, Shield, Users } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 import {
   Card,
   CardContent,
@@ -25,6 +26,7 @@ import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import CreateTeamDialog from "./_components/create-team-dialog.tsx";
 
 export default function Teams() {
+  const navigate = useNavigate();
   const { user } = useCurrentUser();
   const canManage =
     user?.role === "academy_admin" ||
@@ -34,16 +36,29 @@ export default function Teams() {
   const { isAuthenticated } = useConvexAuth();
   const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
   const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredTeams = useMemo(() => {
+    if (!teams) return [];
+    if (!search.trim()) return teams;
+    const q = search.toLowerCase();
+    return teams.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.sport && t.sport.toLowerCase().includes(q)) ||
+        (t.preferredFormation && t.preferredFormation.toLowerCase().includes(q)),
+    );
+  }, [teams, search]);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">
-            Teams
+            Teams & Squads
           </h1>
           <p className="text-sm text-muted-foreground">
-            Group athletes into teams and schedule training sessions.
+            Manage squad rosters, tactical formations, and training schedules.
           </p>
         </div>
         {canManage && (
@@ -56,6 +71,18 @@ export default function Teams() {
           </Button>
         )}
       </div>
+
+      {teams && teams.length > 0 && (
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search teams by name, sport, or formation..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-10 text-sm"
+          />
+        </div>
+      )}
 
       {teams === undefined ? (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -89,30 +116,70 @@ export default function Teams() {
             </Empty>
           </CardContent>
         </Card>
+      ) : filteredTeams.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No teams match your search "{search}".
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {teams.map((team) => (
-            <Link key={team._id} to={`/teams/${team._id}`}>
-              <Card className="h-full transition-colors hover:border-primary/40">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="font-display text-lg">
-                      {team.name}
-                    </CardTitle>
+          {filteredTeams.map((team) => (
+            <div
+              key={team._id}
+              className="group relative rounded-xl border bg-card p-5 transition-all hover:border-primary/50 hover:shadow-xs flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <Link
+                    to={`/teams/${team._id}`}
+                    className="font-display text-lg font-semibold hover:text-primary transition-colors"
+                  >
+                    {team.name}
+                  </Link>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {team.preferredFormation && (
+                      <Badge variant="outline" className="font-mono text-xs border-primary/40 text-primary">
+                        {team.preferredFormation}
+                      </Badge>
+                    )}
                     {team.sport && (
-                      <Badge variant="secondary">{team.sport}</Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {team.sport}
+                      </Badge>
                     )}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="size-4" />
+                </div>
+
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-3">
+                  <Users className="size-4" />
+                  <span>
                     {team.memberCount}{" "}
-                    {team.memberCount === 1 ? "athlete" : "athletes"}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+                    {team.memberCount === 1 ? "athlete" : "athletes"} on roster
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t">
+                <Link
+                  to={`/teams/${team._id}`}
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  Manage Squad & Roster →
+                </Link>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/tactical-board?teamId=${team._id}`)}
+                  className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                  title="Deploy squad onto tactical board"
+                >
+                  <Compass className="size-3.5 text-primary" />
+                  <span>Tactical Board</span>
+                </Button>
+              </div>
+            </div>
           ))}
         </div>
       )}

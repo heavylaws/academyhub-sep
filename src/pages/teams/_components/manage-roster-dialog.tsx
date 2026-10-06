@@ -83,25 +83,49 @@ export default function ManageRosterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto w-[calc(100vw-2rem)] sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="flex flex-col max-h-[85vh] w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6 overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Manage roster</DialogTitle>
           <DialogDescription>
-            Select which athletes belong to this team.
+            Select which athletes belong to this squad ({selected.size} selected).
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search athletes..."
-            className="pl-9 h-11 sm:h-10 text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-2 shrink-0 my-1">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search athletes..."
+              className="pl-9 h-10 text-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {allAthletes && allAthletes.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelected(new Set(allAthletes.map((a) => a._id)))}
+                className="h-10 text-xs px-2"
+              >
+                All
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelected(new Set())}
+                className="h-10 text-xs px-2"
+              >
+                Clear
+              </Button>
+            </div>
+          )}
         </div>
 
-        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
+        <div className="flex-1 min-h-[160px] overflow-y-auto pr-1 flex flex-col gap-1 overscroll-contain">
           {allAthletes === undefined ? (
             Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-11 w-full rounded-xl" />
@@ -134,14 +158,14 @@ export default function ManageRosterDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-2 border-t mt-2">
           <Button
             onClick={handleSave}
             disabled={submitting}
             className="h-10 sm:h-9 text-xs sm:text-sm font-semibold w-full sm:w-auto"
           >
             {submitting && <Spinner className="size-4" />}
-            Save roster
+            Save roster ({selected.size})
           </Button>
         </DialogFooter>
       </DialogContent>

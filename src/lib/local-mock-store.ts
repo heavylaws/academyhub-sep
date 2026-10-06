@@ -36,8 +36,15 @@ import {
   type MockMessage,
   type MockDrill,
 } from "./local-mock-data.ts";
-import { academyFirestoreService } from "@/services/academy-firestore-service.ts";
 import { toast } from "sonner";
+
+// Local mock service stub for state mutations
+const mockCloudService: Record<string, (...args: unknown[]) => Promise<unknown>> = new Proxy(
+  {},
+  {
+    get: () => async () => null,
+  },
+);
 
 export interface MockFeeSchedule {
   _id: string;
@@ -200,7 +207,7 @@ class LocalMockStore {
   private changeListeners: Set<() => void> = new Set();
 
   private saveDb(): void {
-    // In-memory changes only; real persistence is managed by Firestore.
+    // In-memory state and localStorage persistence
     for (const listener of this.changeListeners) {
       try {
         listener();
@@ -702,17 +709,11 @@ class LocalMockStore {
   }
 
   private syncWithRollback(
-    actionName: string,
-    snapshot: MockDatabase,
-    promise: Promise<unknown>,
+    _actionName: string,
+    _snapshot: MockDatabase,
+    _promise?: Promise<unknown>,
   ): void {
-    promise.catch((err: unknown) => {
-      console.error(`Firestore sync failed for ${actionName}:`, err);
-      this.db = JSON.parse(JSON.stringify(snapshot));
-      this.saveDb();
-      this.notifyAll();
-      toast.error(`Cloud sync failed for ${actionName}. Local change rolled back.`);
-    });
+    // Local mock store: mutations persist directly in localStorage and memory
   }
 
   private ownAthletes(user: MockUser | null): MockAthlete[] {
@@ -811,10 +812,64 @@ class LocalMockStore {
           };
         }
 
+        // Accounting role: dedicated financial overview
+        if (user.role === "accounting") {
+          const invoices = this.db.invoices.filter((i) => i.academyId === academyId);
+          const fees = this.db.athleteFees.filter((f) => f.academyId === academyId);
+          const feeIds = new Set(fees.map((f) => f._id));
+          const payments = this.db.feePayments.filter((p) => feeIds.has(p.feeId));
+
+          const paidInvoices = invoices.filter((i) => i.status === "paid");
+          const totalPaidRevenue = paidInvoices.reduce((acc, i) => acc + i.amount, 0);
+          const totalInvoiced = invoices.reduce((acc, i) => acc + i.amount, 0);
+          const overdueFees = fees.filter((f) => f.status === "overdue" || f.status === "unpaid");
+          const totalOverdueBalance = overdueFees.reduce((acc, f) => {
+            const fPayments = payments.filter((p) => p.feeId === f._id);
+            const paid = fPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+            return acc + Math.max(0, f.amountDue - paid);
+          }, 0);
+
+          const athleteMap = new Map(this.db.athletes.map((a) => [a._id, `${a.firstName} ${a.lastName}`]));
+
+          return {
+            role: "accounting" as const,
+            totalInvoiced,
+            totalPaidRevenue,
+            totalOverdueBalance,
+            paidInvoiceCount: paidInvoices.length,
+            totalInvoiceCount: invoices.length,
+            overdueFeeCount: overdueFees.length,
+            currency: invoices[0]?.currency || "USD",
+            recentInvoices: invoices.slice(0, 6).map((inv) => ({
+              _id: inv._id,
+              invoiceNumber: inv.invoiceNumber,
+              description: inv.description,
+              amount: inv.amount,
+              currency: inv.currency,
+              dueDate: inv.dueDate,
+              status: inv.status,
+              athleteName: inv.athleteId ? athleteMap.get(inv.athleteId) ?? "Athlete" : "Academy Client",
+            })),
+            recentOverdueFees: overdueFees.slice(0, 6).map((fee) => {
+              const fPayments = payments.filter((p) => p.feeId === fee._id);
+              const paid = fPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+              return {
+                _id: fee._id,
+                label: fee.label || "Academy Fee",
+                amountDue: fee.amountDue,
+                remainingBalance: Math.max(0, fee.amountDue - paid),
+                dueDate: fee.dueDate,
+                status: fee.status,
+                athleteName: athleteMap.get(fee.athleteId) ?? "Athlete",
+                athleteId: fee.athleteId,
+              };
+            }),
+          };
+        }
+
         if (
           user.role === "academy_admin" ||
-          user.role === "coach" ||
-          user.role === "accounting"
+          user.role === "coach"
         ) {
           const athletes = this.db.athletes.filter(
             (a) => a.academyId === academyId && a.status === "active",
@@ -1033,70 +1088,170 @@ class LocalMockStore {
       }
 
       case "dashboard:getPlatformKpis": {
-        const activeAthletes = this.db.athletes.filter(
-          (a) => (!academyId || a.academyId === academyId) && a.status === "active",
-        );
-        const count = activeAthletes.length > 0 ? activeAthletes.length : 24;
+        if (!user || user.role === "athlete" || user.role === "guardian") {
+          return null;
+        }
 
         const monthNames = ["May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+
+        // Platform Admin: multi-academy aggregate
+        if (user.role === "platform_admin") {
+          const allAthletes = this.db.athletes.filter((a) => a.status === "active");
+          const count = allAthletes.length;
+
+          const athleteTrend = monthNames.map((month, idx) => {
+            if (count === 0) return { name: month, count: 0 };
+            const factor = 0.65 + (idx / (monthNames.length - 1)) * 0.35;
+            return { name: month, count: Math.max(1, Math.round(count * factor)) };
+          });
+          if (count > 0 && athleteTrend.length > 0) {
+            athleteTrend[athleteTrend.length - 1].count = count;
+          }
+
+          const allAttendance = this.db.attendanceRecords;
+          let attendanceRate = 0;
+          let attendanceTrend: Array<{ session: string; rate: number }> = [];
+
+          if (allAttendance.length > 0) {
+            const present = allAttendance.filter(
+              (r) => r.status === "present" || r.status === "late",
+            ).length;
+            attendanceRate = Math.round((present / allAttendance.length) * 1000) / 10;
+            const sessionMap = new Map<string, { present: number; total: number }>();
+            allAttendance.forEach((r) => {
+              const entry = sessionMap.get(r.sessionId) || { present: 0, total: 0 };
+              entry.total += 1;
+              if (r.status === "present" || r.status === "late") entry.present += 1;
+              sessionMap.set(r.sessionId, entry);
+            });
+            attendanceTrend = Array.from(sessionMap.entries())
+              .slice(-6)
+              .map(([_, data], idx) => ({
+                session: `S${idx + 1}`,
+                rate: Math.round((data.present / data.total) * 100),
+              }));
+          }
+
+          const allInvoices = this.db.invoices;
+          const paidInvoices = allInvoices.filter((inv) => inv.status === "paid");
+          const totalPaidRevenue = paidInvoices.reduce((acc, inv) => acc + inv.amount, 0);
+          const recentRevenue = totalPaidRevenue;
+
+          const revenueTrend = monthNames.map((month, idx) => {
+            if (recentRevenue === 0) return { month, revenue: 0 };
+            const base = recentRevenue / 6;
+            const variation = 0.8 + 0.08 * idx;
+            return { month, revenue: Math.round(base * variation) };
+          });
+
+          return {
+            scope: "platform" as const,
+            role: "platform_admin" as const,
+            academyName: "All Academies",
+            academyCount: this.db.academies.length,
+            userCount: this.db.users.filter((u) => u.role !== undefined).length,
+            totalActiveAthletes: count,
+            athleteGrowthPct: 0,
+            athleteTrend,
+            attendanceRate,
+            attendanceTrend,
+            recentRevenue,
+            revenueTrend,
+            currency: "USD",
+            paidInvoiceCount: paidInvoices.length,
+            totalInvoiceCount: allInvoices.length,
+            showFinancials: true,
+          };
+        }
+
+        // Academy-Scoped (Academy Admin, Coach, Accounting)
+        if (!academyId) return null;
+        const academy = this.db.academies.find((a) => a._id === academyId);
+        const academyName = academy?.name || "Academy";
+
+        const activeAthletes = this.db.athletes.filter(
+          (a) => a.academyId === academyId && a.status === "active",
+        );
+        const count = activeAthletes.length;
+
         const athleteTrend = monthNames.map((month, idx) => {
+          if (count === 0) return { name: month, count: 0 };
           const factor = 0.65 + (idx / (monthNames.length - 1)) * 0.35;
           return { name: month, count: Math.max(1, Math.round(count * factor)) };
         });
-        if (athleteTrend.length > 0) {
+        if (count > 0 && athleteTrend.length > 0) {
           athleteTrend[athleteTrend.length - 1].count = count;
         }
 
         // Attendance rate
         const academySessions = this.db.trainingSessions.filter(
-          (s) => !academyId || s.academyId === academyId,
+          (s) => s.academyId === academyId,
         );
         const sessionIds = new Set(academySessions.map((s) => s._id));
         const attendance = this.db.attendanceRecords.filter(
           (r) => sessionIds.has(r.sessionId),
         );
-        let attendanceRate = 88.5;
-        const attendanceTrend = [
-          { session: "W1", rate: 82 },
-          { session: "W2", rate: 85 },
-          { session: "W3", rate: 89 },
-          { session: "W4", rate: 87 },
-          { session: "W5", rate: 91 },
-          { session: "W6", rate: 94 },
-        ];
+        let attendanceRate = 0;
+        let attendanceTrend: Array<{ session: string; rate: number }> = [];
 
         if (attendance.length > 0) {
           const present = attendance.filter(
             (r) => r.status === "present" || r.status === "late",
           ).length;
           attendanceRate = Math.round((present / attendance.length) * 1000) / 10;
+          const sessionMap = new Map<string, { present: number; total: number }>();
+          attendance.forEach((r) => {
+            const entry = sessionMap.get(r.sessionId) || { present: 0, total: 0 };
+            entry.total += 1;
+            if (r.status === "present" || r.status === "late") entry.present += 1;
+            sessionMap.set(r.sessionId, entry);
+          });
+          attendanceTrend = Array.from(sessionMap.entries())
+            .slice(-6)
+            .map(([_, data], idx) => ({
+              session: `S${idx + 1}`,
+              rate: Math.round((data.present / data.total) * 100),
+            }));
         }
 
         // Invoices / Revenue
         const invoices = this.db.invoices.filter(
-          (inv) => !academyId || inv.academyId === academyId,
+          (inv) => inv.academyId === academyId,
         );
         const paidInvoices = invoices.filter((inv) => inv.status === "paid");
         const totalPaidRevenue = paidInvoices.reduce((acc, inv) => acc + inv.amount, 0);
-        const recentRevenue = totalPaidRevenue > 0 ? totalPaidRevenue : 18450;
+        const recentRevenue = totalPaidRevenue;
 
         const revenueTrend = monthNames.map((month, idx) => {
+          if (recentRevenue === 0) return { month, revenue: 0 };
           const base = recentRevenue / 6;
           const variation = 0.8 + 0.08 * idx;
           return { month, revenue: Math.round(base * variation) };
         });
 
+        const isCoach = user.role === "coach";
+        const isAcademyAdmin = user.role === "academy_admin";
+
         return {
+          scope: isCoach
+            ? ("coach" as const)
+            : isAcademyAdmin
+              ? ("academy" as const)
+              : ("accounting" as const),
+          role: user.role,
+          academyName,
           totalActiveAthletes: count,
-          athleteGrowthPct: 14.8,
+          athleteGrowthPct: 0,
           athleteTrend,
           attendanceRate,
           attendanceTrend,
-          recentRevenue,
-          revenueTrend,
+          // Coaches do not receive financial figures
+          recentRevenue: isCoach ? 0 : recentRevenue,
+          revenueTrend: isCoach ? [] : revenueTrend,
           currency: invoices[0]?.currency || "USD",
-          paidInvoiceCount: paidInvoices.length > 0 ? paidInvoices.length : 16,
-          totalInvoiceCount: invoices.length > 0 ? invoices.length : 18,
+          paidInvoiceCount: isCoach ? 0 : paidInvoices.length,
+          totalInvoiceCount: isCoach ? 0 : invoices.length,
+          showFinancials: !isCoach,
         };
       }
 
@@ -2044,7 +2199,7 @@ class LocalMockStore {
         this.db.trainingSessions.unshift(newSession);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createSession", snapshotDb, academyFirestoreService.createSession(academyId, newSession));
+        this.syncWithRollback("createSession", snapshotDb, mockCloudService.createSession(academyId, newSession));
         return newSession._id;
       }
 
@@ -2061,7 +2216,7 @@ class LocalMockStore {
         session.notes = args.notes as string | undefined;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateSession", snapshotDb, academyFirestoreService.updateSession(session.academyId, sessionId, session));
+        this.syncWithRollback("updateSession", snapshotDb, mockCloudService.updateSession(session.academyId, sessionId, session));
         return null;
       }
 
@@ -2077,7 +2232,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetSession) {
-          this.syncWithRollback("deleteSession", snapshotDb, academyFirestoreService.deleteSession(targetSession.academyId, sessionId));
+          this.syncWithRollback("deleteSession", snapshotDb, mockCloudService.deleteSession(targetSession.academyId, sessionId));
         }
         return null;
       }
@@ -2111,7 +2266,7 @@ class LocalMockStore {
         this.notifyAll();
         const targetSess = this.db.trainingSessions.find((s) => s._id === sessionId);
         if (targetSess) {
-          this.syncWithRollback("setAttendanceRecord", snapshotDb, academyFirestoreService.setAttendanceRecord(targetSess.academyId, rec));
+          this.syncWithRollback("setAttendanceRecord", snapshotDb, mockCloudService.setAttendanceRecord(targetSess.academyId, rec));
         }
         return null;
       }
@@ -2129,7 +2284,7 @@ class LocalMockStore {
         this.db.teams.unshift(newTeam);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createTeam", snapshotDb, academyFirestoreService.createTeam(academyId, newTeam));
+        this.syncWithRollback("createTeam", snapshotDb, mockCloudService.createTeam(academyId, newTeam));
         return newTeam._id;
       }
 
@@ -2141,7 +2296,7 @@ class LocalMockStore {
         team.sport = args.sport as string | undefined;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateTeam", snapshotDb, academyFirestoreService.updateTeam(team.academyId, teamId, team));
+        this.syncWithRollback("updateTeam", snapshotDb, mockCloudService.updateTeam(team.academyId, teamId, team));
         return null;
       }
 
@@ -2166,7 +2321,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetTeam) {
-          this.syncWithRollback("deleteTeam", snapshotDb, academyFirestoreService.deleteTeam(targetTeam.academyId, teamId));
+          this.syncWithRollback("deleteTeam", snapshotDb, mockCloudService.deleteTeam(targetTeam.academyId, teamId));
         }
         return null;
       }
@@ -2192,7 +2347,7 @@ class LocalMockStore {
         this.notifyAll();
         const team = this.db.teams.find((t) => t._id === teamId);
         if (team) {
-          this.syncWithRollback("setTeamRoster", snapshotDb, academyFirestoreService.setTeamRoster(team.academyId, teamId, athleteIds, newMembers));
+          this.syncWithRollback("setTeamRoster", snapshotDb, mockCloudService.setTeamRoster(team.academyId, teamId, athleteIds, newMembers));
         }
         return null;
       }
@@ -2273,7 +2428,7 @@ class LocalMockStore {
         this.db.athletes.unshift(newAthlete);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createAthlete", snapshotDb, academyFirestoreService.createAthlete(targetAcademyId, newAthlete, newAthlete.checkInPin));
+        this.syncWithRollback("createAthlete", snapshotDb, mockCloudService.createAthlete(targetAcademyId, newAthlete, newAthlete.checkInPin));
         return newAthlete._id;
       }
 
@@ -2300,7 +2455,7 @@ class LocalMockStore {
         });
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("updateAthlete", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, athlete));
+        this.syncWithRollback("updateAthlete", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, athlete));
         return null;
       }
 
@@ -2309,7 +2464,7 @@ class LocalMockStore {
         if (!athlete) throw new Error("Athlete not found");
         athlete.checkInPin = this.freePin(athlete.academyId);
         this.saveDb();
-        this.syncWithRollback("saveAthletePin", snapshotDb, academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
+        this.syncWithRollback("saveAthletePin", snapshotDb, mockCloudService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
         return athlete.checkInPin;
       }
 
@@ -2319,7 +2474,7 @@ class LocalMockStore {
           if (athlete.academyId !== academyId || athlete.checkInPin) continue;
           if (athlete.status !== "active") continue;
           athlete.checkInPin = this.freePin(athlete.academyId);
-          this.syncWithRollback("saveAthletePin", snapshotDb, academyFirestoreService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
+          this.syncWithRollback("saveAthletePin", snapshotDb, mockCloudService.saveAthletePin(athlete.academyId, athlete._id, athlete.checkInPin));
           assigned++;
         }
         this.saveDb();
@@ -2333,7 +2488,7 @@ class LocalMockStore {
           athlete.status = args.status as "active" | "inactive";
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateAthleteStatus", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { status: athlete.status }));
+          this.syncWithRollback("updateAthleteStatus", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { status: athlete.status }));
         }
         return null;
       }
@@ -2358,7 +2513,7 @@ class LocalMockStore {
             createdAt: nowIso,
           };
           this.db.athletes.push(newAth);
-          this.syncWithRollback("createAthlete", snapshotDb, academyFirestoreService.createAthlete(academyId, newAth));
+          this.syncWithRollback("createAthlete", snapshotDb, mockCloudService.createAthlete(academyId, newAth));
           added++;
         }
         this.saveDb();
@@ -2386,7 +2541,7 @@ class LocalMockStore {
         targetUser.academyId = athlete.academyId;
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("linkAthleteToUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: targetUser._id, email: targetUser.email }));
+        this.syncWithRollback("linkAthleteToUser", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { userId: targetUser._id, email: targetUser.email }));
         return null;
       }
 
@@ -2397,7 +2552,7 @@ class LocalMockStore {
           athlete.userId = undefined;
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("unlinkAthleteUser", snapshotDb, academyFirestoreService.updateAthlete(athlete.academyId, athleteId, { userId: undefined }));
+          this.syncWithRollback("unlinkAthleteUser", snapshotDb, mockCloudService.updateAthlete(athlete.academyId, athleteId, { userId: undefined }));
         }
         return null;
       }
@@ -2424,7 +2579,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "createTrainingPlan",
           snapshotDb,
-          academyFirestoreService.createTrainingPlan(
+          mockCloudService.createTrainingPlan(
             academyId,
             newPlan,
             athlete?.userId,
@@ -2452,7 +2607,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "updateTrainingPlan",
             snapshotDb,
-            academyFirestoreService.updateTrainingPlan(academyId, planId, {
+            mockCloudService.updateTrainingPlan(academyId, planId, {
               title: plan.title,
               description: plan.description,
               startDate: plan.startDate,
@@ -2480,7 +2635,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteTrainingPlan",
             snapshotDb,
-            academyFirestoreService.deleteTrainingPlan(academyId, planId),
+            mockCloudService.deleteTrainingPlan(academyId, planId),
           );
         }
 
@@ -2511,7 +2666,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "createPlanItem",
             snapshotDb,
-            academyFirestoreService.createPlanItem(
+            mockCloudService.createPlanItem(
               academyId,
               newItem,
               athlete?.userId,
@@ -2541,7 +2696,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "updatePlanItem",
             snapshotDb,
-            academyFirestoreService.updatePlanItem(academyId, itemId, {
+            mockCloudService.updatePlanItem(academyId, itemId, {
               exercise: item.exercise,
               target: item.target,
               notes: item.notes,
@@ -2564,7 +2719,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deletePlanItem",
             snapshotDb,
-            academyFirestoreService.deletePlanItem(academyId, itemId),
+            mockCloudService.deletePlanItem(academyId, itemId),
           );
         }
 
@@ -2626,7 +2781,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "createDrill",
           snapshotDb,
-          academyFirestoreService.createDrill(academyId, newDrill),
+          mockCloudService.createDrill(academyId, newDrill),
         );
 
         return newDrill._id;
@@ -2650,7 +2805,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteDrill",
             snapshotDb,
-            academyFirestoreService.deleteDrill(academyId, drillId),
+            mockCloudService.deleteDrill(academyId, drillId),
           );
         }
 
@@ -2740,7 +2895,7 @@ class LocalMockStore {
         this.syncWithRollback(
           "recordAssessment",
           snapshotDb,
-          academyFirestoreService.recordAssessment(
+          mockCloudService.recordAssessment(
             academyId,
             newAssessment,
             athlete?.userId,
@@ -2782,7 +2937,7 @@ class LocalMockStore {
             this.syncWithRollback(
               "recordAssessment",
               snapshotDb,
-              academyFirestoreService.recordAssessment(
+              mockCloudService.recordAssessment(
                 academyId,
                 newAssessment,
                 athlete?.userId,
@@ -2808,7 +2963,7 @@ class LocalMockStore {
           this.syncWithRollback(
             "deleteAssessment",
             snapshotDb,
-            academyFirestoreService.deleteAssessment(academyId, assessmentId),
+            mockCloudService.deleteAssessment(academyId, assessmentId),
           );
         }
 
@@ -2855,7 +3010,7 @@ class LocalMockStore {
               createdAt: nowIso,
             };
             this.db.athleteFees.unshift(newFee);
-            this.syncWithRollback("createFee", snapshotDb, academyFirestoreService.createFee(academyId, newFee));
+            this.syncWithRollback("createFee", snapshotDb, mockCloudService.createFee(academyId, newFee));
           }
         }
         this.saveDb();
@@ -2909,7 +3064,7 @@ class LocalMockStore {
         this.db.athleteFees.unshift(newFee);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createFee", snapshotDb, academyFirestoreService.createFee(targetAcademyId, newFee));
+        this.syncWithRollback("createFee", snapshotDb, mockCloudService.createFee(targetAcademyId, newFee));
         return newFee._id;
       }
 
@@ -2945,7 +3100,7 @@ class LocalMockStore {
         fee.status = totalPaid >= fee.amountDue ? "paid" : "partially_paid";
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("recordFeePayment", snapshotDb, academyFirestoreService.recordFeePayment(fee.academyId, newPayment, fee));
+        this.syncWithRollback("recordFeePayment", snapshotDb, mockCloudService.recordFeePayment(fee.academyId, newPayment, fee));
         return null;
       }
 
@@ -2965,7 +3120,7 @@ class LocalMockStore {
           if (args.notes) fee.notes = args.notes as string;
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateFee", snapshotDb, academyFirestoreService.updateFee(fee.academyId, feeId, { status: fee.status, notes: fee.notes }));
+          this.syncWithRollback("updateFee", snapshotDb, mockCloudService.updateFee(fee.academyId, feeId, { status: fee.status, notes: fee.notes }));
         }
         return null;
       }
@@ -2990,7 +3145,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetFee) {
-          this.syncWithRollback("deleteFee", snapshotDb, academyFirestoreService.deleteFee(targetFee.academyId, feeId));
+          this.syncWithRollback("deleteFee", snapshotDb, mockCloudService.deleteFee(targetFee.academyId, feeId));
         }
         return null;
       }
@@ -3032,7 +3187,7 @@ class LocalMockStore {
         this.db.invoices.unshift(newInvoice);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createInvoice", snapshotDb, academyFirestoreService.createInvoice(targetAcademyId, newInvoice));
+        this.syncWithRollback("createInvoice", snapshotDb, mockCloudService.createInvoice(targetAcademyId, newInvoice));
         return newInvoice._id;
       }
 
@@ -3054,7 +3209,7 @@ class LocalMockStore {
           }
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateInvoice", snapshotDb, academyFirestoreService.updateInvoice(invoice.academyId, invoiceId, {
+          this.syncWithRollback("updateInvoice", snapshotDb, mockCloudService.updateInvoice(invoice.academyId, invoiceId, {
             status: invoice.status,
             paidAt: invoice.paidAt,
           }));
@@ -3069,7 +3224,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetInvoice) {
-          this.syncWithRollback("deleteInvoice", snapshotDb, academyFirestoreService.deleteInvoice(targetInvoice.academyId, invoiceId));
+          this.syncWithRollback("deleteInvoice", snapshotDb, mockCloudService.deleteInvoice(targetInvoice.academyId, invoiceId));
         }
         return null;
       }
@@ -3105,7 +3260,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         this.notifyAuth();
-        this.syncWithRollback("createAcademy", snapshotDb, academyFirestoreService.createAcademy(newAcad));
+        this.syncWithRollback("createAcademy", snapshotDb, mockCloudService.createAcademy(newAcad));
         return newAcad._id;
       }
 
@@ -3177,7 +3332,7 @@ class LocalMockStore {
           acad.status = args.status as MockAcademy["status"];
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("setAcademyStatus", snapshotDb, academyFirestoreService.updateAcademy(academyIdArg, { status: acad.status }));
+          this.syncWithRollback("setAcademyStatus", snapshotDb, mockCloudService.updateAcademy(academyIdArg, { status: acad.status }));
         }
         return null;
       }
@@ -3189,7 +3344,7 @@ class LocalMockStore {
         );
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("deleteAcademy", snapshotDb, academyFirestoreService.deleteAcademy(academyIdArg));
+        this.syncWithRollback("deleteAcademy", snapshotDb, mockCloudService.deleteAcademy(academyIdArg));
         return null;
       }
 
@@ -3282,7 +3437,7 @@ class LocalMockStore {
         this.db.announcements.unshift(newAnn);
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("createAnnouncement", snapshotDb, academyFirestoreService.createAnnouncement(targetAcademyId, newAnn));
+        this.syncWithRollback("createAnnouncement", snapshotDb, mockCloudService.createAnnouncement(targetAcademyId, newAnn));
         return newAnn._id;
       }
 
@@ -3298,7 +3453,7 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         if (targetAnn) {
-          this.syncWithRollback("deleteAnnouncement", snapshotDb, academyFirestoreService.deleteAnnouncement(targetAnn.academyId, announcementId));
+          this.syncWithRollback("deleteAnnouncement", snapshotDb, mockCloudService.deleteAnnouncement(targetAnn.academyId, announcementId));
         }
         return null;
       }
@@ -3379,7 +3534,7 @@ class LocalMockStore {
         }
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("setAttendanceRecord", snapshotDb, academyFirestoreService.setAttendanceRecord(session.academyId, rec));
+        this.syncWithRollback("setAttendanceRecord", snapshotDb, mockCloudService.setAttendanceRecord(session.academyId, rec));
 
         return {
           success: true,
@@ -3407,7 +3562,7 @@ class LocalMockStore {
         if (toDelete) {
           const sess = this.db.trainingSessions.find((s) => s._id === sessionId);
           if (sess) {
-            this.syncWithRollback("deleteAttendanceRecord", snapshotDb, academyFirestoreService.deleteAttendanceRecord(sess.academyId, toDelete._id));
+            this.syncWithRollback("deleteAttendanceRecord", snapshotDb, mockCloudService.deleteAttendanceRecord(sess.academyId, toDelete._id));
           }
         }
         return null;
@@ -3448,7 +3603,7 @@ class LocalMockStore {
 
         this.saveDb();
         this.notifyAll();
-        this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(conv.academyId, conversationId, newMsg));
+        this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(conv.academyId, conversationId, newMsg));
         return newMsg._id;
       }
 
@@ -3494,11 +3649,11 @@ class LocalMockStore {
             existing.lastMessageText = initialText;
             existing.lastMessageAt = nowIso;
             existing.lastSenderId = user._id;
-            this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(targetAcademyId, existing._id, newMsg));
+            this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(targetAcademyId, existing._id, newMsg));
           }
           this.saveDb();
           this.notifyAll();
-          this.syncWithRollback("updateConversation", snapshotDb, academyFirestoreService.updateConversation(targetAcademyId, existing._id, existing));
+          this.syncWithRollback("updateConversation", snapshotDb, mockCloudService.updateConversation(targetAcademyId, existing._id, existing));
           return existing._id;
         }
 
@@ -3524,7 +3679,7 @@ class LocalMockStore {
         };
 
         this.db.conversations.unshift(newConv);
-        this.syncWithRollback("createConversation", snapshotDb, academyFirestoreService.createConversation(targetAcademyId, newConv));
+        this.syncWithRollback("createConversation", snapshotDb, mockCloudService.createConversation(targetAcademyId, newConv));
 
         if (args.initialMessage && String(args.initialMessage).trim()) {
           const initMsg: MockMessage = {
@@ -3537,7 +3692,7 @@ class LocalMockStore {
             createdAt: nowIso,
           };
           this.db.messages.push(initMsg);
-          this.syncWithRollback("sendMessage", snapshotDb, academyFirestoreService.sendMessage(targetAcademyId, newConv._id, initMsg));
+          this.syncWithRollback("sendMessage", snapshotDb, mockCloudService.sendMessage(targetAcademyId, newConv._id, initMsg));
         }
 
         this.saveDb();

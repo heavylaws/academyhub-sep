@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationBell } from "@/components/notifications/notification-bell.tsx";
-import { CloudSyncIndicator } from "@/components/layout/cloud-sync-indicator.tsx";
 import { AcademySwitcher } from "@/components/layout/academy-switcher.tsx";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav.tsx";
 import {
@@ -44,7 +43,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useFirebaseAuth } from "@/components/providers/auth-context.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
@@ -155,7 +153,6 @@ export default function AppLayout({
   const { user } = useCurrentUser();
   const { openTutorial } = useAdminTutorial();
   const { signOut: convexSignOut } = useAuthActions();
-  const { signOut: firebaseSignOut } = useFirebaseAuth();
   const { signout: legacySignOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -168,11 +165,6 @@ export default function AppLayout({
       await convexSignOut();
     } catch (e) {
       console.warn("Convex signOut error:", e);
-    }
-    try {
-      await firebaseSignOut();
-    } catch (e) {
-      console.warn("Firebase signOut error:", e);
     }
     try {
       await legacySignOut();
@@ -330,7 +322,6 @@ export default function AppLayout({
                 <span className="hidden sm:inline">Admin Guide</span>
               </Button>
             )}
-            <CloudSyncIndicator />
             <NotificationBell />
             <Button
               variant="ghost"

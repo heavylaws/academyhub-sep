@@ -25,6 +25,7 @@ import {
   BookOpen,
   Tag,
   History,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api.js";
@@ -69,6 +70,7 @@ import AiDrillDesignerDialog from "./_components/ai-drill-designer-dialog.tsx";
 import { DrillVersionHistoryDialog } from "./_components/drill-version-history-dialog.tsx";
 import { PlaybookCollectionDialog } from "./_components/playbook-collection-dialog.tsx";
 import { TacticalSheetExportModal } from "@/components/tactical-board/tactical-sheet-export-modal.tsx";
+import AddDrillToSessionDialog from "./_components/add-drill-to-session-dialog.tsx";
 import { DEFAULT_COLLECTIONS, type PlaybookCollection } from "@/domain/tactics/playbook-domain.ts";
 
 const AGE_TABS = [
@@ -148,6 +150,7 @@ export default function DrillsPage() {
   const [assigningDrill, setAssigningDrill] = useState<SoccerDrill | null>(null);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
+  const [sessionDrill, setSessionDrill] = useState<SoccerDrill | null>(null);
 
   // Queries & Mutations
   const { isAuthenticated } = useConvexAuth();
@@ -607,18 +610,31 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                   </Button>
 
                   {isCoachOrAdmin && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAssigningDrill(drill);
-                        setAssignModalOpen(true);
-                      }}
-                      className="h-9 sm:h-8 text-xs gap-1"
-                    >
-                      <Plus className="size-3" />
-                      Assign
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSessionDrill(drill)}
+                        className="h-9 sm:h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                        title="Add this drill to a scheduled training session"
+                      >
+                        <CalendarClock className="size-3.5" />
+                        <span className="hidden sm:inline">Session</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setAssigningDrill(drill);
+                          setAssignModalOpen(true);
+                        }}
+                        className="h-9 sm:h-8 text-xs gap-1"
+                        title="Assign to individual athlete"
+                      >
+                        <Plus className="size-3" />
+                        Assign
+                      </Button>
+                    </>
                   )}
                   <Button
                     variant="default"
@@ -802,19 +818,33 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                 </Button>
 
                 {isCoachOrAdmin && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => {
-                      setAssigningDrill(activeDrill);
-                      setAssignModalOpen(true);
-                      setActiveDrill(null);
-                    }}
-                    className="w-full sm:w-auto text-xs gap-1"
-                  >
-                    <Plus className="size-3.5" />
-                    Assign to Athlete
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSessionDrill(activeDrill);
+                        setActiveDrill(null);
+                      }}
+                      className="w-full sm:w-auto text-xs gap-1 border-primary/30 text-primary"
+                    >
+                      <CalendarClock className="size-3.5" />
+                      Add to Session
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        setAssigningDrill(activeDrill);
+                        setAssignModalOpen(true);
+                        setActiveDrill(null);
+                      }}
+                      className="w-full sm:w-auto text-xs gap-1"
+                    >
+                      <Plus className="size-3.5" />
+                      Assign to Athlete
+                    </Button>
+                  </>
                 )}
                 <Button
                   variant="ghost"
@@ -947,6 +977,15 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
           if (!open) setAnalyticsDrill(null);
         }}
         canManage={isCoachOrAdmin}
+      />
+
+      {/* Add Drill to Training Session Dialog */}
+      <AddDrillToSessionDialog
+        open={Boolean(sessionDrill)}
+        onOpenChange={(open) => {
+          if (!open) setSessionDrill(null);
+        }}
+        drill={sessionDrill}
       />
     </div>
   );
