@@ -271,7 +271,7 @@ class LocalMockStore {
     const currentAcademies = this.db.academies.length > 0 ? this.db.academies : SEED_ACADEMIES;
     this.db = {
       academies: currentAcademies,
-      users: [],
+      users: [...SEED_USERS],
       athletes: [],
       teams: [],
       teamMembers: [],

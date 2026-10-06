@@ -281,7 +281,132 @@ export const SEED_ACADEMIES: MockAcademy[] = [
 ];
 
 // Clean user list for mock authentication
-export const SEED_USERS: MockUser[] = [];
+export const SEED_USERS: MockUser[] = [
+  // Super Admin / Platform Admin
+  {
+    _id: "usr_superadmin",
+    name: "Platform Admin",
+    email: "ah.baalbaki@gmail.com",
+    password: "A!t3r3g0",
+    role: "platform_admin",
+    tokenIdentifier: "mock|usr_superadmin",
+  },
+  // Head Coach (Hercules Academy)
+  {
+    _id: "usr_coach_hercules",
+    name: "Dave Miller",
+    email: "adminhercules@academieshub.com",
+    password: "hercules2026!",
+    role: "coach",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_coach_hercules",
+  },
+  // Coach (Dave Miller)
+  {
+    _id: "usr_coach",
+    name: "Dave Miller",
+    email: "dave.miller@test.local",
+    password: "hercules2026!",
+    role: "coach",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_coach",
+  },
+  // Academy Admin (Alex Thorne)
+  {
+    _id: "usr_admin",
+    name: "Alex Thorne",
+    email: "alex.admin@test.local",
+    password: "Admin-123456",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin",
+  },
+  // Athlete (Marcus Vance)
+  {
+    _id: "usr_athlete",
+    name: "Marcus Vance",
+    email: "marcus.vance@test.local",
+    password: "Athlete-123456",
+    role: "athlete",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_athlete",
+  },
+  // Guardian (Sarah Vance)
+  {
+    _id: "usr_guardian",
+    name: "Sarah Vance",
+    email: "sarah.guardian@test.local",
+    password: "Guardian-123456",
+    role: "guardian",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_guardian",
+  },
+  // Accounting (Finance Manager)
+  {
+    _id: "usr_accounting",
+    name: "Finance Manager",
+    email: "finance@test.local",
+    password: "Finance-123456",
+    role: "accounting",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_accounting",
+  },
+  // Additional academy admins
+  {
+    _id: "usr_admin_hajali",
+    name: "Admin Haj Ali",
+    email: "adminhajali@academieshub.com",
+    password: "hajali2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_hajali",
+  },
+  {
+    _id: "usr_admin_alhakkani",
+    name: "Admin AL-Hakkani",
+    email: "adminalhakkani@academieshub.com",
+    password: "alhakkani2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_alhakkani",
+  },
+  {
+    _id: "usr_admin_sportzona",
+    name: "Admin SportZona",
+    email: "adminsportzona@academieshub.com",
+    password: "sportzona2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_sportzona",
+  },
+  {
+    _id: "usr_admin_elite",
+    name: "Admin Elite Academy",
+    email: "admineliteacademy@academieshub.com",
+    password: "eliteacademy2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_elite",
+  },
+  {
+    _id: "usr_admin_cedars",
+    name: "Admin Cedars",
+    email: "admincedars@academieshub.com",
+    password: "cedars2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_cedars",
+  },
+  {
+    _id: "usr_admin_badems",
+    name: "Admin BadEMS",
+    email: "adminbadems@academieshub.com",
+    password: "badems2026!",
+    role: "academy_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_admin_badems",
+  },
+];
 
 // All other collections wiped clean for testing
 export const SEED_ATHLETES: MockAthlete[] = [];

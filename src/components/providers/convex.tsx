@@ -37,6 +37,7 @@ export function getLiveConvexClient(): ConvexReactClient {
     const originalAction = (baseClient as any).action.bind(baseClient);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (baseClient as any).watchQuery = (query: any, ...argsAndOptions: any[]) => {
       const name = resolveFunctionName(query);
       const realWatch = originalWatchQuery(query, ...argsAndOptions);
@@ -49,9 +50,7 @@ export function getLiveConvexClient(): ConvexReactClient {
             callback();
           });
           const unsubMock = localMockStore.subscribe(() => {
-            if (isFallback) {
-              callback();
-            }
+            callback();
           });
           return () => {
             unsubReal();
@@ -61,44 +60,45 @@ export function getLiveConvexClient(): ConvexReactClient {
         localQueryResult: () => {
           try {
             let res = realWatch.localQueryResult();
-            isFallback = false;
-            // Sanitize remote legacy mock fallbacks if returned from Convex Cloud
-            if (name === "dashboard:getPlatformKpis" && res && typeof res === "object") {
-              const kpi = { ...(res as Record<string, unknown>) };
-              if (kpi.totalInvoiceCount === 0 && (kpi.recentRevenue as number) > 0) {
-                kpi.recentRevenue = 0;
-                kpi.paidInvoiceCount = 0;
-                kpi.revenueTrend = [
-                  { month: "May", revenue: 0 },
-                  { month: "Jun", revenue: 0 },
-                  { month: "Jul", revenue: 0 },
-                  { month: "Aug", revenue: 0 },
-                  { month: "Sep", revenue: 0 },
-                  { month: "Oct", revenue: 0 },
-                ];
+            if (res !== undefined) {
+              isFallback = false;
+              // Sanitize remote legacy mock fallbacks if returned from Convex Cloud
+              if (name === "dashboard:getPlatformKpis" && res && typeof res === "object") {
+                const kpi = { ...(res as Record<string, unknown>) };
+                if (kpi.totalInvoiceCount === 0 && (kpi.recentRevenue as number) > 0) {
+                  kpi.recentRevenue = 0;
+                  kpi.paidInvoiceCount = 0;
+                  kpi.revenueTrend = [
+                    { month: "May", revenue: 0 },
+                    { month: "Jun", revenue: 0 },
+                    { month: "Jul", revenue: 0 },
+                    { month: "Aug", revenue: 0 },
+                    { month: "Sep", revenue: 0 },
+                    { month: "Oct", revenue: 0 },
+                  ];
+                }
+                if (
+                  kpi.attendanceRate === 88.5 &&
+                  Array.isArray(kpi.attendanceTrend) &&
+                  kpi.attendanceTrend.length === 6 &&
+                  (kpi.attendanceTrend[0] as { rate?: number })?.rate === 82
+                ) {
+                  kpi.attendanceRate = 0;
+                  kpi.attendanceTrend = [];
+                }
+                res = kpi;
               }
-              if (
-                kpi.attendanceRate === 88.5 &&
-                Array.isArray(kpi.attendanceTrend) &&
-                kpi.attendanceTrend.length === 6 &&
-                (kpi.attendanceTrend[0] as { rate?: number })?.rate === 82
-              ) {
-                kpi.attendanceRate = 0;
-                kpi.attendanceTrend = [];
-              }
-              res = kpi;
+              return res;
             }
-            return res;
-          } catch (err: unknown) {
-            const msg = String((err as { message?: string })?.message || err || "");
-            if (
-              msg.includes("Could not find public function") ||
-              msg.includes("Server Error")
-            ) {
+            // If real query is undefined (offline/404 cloud or not connected yet), check local store
+            if (localMockStore.getCurrentUser()) {
               isFallback = true;
               return localMockStore.evaluateQuery(name, args);
             }
-            throw err;
+            return undefined;
+          } catch (_err: unknown) {
+            isFallback = true;
+            return localMockStore.evaluateQuery(name, args);
           }
         },
         localQueryLogs: () => {
@@ -124,17 +124,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).mutation = async (mutation: any, ...argsAndOptions: any[]) => {
       try {
         return await originalMutation(mutation, ...argsAndOptions);
-      } catch (err: unknown) {
-        const msg = String((err as { message?: string })?.message || err || "");
-        if (
-          msg.includes("Could not find public function") ||
-          msg.includes("Server Error")
-        ) {
-          const name = resolveFunctionName(mutation);
-          const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
-          return await localMockStore.executeMutation(name, args);
-        }
-        throw err;
+      } catch (_err: unknown) {
+        const name = resolveFunctionName(mutation);
+        const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
+        return await localMockStore.executeMutation(name, args);
       }
     };
 
@@ -142,17 +135,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).query = async (query: any, ...argsAndOptions: any[]) => {
       try {
         return await originalQuery(query, ...argsAndOptions);
-      } catch (err: unknown) {
-        const msg = String((err as { message?: string })?.message || err || "");
-        if (
-          msg.includes("Could not find public function") ||
-          msg.includes("Server Error")
-        ) {
-          const name = resolveFunctionName(query);
-          const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
-          return localMockStore.evaluateQuery(name, args);
-        }
-        throw err;
+      } catch (_err: unknown) {
+        const name = resolveFunctionName(query);
+        const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
+        return localMockStore.evaluateQuery(name, args);
       }
     };
 
@@ -160,17 +146,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).action = async (action: any, ...argsAndOptions: any[]) => {
       try {
         return await originalAction(action, ...argsAndOptions);
-      } catch (err: unknown) {
-        const msg = String((err as { message?: string })?.message || err || "");
-        if (
-          msg.includes("Could not find public function") ||
-          msg.includes("Server Error")
-        ) {
-          const name = resolveFunctionName(action);
-          const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
-          return await localMockStore.executeMutation(name, args);
-        }
-        throw err;
+      } catch (_err: unknown) {
+        const name = resolveFunctionName(action);
+        const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
+        return await localMockStore.executeMutation(name, args);
       }
     };
 

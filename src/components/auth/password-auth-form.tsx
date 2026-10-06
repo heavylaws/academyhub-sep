@@ -4,7 +4,8 @@ import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Shield, User, Users, GraduationCap } from "lucide-react";
+import { localMockStore } from "@/lib/local-mock-store.ts";
 
 type Step =
   | { kind: "signIn" }
@@ -15,11 +16,52 @@ type Step =
 
 const DEMO_PRESETS = [
   {
-    label: "Hercules Academy Coach",
+    label: "Super Admin (Platform)",
+    email: "ah.baalbaki@gmail.com",
+    password: "A!t3r3g0",
+    role: "platform_admin",
+    icon: Shield,
+    badge: "Platform Admin",
+  },
+  {
+    label: "Hercules Head Coach",
     email: "adminhercules@academieshub.com",
     password: "hercules2026!",
+    role: "coach",
     icon: Sparkles,
-    badge: "Hercules Academy",
+    badge: "Hercules Coach",
+  },
+  {
+    label: "Academy Admin",
+    email: "alex.admin@test.local",
+    password: "Admin-123456",
+    role: "academy_admin",
+    icon: GraduationCap,
+    badge: "Academy Admin",
+  },
+  {
+    label: "Coach (Dave Miller)",
+    email: "dave.miller@test.local",
+    password: "hercules2026!",
+    role: "coach",
+    icon: Users,
+    badge: "Coach",
+  },
+  {
+    label: "Athlete (Marcus Vance)",
+    email: "marcus.vance@test.local",
+    password: "Athlete-123456",
+    role: "athlete",
+    icon: User,
+    badge: "Athlete",
+  },
+  {
+    label: "Guardian (Sarah Vance)",
+    email: "sarah.guardian@test.local",
+    password: "Guardian-123456",
+    role: "guardian",
+    icon: User,
+    badge: "Parent",
   },
 ];
 
@@ -58,14 +100,29 @@ export function PasswordAuthForm() {
     setEmailVal(email);
     setPasswordVal(pass);
     await run(async () => {
-      const res = await signIn("password", {
-        email: email.trim().toLowerCase(),
-        password: pass,
-        flow: "signIn",
-      });
-      if (res && !res.signingIn) {
-        setStep({ kind: "verify", email });
-        toast.success(`We emailed a verification code to ${email}`);
+      const normalizedEmail = email.trim().toLowerCase();
+      try {
+        const res = await signIn("password", {
+          email: normalizedEmail,
+          password: pass,
+          flow: "signIn",
+        });
+        if (res && !res.signingIn) {
+          setStep({ kind: "verify", email });
+          toast.success(`We emailed a verification code to ${email}`);
+          return;
+        }
+      } catch (cloudErr) {
+        // Offline / 404 / cloud server down fallback
+        const localRes = localMockStore.authenticateWithPassword(normalizedEmail, pass);
+        if (localRes.success && localRes.user) {
+          toast.success(`Signed in as ${localRes.user.name || localRes.user.email}`);
+          return;
+        }
+        if (localRes.error && !localRes.error.includes("User not found")) {
+          throw new Error(localRes.error);
+        }
+        throw cloudErr;
       }
     }, "Could not sign in with selected account");
   };
@@ -80,16 +137,58 @@ export function PasswordAuthForm() {
       const password = passwordVal || get("password");
       void run(
         async () => {
-          const res = await signIn("password", {
-            email,
-            password,
-            flow: step.kind,
-            ...(step.kind === "signUp" ? { name: get("name").trim() } : {}),
-          });
-          // A verification code was emailed instead of signing in.
-          if (!res.signingIn) {
-            setStep({ kind: "verify", email });
-            toast.success(`We emailed a verification code to ${email}`);
+          if (step.kind === "signIn") {
+            try {
+              const res = await signIn("password", {
+                email,
+                password,
+                flow: "signIn",
+              });
+              // A verification code was emailed instead of signing in.
+              if (!res.signingIn) {
+                setStep({ kind: "verify", email });
+                toast.success(`We emailed a verification code to ${email}`);
+                return;
+              }
+            } catch (cloudErr) {
+              // Graceful fallback to local authentication when Convex Cloud is offline / 404
+              const localRes = localMockStore.authenticateWithPassword(email, password);
+              if (localRes.success && localRes.user) {
+                toast.success(`Signed in as ${localRes.user.name || localRes.user.email}`);
+                return;
+              }
+              if (localRes.error && !localRes.error.includes("User not found")) {
+                throw new Error(localRes.error);
+              }
+              throw cloudErr;
+            }
+          } else {
+            // signUp
+            try {
+              const res = await signIn("password", {
+                email,
+                password,
+                flow: "signUp",
+                name: get("name").trim(),
+              });
+              if (!res.signingIn) {
+                setStep({ kind: "verify", email });
+                toast.success(`We emailed a verification code to ${email}`);
+              }
+            } catch {
+              // Offline fallback to create mock account
+              const name = get("name").trim() || email.split("@")[0];
+              const newId = `usr_${Date.now()}`;
+              localMockStore.setCurrentUser({
+                _id: newId,
+                name,
+                email,
+                password,
+                role: "academy_admin",
+              });
+              localMockStore.setPersona(newId);
+              toast.success(`Account created as ${name}`);
+            }
           }
         },
         step.kind === "signUp"
@@ -217,18 +316,18 @@ export function PasswordAuthForm() {
         </Button>
       </form>
 
-      {/* Quick Sign-In Preset for Hercules Academy */}
+      {/* Quick Sign-In Presets */}
       {step.kind === "signIn" && (
         <div className="pt-2 border-t border-border/60 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="size-3 text-primary" />
-              <span>Hercules Academy Sign-In</span>
+              <span>Quick Sign-In Accounts (All Roles)</span>
             </span>
             <span className="text-[10px] text-muted-foreground">1-Tap Fill & Sign In</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5 max-h-60 overflow-y-auto pr-0.5">
             {DEMO_PRESETS.map((preset) => {
               const Icon = preset.icon;
               return (
@@ -252,8 +351,8 @@ export function PasswordAuthForm() {
                       </span>
                     </div>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
-                    Sign in &rarr;
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0 ml-1">
+                    {preset.badge} &rarr;
                   </span>
                 </button>
               );

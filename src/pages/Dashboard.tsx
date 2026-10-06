@@ -521,10 +521,12 @@ function AdminCoachDashboard({ data }: { data: AdminCoachData }) {
 // ─── Attendance Leaderboard Card ──────────────────────────────────────────────
 
 function AttendanceLeaderboardCard() {
+  const { user } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
+  const isAuthed = isAuthenticated || Boolean(user);
   const leaderboard = useQuery(
     api.trainingSessions.getAcademyAttendanceLeaderboard,
-    isAuthenticated ? {} : "skip",
+    isAuthed ? {} : "skip",
   );
 
   if (leaderboard === undefined) {
@@ -1362,8 +1364,10 @@ function NoWorkspaceState({ userEmail }: { userEmail?: string }) {
 }
 
 function UrgentAnnouncementBanner() {
+  const { user } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
-  const announcements = useQuery(api.announcements.listAnnouncements, isAuthenticated ? {} : "skip");
+  const isAuthed = isAuthenticated || Boolean(user);
+  const announcements = useQuery(api.announcements.listAnnouncements, isAuthed ? {} : "skip");
   const activeAnnouncements = useMemo(() => {
     if (!announcements) return [];
     return announcements.filter((a) => a.priority === "urgent" || a.isPinned);
@@ -1413,9 +1417,10 @@ function UrgentAnnouncementBanner() {
 export default function Dashboard() {
   const { user } = useCurrentUser();
   const { isAuthenticated } = useConvexAuth();
-  const data = useQuery(api.dashboard.getDashboardData, isAuthenticated ? {} : "skip");
-  const kpiData = useQuery(api.dashboard.getPlatformKpis, isAuthenticated ? {} : "skip");
-  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
+  const isAuthed = isAuthenticated || Boolean(user);
+  const data = useQuery(api.dashboard.getDashboardData, isAuthed ? {} : "skip");
+  const kpiData = useQuery(api.dashboard.getPlatformKpis, isAuthed ? {} : "skip");
+  const athletes = useQuery(api.athletes.listAthletes, isAuthed ? {} : "skip");
   const now = useMemo(() => new Date().toISOString(), []);
 
   const reconciledKpiData = useMemo(() => {

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
@@ -24,11 +25,21 @@ export interface CurrentUser {
 
 /** Current signed-in user's profile and academy role from Convex Auth or Local Mock. */
 export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoading: boolean } {
-  const { isAuthenticated: convexIsAuth } = useConvexAuth();
+  const { isAuthenticated: convexIsAuth, isLoading: convexLoading } = useConvexAuth();
   const convexUser = useQuery(
     api.users.getCurrentUser,
     convexIsAuth ? {} : "skip",
   );
+
+  const [localUser, setLocalUser] = useState(() => localMockStore.getCurrentUser());
+
+  useEffect(() => {
+    setLocalUser(localMockStore.getCurrentUser());
+    const unsub = localMockStore.subscribeAuth(() => {
+      setLocalUser(localMockStore.getCurrentUser());
+    });
+    return unsub;
+  }, []);
 
   // 1. Authoritative Convex user if authenticated
   if (convexIsAuth) {
@@ -50,16 +61,18 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
   }
 
   // 2. Fallback to localMockStore user
-  const localUser = localMockStore.getCurrentUser();
   if (localUser) {
     return {
-      user: localUser as unknown as CurrentUser,
+      user: {
+        ...localUser,
+        emailVerified: true,
+      } as unknown as CurrentUser,
       isLoading: false,
     };
   }
 
   return {
     user: null,
-    isLoading: false,
+    isLoading: convexLoading && !localUser,
   };
 }
