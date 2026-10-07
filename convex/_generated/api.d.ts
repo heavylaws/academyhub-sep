@@ -47,6 +47,7 @@ import type * as schema_trainingSessions from "../schema/trainingSessions.js";
 import type * as schema_videoAnalyses from "../schema/videoAnalyses.js";
 import type * as seed from "../seed.js";
 import type * as seedHercules from "../seedHercules.js";
+import type * as seedRealAccounts from "../seedRealAccounts.js";
 import type * as tacticalAi from "../tacticalAi.js";
 import type * as tacticalPlans from "../tacticalPlans.js";
 import type * as teams from "../teams.js";
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "schema/videoAnalyses": typeof schema_videoAnalyses;
   seed: typeof seed;
   seedHercules: typeof seedHercules;
+  seedRealAccounts: typeof seedRealAccounts;
   tacticalAi: typeof tacticalAi;
   tacticalPlans: typeof tacticalPlans;
   teams: typeof teams;

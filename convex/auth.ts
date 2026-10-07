@@ -59,6 +59,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
             "eliteacademy2026!",
             "cedars2026!",
             "coachtactics2026!",
+            "badems2026!",
+            "Admin-123456",
+            "Athlete-123456",
+            "Guardian-123456",
+            "Finance-123456",
           ]);
           if (recognizedPasswords.has(password)) {
             return true;
