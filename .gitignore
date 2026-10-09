@@ -41,3 +41,6 @@ dist.zip
 
 # Local test credentials (never commit)
 credentials.md
+
+# Visual test screenshots
+tactical_board_*.png

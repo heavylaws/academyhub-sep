@@ -16,5 +16,11 @@ crons.daily(
   internal.feeAutomation.updateOverdueAndReminders,
   {},
 );
+crons.daily(
+  "cleanup expired login attempts",
+  { hourUTC: 6, minuteUTC: 0 },
+  internal.authRateLimit.cleanupExpiredAttempts,
+  {},
+);
 
 export default crons;

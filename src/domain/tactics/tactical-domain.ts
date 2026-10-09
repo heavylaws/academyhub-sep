@@ -23,12 +23,15 @@ export interface PlayerNode {
   targetPosition?: PitchCoordinate; // Where the player is moving in this phase
   movementType?: "straight_run" | "curve_run" | "press" | "hold" | "overlap";
   hasBall?: boolean;
+  tacticalRole?: string; // from CoachTactics: e.g. "Target Man", "False 9", "Inverted Winger"
+  tacticalDuty?: string; // e.g. "Holds up ball, pins CBs, brings midfield into play"
 }
 
 export interface BallNode {
   x: number; // 0..100
   y: number; // 0..100
   attachedPlayerId?: string; // If possessed by a player
+  targetPosition?: PitchCoordinate; // target position for passing/shooting corridor
   trajectory?: PitchCoordinate[]; // Pass or shot waypoint trajectory
   speed?: "ground" | "lofted" | "driven";
 }
@@ -60,6 +63,8 @@ export type AnnotationType =
   | "cover_shadow"
   | "defensive_block"
   | "freehand"
+  | "laser"
+  | "note"
   | "text";
 
 export interface TacticalAnnotation {
@@ -269,6 +274,8 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
         targetPosition: targetPos,
         movementType: pl.movementType as PlayerNode["movementType"],
         hasBall: Boolean(pl.hasBall),
+        tacticalRole: typeof pl.tacticalRole === "string" ? pl.tacticalRole : undefined,
+        tacticalDuty: typeof pl.tacticalDuty === "string" ? pl.tacticalDuty : undefined,
       });
     });
 
@@ -279,12 +286,14 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
       const bPos = normalizeCoordinate({ x: b.x, y: b.y });
       const rawTrajectory = Array.isArray(b.trajectory) ? b.trajectory : [];
       const normalizedTrajectory = rawTrajectory.map((pt) => normalizeCoordinate(pt));
+      const bTargetPos = b.targetPosition ? normalizeCoordinate(b.targetPosition) : undefined;
 
       normalizedBall = {
         x: bPos.x,
         y: bPos.y,
         attachedPlayerId:
           typeof b.attachedPlayerId === "string" ? b.attachedPlayerId : undefined,
+        targetPosition: bTargetPos,
         trajectory: normalizedTrajectory.length > 0 ? normalizedTrajectory : undefined,
         speed: (["ground", "lofted", "driven"].includes(b.speed as string)
           ? b.speed
@@ -515,7 +524,6 @@ export function createDefaultTacticalPlan(drillTitle = "Tactical Possession & Tr
             points: [{ x: 22, y: 32 }, { x: 32, y: 50 }],
             color: "#60A5FA",
             width: 2.5,
-            label: "1st Line Pass",
           },
           {
             id: "ann_2",
@@ -523,7 +531,6 @@ export function createDefaultTacticalPlan(drillTitle = "Tactical Possession & Tr
             points: [{ x: 34, y: 15 }, { x: 44, y: 12 }],
             color: "#34D399",
             width: 2,
-            label: "Overlapping run",
           },
         ],
       },

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { requireAcademyMember, requireUser } from "./lib/auth.ts";
+import { sanitizeOptionalString, sanitizeOptionalText, sanitizeText } from "./lib/sanitize.ts";
 import { conversationContextValidator } from "./schema/messages.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
@@ -44,14 +45,22 @@ export const listConversations = query({
             ? userMap.get(otherParticipantIds[0])
             : user;
 
-        // Count unread messages in this conversation for current user
-        const unreadMessages = await ctx.db
+        // Efficiently count unread messages: scan newest first, stop as soon as we reach a read message
+        const recentMessages = await ctx.db
           .query("messages")
-          .withIndex("by_conversation", (q) => q.eq("conversationId", c._id))
-          .collect();
-        const unreadCount = unreadMessages.filter(
-          (m) => !m.readBy.includes(user._id),
-        ).length;
+          .withIndex("by_conversation_and_created", (q) =>
+            q.eq("conversationId", c._id),
+          )
+          .order("desc")
+          .take(50);
+
+        let unreadCount = 0;
+        for (const m of recentMessages) {
+          if (m.readBy.includes(user._id)) {
+            break;
+          }
+          unreadCount++;
+        }
 
         return {
           ...c,
@@ -171,7 +180,7 @@ export const sendMessage = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    const text = args.content.trim();
+    const text = sanitizeText(args.content, 4000, "Message");
     if (!text) {
       throw new ConvexError({
         code: "BAD_REQUEST",
@@ -249,6 +258,10 @@ export const getOrCreateConversation = mutation({
       });
     }
 
+    const cleanTitle = sanitizeOptionalString(args.title, 120, "Title");
+    const cleanContextTitle = sanitizeOptionalString(args.contextTitle, 120, "Context title");
+    const cleanInitialMessage = sanitizeOptionalText(args.initialMessage, 4000, "Initial message");
+
     // Look for existing conversation between these 2 users
     const allAcademyConversations = await ctx.db
       .query("conversations")
@@ -268,23 +281,23 @@ export const getOrCreateConversation = mutation({
       if (args.contextType && args.contextType !== "general") {
         patchData.contextType = args.contextType;
       }
-      if (args.contextTitle) {
-        patchData.contextTitle = args.contextTitle;
+      if (cleanContextTitle) {
+        patchData.contextTitle = cleanContextTitle;
       }
       if (args.contextId) {
         patchData.contextId = args.contextId;
       }
-      if (args.initialMessage && args.initialMessage.trim()) {
+      if (cleanInitialMessage) {
         const nowIso = new Date().toISOString();
         await ctx.db.insert("messages", {
           conversationId: existing._id,
           academyId: user.academyId,
           senderId: user._id,
-          content: args.initialMessage.trim(),
+          content: cleanInitialMessage,
           readBy: [user._id],
           createdAt: nowIso,
         });
-        patchData.lastMessageText = args.initialMessage.trim();
+        patchData.lastMessageText = cleanInitialMessage;
         patchData.lastMessageAt = nowIso;
         patchData.lastSenderId = user._id;
       }
@@ -300,22 +313,22 @@ export const getOrCreateConversation = mutation({
       academyId: user.academyId,
       participantIds: [user._id, args.targetUserId],
       athleteId: args.athleteId,
-      title: args.title,
+      title: cleanTitle,
       contextType: args.contextType ?? "general",
       contextId: args.contextId,
-      contextTitle: args.contextTitle,
-      lastMessageText: args.initialMessage?.trim(),
-      lastMessageAt: args.initialMessage?.trim() ? nowIso : undefined,
-      lastSenderId: args.initialMessage?.trim() ? user._id : undefined,
+      contextTitle: cleanContextTitle,
+      lastMessageText: cleanInitialMessage,
+      lastMessageAt: cleanInitialMessage ? nowIso : undefined,
+      lastSenderId: cleanInitialMessage ? user._id : undefined,
       createdAt: nowIso,
     });
 
-    if (args.initialMessage && args.initialMessage.trim()) {
+    if (cleanInitialMessage) {
       await ctx.db.insert("messages", {
         conversationId,
         academyId: user.academyId,
         senderId: user._id,
-        content: args.initialMessage.trim(),
+        content: cleanInitialMessage,
         readBy: [user._id],
         createdAt: nowIso,
       });
@@ -367,12 +380,20 @@ export const getUnreadMessagesCount = query({
 
       let totalUnread = 0;
       for (const c of userConvs) {
-        const msgs = await ctx.db
+        const recentMessages = await ctx.db
           .query("messages")
-          .withIndex("by_conversation", (q) => q.eq("conversationId", c._id))
-          .collect();
-        const unread = msgs.filter((m) => !m.readBy.includes(user._id)).length;
-        totalUnread += unread;
+          .withIndex("by_conversation_and_created", (q) =>
+            q.eq("conversationId", c._id),
+          )
+          .order("desc")
+          .take(50);
+
+        for (const m of recentMessages) {
+          if (m.readBy.includes(user._id)) {
+            break;
+          }
+          totalUnread++;
+        }
       }
 
       return totalUnread;

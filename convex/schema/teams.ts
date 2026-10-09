@@ -9,6 +9,8 @@ export const teams = defineTable({
   activeTacticalPlanId: v.optional(v.id("tacticalPlans")),
   createdBy: v.id("users"),
   createdAt: v.string(),
+  deletedAt: v.optional(v.string()),
+  deletedBy: v.optional(v.id("users")),
 }).index("by_academy", ["academyId"]);
 
 export const teamMembers = defineTable({

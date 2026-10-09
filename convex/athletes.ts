@@ -9,6 +9,11 @@ import {
   requireUser,
 } from "./lib/auth.ts";
 import { linkGuardianByEmail } from "./lib/onboarding.ts";
+import {
+  sanitizeOptionalString,
+  sanitizeOptionalText,
+  sanitizeString,
+} from "./lib/sanitize.ts";
 import { athleteGenderValidator } from "./schema.ts";
 
 const athleteFields = {
@@ -40,6 +45,29 @@ function normalizeEmails<T extends { email?: string; guardianEmail?: string }>(
   };
 }
 
+function sanitizeAthletePayload<
+  T extends {
+    firstName: string;
+    lastName: string;
+    sport?: string;
+    phone?: string;
+    guardianName?: string;
+    guardianPhone?: string;
+    notes?: string;
+  },
+>(data: T): T {
+  return {
+    ...data,
+    firstName: sanitizeString(data.firstName, 60, "First name"),
+    lastName: sanitizeString(data.lastName, 60, "Last name"),
+    sport: sanitizeOptionalString(data.sport, 60, "Sport"),
+    phone: sanitizeOptionalString(data.phone, 30, "Phone"),
+    guardianName: sanitizeOptionalString(data.guardianName, 100, "Guardian name"),
+    guardianPhone: sanitizeOptionalString(data.guardianPhone, 30, "Guardian phone"),
+    notes: sanitizeOptionalText(data.notes, 2000, "Notes"),
+  };
+}
+
 /** Academy admin/coach/platform_admin: create a new athlete record in their academy. */
 export const createAthlete = mutation({
   args: athleteFields,
@@ -52,14 +80,15 @@ export const createAthlete = mutation({
         message: "You are not part of an academy",
       });
     }
-    if (!args.firstName.trim() || !args.lastName.trim()) {
+    const cleanArgs = sanitizeAthletePayload(args);
+    if (!cleanArgs.firstName || !cleanArgs.lastName) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "First and last name are required",
       });
     }
     const athleteId = await ctx.db.insert("athletes", {
-      ...normalizeEmails(args),
+      ...normalizeEmails(cleanArgs),
       academyId: targetAcademyId,
       status: "active",
       createdBy: user._id,
@@ -84,13 +113,14 @@ export const updateAthlete = mutation({
       });
     }
     await requireAcademyMember(ctx, athlete.academyId);
-    if (!updates.firstName.trim() || !updates.lastName.trim()) {
+    const cleanUpdates = sanitizeAthletePayload(updates);
+    if (!cleanUpdates.firstName || !cleanUpdates.lastName) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "First and last name are required",
       });
     }
-    const normalized = normalizeEmails(updates);
+    const normalized = normalizeEmails(cleanUpdates);
     const guardianChanged = normalized.guardianEmail !== athlete.guardianEmail;
     await ctx.db.patch("athletes", athleteId, {
       ...normalized,
@@ -124,6 +154,27 @@ export const setAthleteStatus = mutation({
   },
 });
 
+/** Academy admin: soft delete an athlete with audit trail. */
+export const deleteAthlete = mutation({
+  args: { athleteId: v.id("athletes") },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["academy_admin"]);
+    const athlete = await ctx.db.get("athletes", args.athleteId);
+    if (!athlete || athlete.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Athlete not found",
+      });
+    }
+    await requireAcademyMember(ctx, athlete.academyId);
+    await ctx.db.patch("athletes", args.athleteId, {
+      deletedAt: new Date().toISOString(),
+      deletedBy: user._id,
+    });
+    return null;
+  },
+});
+
 /** Lists athletes in the current user's academy. Staff see everyone; athletes see only themselves; guardians see their children. */
 export const listAthletes = query({
   args: { search: v.optional(v.string()) },
@@ -132,11 +183,13 @@ export const listAthletes = query({
     if (!user.academyId) {
       return [];
     }
-    const all = await ctx.db
-      .query("athletes")
-      .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
-      .order("desc")
-      .collect();
+    const all = (
+      await ctx.db
+        .query("athletes")
+        .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
+        .order("desc")
+        .collect()
+    ).filter((a) => !a.deletedAt);
 
     const visible =
       user.role === "athlete"
@@ -187,13 +240,22 @@ export const bulkImportAthletes = mutation({
 
     for (const a of args.athletes) {
       try {
-        if (!a.firstName.trim() || !a.lastName.trim()) {
+        const cleanFirst = sanitizeString(a.firstName, 60, "First name");
+        const cleanLast = sanitizeString(a.lastName, 60, "Last name");
+        if (!cleanFirst || !cleanLast) {
           skipped++;
           errors.push(`Skipped row: first_name and last_name are required`);
           continue;
         }
+        const cleanA = {
+          ...a,
+          firstName: cleanFirst,
+          lastName: cleanLast,
+          sport: sanitizeOptionalString(a.sport, 60, "Sport"),
+          phone: sanitizeOptionalString(a.phone, 30, "Phone"),
+        };
         await ctx.db.insert("athletes", {
-          ...normalizeEmails(a),
+          ...normalizeEmails(cleanA),
           academyId: user.academyId,
           status: "active",
           createdBy: user._id,

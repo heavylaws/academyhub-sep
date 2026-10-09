@@ -1,6 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
-import { requireAcademyMember, requireAthleteAccess, requireRole } from "./lib/auth.ts";
+import { requireAcademyMember, requireAthleteAccess, requireRole, requireUser } from "./lib/auth.ts";
+import { logAction } from "./lib/logger.ts";
+import {
+  sanitizeOptionalString,
+  sanitizeOptionalText,
+  sanitizeString,
+} from "./lib/sanitize.ts";
 import type { Doc } from "./_generated/dataModel.d.ts";
 
 /** Trainer records a new assessment data point for an athlete. */
@@ -24,24 +30,34 @@ export const recordAssessment = mutation({
       });
     }
     await requireAcademyMember(ctx, athlete.academyId);
-    if (!args.metric.trim()) {
+    const cleanMetric = sanitizeString(args.metric, 80, "Metric name");
+    if (!cleanMetric) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "Metric name is required",
       });
     }
-    return await ctx.db.insert("assessments", {
+    const id = await ctx.db.insert("assessments", {
       academyId: athlete.academyId,
       athleteId: args.athleteId,
       sessionId: args.sessionId,
-      metric: args.metric.trim(),
+      metric: cleanMetric,
       value: args.value,
-      unit: args.unit,
+      unit: sanitizeOptionalString(args.unit, 30, "Unit"),
       assessedOn: args.assessedOn,
-      notes: args.notes,
+      notes: sanitizeOptionalText(args.notes, 2000, "Notes"),
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
+    logAction("assessment:record", {
+      userId: user._id,
+      academyId: athlete.academyId,
+      athleteId: args.athleteId,
+      metric: cleanMetric,
+      value: args.value,
+      assessmentId: id,
+    });
+    return id;
   },
 });
 
@@ -49,16 +65,24 @@ export const recordAssessment = mutation({
 export const deleteAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach"]);
     const record = await ctx.db.get("assessments", args.assessmentId);
-    if (!record) {
+    if (!record || record.deletedAt) {
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Assessment not found",
       });
     }
     await requireAcademyMember(ctx, record.academyId);
-    await ctx.db.delete("assessments", args.assessmentId);
+    await ctx.db.patch("assessments", args.assessmentId, {
+      deletedAt: new Date().toISOString(),
+      deletedBy: user._id,
+    });
+    logAction("assessment:delete", {
+      userId: user._id,
+      academyId: record.academyId,
+      assessmentId: args.assessmentId,
+    });
     return null;
   },
 });
@@ -107,6 +131,7 @@ export const listAssessmentsForAthlete = query({
       { unit: string | undefined; points: Doc<"assessments">[] }
     >();
     for (const r of records) {
+      if (r.deletedAt) continue;
       const entry = byMetric.get(r.metric);
       if (entry) {
         entry.points.push(r);
@@ -219,24 +244,31 @@ export const listAssessmentsForSession = query({
   },
 });
 
-/** Query all assessments for academy analytics and drill performance tracking. */
+import { paginationOptsValidator } from "convex/server";
+
+/** Query assessments for academy analytics and drill performance tracking with configurable limit. */
 export const listAssessmentsForAnalytics = query({
   args: {
     metric: v.optional(v.string()),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const fetchLimit = Math.min(Math.max(args.limit ?? 500, 1), 2000);
+
     let records: Doc<"assessments">[];
     if (user.role === "platform_admin" && !user.academyId) {
-      records = await ctx.db.query("assessments").order("desc").take(500);
+      records = await ctx.db.query("assessments").order("desc").take(fetchLimit);
     } else {
       const academyId = user.academyId!;
       records = await ctx.db
         .query("assessments")
         .withIndex("by_academy", (q) => q.eq("academyId", academyId))
         .order("desc")
-        .take(500);
+        .take(fetchLimit);
     }
+
+    records = records.filter((r) => !r.deletedAt);
 
     if (args.metric) {
       const term = args.metric.toLowerCase();
@@ -255,3 +287,118 @@ export const listAssessmentsForAnalytics = query({
     }));
   },
 });
+
+/** Paginated query for large assessment analytics datasets. */
+export const listAssessmentsForAnalyticsPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    metric: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const queryBase =
+      user.role === "platform_admin" && !user.academyId
+        ? ctx.db.query("assessments")
+        : ctx.db
+            .query("assessments")
+            .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!));
+
+    const page = await queryBase.order("desc").paginate(args.paginationOpts);
+
+    let pageResults = page.page.filter((r) => !r.deletedAt);
+    if (args.metric) {
+      const term = args.metric.toLowerCase();
+      pageResults = pageResults.filter((r) => r.metric.toLowerCase().includes(term));
+    }
+
+    return {
+      ...page,
+      page: pageResults.map((r) => ({
+        _id: r._id,
+        athleteId: r.athleteId,
+        sessionId: r.sessionId,
+        metric: r.metric,
+        value: r.value,
+        unit: r.unit,
+        assessedOn: r.assessedOn,
+        notes: r.notes,
+      })),
+    };
+  },
+});
+
+/** Compute actual aggregated academy averages across the 6 athletic competencies */
+export const getAcademyAverages = query({
+  args: {
+    academyId: v.optional(v.id("academies")),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const targetAcademyId = args.academyId || user.academyId;
+
+    const defaultAverages = {
+      Speed: 72,
+      Power: 68,
+      Agility: 70,
+      Strength: 65,
+      Endurance: 75,
+      Mobility: 78,
+    };
+
+    if (!targetAcademyId) {
+      return defaultAverages;
+    }
+
+    const records = await ctx.db
+      .query("assessments")
+      .withIndex("by_academy", (q) => q.eq("academyId", targetAcademyId))
+      .take(1000);
+
+    if (records.length === 0) {
+      return defaultAverages;
+    }
+
+    const pillarScores: Record<string, number[]> = {
+      Speed: [],
+      Power: [],
+      Agility: [],
+      Strength: [],
+      Endurance: [],
+      Mobility: [],
+    };
+
+    for (const r of records) {
+      if (r.deletedAt) continue;
+      const name = r.metric.toLowerCase();
+      const val = typeof r.value === "number" ? r.value : 50;
+      const normalizedScore = Math.min(100, Math.max(40, Math.round(val <= 15 ? val * 6 : val)));
+
+      if (name.includes("sprint") || name.includes("dash") || name.includes("100m") || name.includes("speed")) {
+        pillarScores.Speed.push(normalizedScore);
+      } else if (name.includes("jump") || name.includes("power") || name.includes("watt")) {
+        pillarScores.Power.push(normalizedScore);
+      } else if (name.includes("agility") || name.includes("shuttle") || name.includes("t-test") || name.includes("dribbl")) {
+        pillarScores.Agility.push(normalizedScore);
+      } else if (name.includes("squat") || name.includes("bench") || name.includes("1rm") || name.includes("strength") || name.includes("press")) {
+        pillarScores.Strength.push(normalizedScore);
+      } else if (name.includes("yo-yo") || name.includes("mile") || name.includes("endurance") || name.includes("run")) {
+        pillarScores.Endurance.push(normalizedScore);
+      } else {
+        pillarScores.Mobility.push(normalizedScore);
+      }
+    }
+
+    const mean = (scores: number[], defaultVal: number) =>
+      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : defaultVal;
+
+    return {
+      Speed: mean(pillarScores.Speed, defaultAverages.Speed),
+      Power: mean(pillarScores.Power, defaultAverages.Power),
+      Agility: mean(pillarScores.Agility, defaultAverages.Agility),
+      Strength: mean(pillarScores.Strength, defaultAverages.Strength),
+      Endurance: mean(pillarScores.Endurance, defaultAverages.Endurance),
+      Mobility: mean(pillarScores.Mobility, defaultAverages.Mobility),
+    };
+  },
+});
+

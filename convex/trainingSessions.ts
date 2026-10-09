@@ -7,6 +7,11 @@ import {
   requireRole,
   requireUser,
 } from "./lib/auth.ts";
+import {
+  sanitizeOptionalString,
+  sanitizeOptionalText,
+  sanitizeString,
+} from "./lib/sanitize.ts";
 
 /**
  * The kiosk runs on a staff-signed-in device (athletes check in there with
@@ -36,7 +41,8 @@ export const createSession = mutation({
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
     await requireAcademyMember(ctx, team.academyId);
-    if (!args.title.trim()) {
+    const cleanTitle = sanitizeString(args.title, 120, "Session title");
+    if (!cleanTitle) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "Session title is required",
@@ -51,11 +57,11 @@ export const createSession = mutation({
     return await ctx.db.insert("trainingSessions", {
       academyId: team.academyId,
       teamId: args.teamId,
-      title: args.title.trim(),
+      title: cleanTitle,
       startsAt: args.startsAt,
       durationMinutes: args.durationMinutes,
-      location: args.location,
-      notes: args.notes,
+      location: sanitizeOptionalString(args.location, 120, "Location"),
+      notes: sanitizeOptionalText(args.notes, 3000, "Notes"),
       tacticalPlanId: args.tacticalPlanId,
       drillIds: args.drillIds,
       createdBy: user._id,
@@ -87,13 +93,19 @@ export const updateSession = mutation({
       });
     }
     await requireAcademyMember(ctx, session.academyId);
-    if (!updates.title.trim()) {
+    const cleanTitle = sanitizeString(updates.title, 120, "Session title");
+    if (!cleanTitle) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "Session title is required",
       });
     }
-    await ctx.db.patch("trainingSessions", sessionId, updates);
+    await ctx.db.patch("trainingSessions", sessionId, {
+      ...updates,
+      title: cleanTitle,
+      location: sanitizeOptionalString(updates.location, 120, "Location"),
+      notes: sanitizeOptionalText(updates.notes, 3000, "Notes"),
+    });
     return null;
   },
 });
@@ -175,27 +187,25 @@ export const removeDrillFromSession = mutation({
   },
 });
 
-/** Academy admin/coach/platform_admin: delete a training session and its attendance records. */
+/** Academy admin/coach/platform_admin: delete a training session with soft-delete audit trail. */
 export const deleteSession = mutation({
   args: { sessionId: v.id("trainingSessions") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
-    if (!session) {
+    if (!session || session.deletedAt !== undefined) {
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Session not found",
       });
     }
     await requireAcademyMember(ctx, session.academyId);
-    const records = await ctx.db
-      .query("attendanceRecords")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
-    for (const record of records) {
-      await ctx.db.delete("attendanceRecords", record._id);
-    }
-    await ctx.db.delete("trainingSessions", args.sessionId);
+
+    // Soft delete session with audit trail
+    await ctx.db.patch("trainingSessions", args.sessionId, {
+      deletedAt: new Date().toISOString(),
+      deletedBy: user._id,
+    });
     return null;
   },
 });
@@ -209,11 +219,12 @@ export const listSessionsForTeam = query({
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
     await requireAcademyMember(ctx, team.academyId);
-    return await ctx.db
+    const sessions = await ctx.db
       .query("trainingSessions")
       .withIndex("by_team_and_startsAt", (q) => q.eq("teamId", args.teamId))
       .order("desc")
       .collect();
+    return sessions.filter((s) => s.deletedAt === undefined);
   },
 });
 
@@ -227,11 +238,13 @@ export const listSessionsForAcademy = query({
     if (!user.academyId) {
       return [];
     }
-    const sessions = await ctx.db
+    const rawSessions = await ctx.db
       .query("trainingSessions")
       .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
       .order("desc")
       .collect();
+
+    const sessions = rawSessions.filter((s) => s.deletedAt === undefined);
 
     const teamCache = new Map<string, string>();
     const withTeamName = await Promise.all(
@@ -281,7 +294,7 @@ export const getSessionWithAttendance = query({
     resolvedDrills: Doc<"drills">[];
   }> => {
     const session = await ctx.db.get("trainingSessions", args.sessionId);
-    if (!session) {
+    if (!session || session.deletedAt !== undefined) {
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Session not found",

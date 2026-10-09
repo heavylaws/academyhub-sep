@@ -6,6 +6,7 @@ import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/auth/protected-route.tsx";
+import { ErrorBoundary } from "./components/error-boundary.tsx";
 
 // Code-split pages for high-performance lazy loading
 const Academies = lazy(() => import("./pages/admin/academies/page.tsx"));
@@ -49,8 +50,9 @@ export default function App() {
   return (
     <DefaultProviders>
       <BrowserRouter>
-        <Suspense fallback={<PageLoadingFallback />}>
-          <Routes>
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route
@@ -242,7 +244,8 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
-      </BrowserRouter>
-    </DefaultProviders>
+      </ErrorBoundary>
+    </BrowserRouter>
+  </DefaultProviders>
   );
 }

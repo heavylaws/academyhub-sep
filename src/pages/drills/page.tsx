@@ -26,7 +26,15 @@ import {
   Tag,
   History,
   CalendarClock,
+  MoreHorizontal,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu.tsx";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -570,28 +578,23 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                 </div>
               </CardContent>
 
-              <CardFooter className="pt-2 border-t bg-muted/10 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-2">
+              <CardFooter className="pt-2.5 pb-2.5 px-3 sm:px-4 border-t bg-muted/10 flex items-center justify-between gap-1.5">
                 <Button
-                  variant="ghost"
+                  variant="default"
                   size="sm"
-                  onClick={() => handleCopyDrill(drill)}
-                  className="h-9 sm:h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-                  title="Copy drill to clipboard"
+                  onClick={() => setActiveDrill(drill)}
+                  className="h-8 text-xs gap-1 font-medium shadow-xs"
                 >
-                  {copiedId === drill.id ? (
-                    <Check className="size-3.5 text-green-500 mr-1" />
-                  ) : (
-                    <Copy className="size-3.5 mr-1" />
-                  )}
-                  {copiedId === drill.id ? "Copied" : "Copy"}
+                  <span>View Plan</span>
+                  <ArrowRight className="size-3" />
                 </Button>
 
-                <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 ml-auto">
+                <div className="flex items-center gap-1.5 ml-auto">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => navigate(`/tactical-board?drillId=${drill.id}`)}
-                    className="h-9 sm:h-8 text-xs gap-1 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10"
+                    className="h-8 text-xs gap-1 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 px-2.5"
                     title="Open in Tactical Board Pitch"
                   >
                     <Compass className="size-3.5" />
@@ -602,61 +605,73 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                     variant="outline"
                     size="sm"
                     onClick={() => setAnalyticsDrill(drill)}
-                    className="h-9 sm:h-8 text-xs gap-1 text-foreground hover:text-primary hover:border-primary/40"
+                    className="h-8 text-xs gap-1 text-foreground hover:text-primary hover:border-primary/40 px-2.5"
                     title="Athlete Statistics & Data Analysis for this drill"
                   >
                     <BarChart3 className="size-3.5 text-primary" />
                     <span>Stats</span>
                   </Button>
 
-                  {isCoachOrAdmin && (
-                    <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSessionDrill(drill)}
-                        className="h-9 sm:h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
-                        title="Add this drill to a scheduled training session"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-foreground"
                       >
-                        <CalendarClock className="size-3.5" />
-                        <span className="hidden sm:inline">Session</span>
+                        <MoreHorizontal className="size-4" />
+                        <span className="sr-only">More options</span>
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setAssigningDrill(drill);
-                          setAssignModalOpen(true);
-                        }}
-                        className="h-9 sm:h-8 text-xs gap-1"
-                        title="Assign to individual athlete"
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      {isCoachOrAdmin && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => setSessionDrill(drill)}
+                            className="cursor-pointer gap-2"
+                          >
+                            <CalendarClock className="size-4 text-primary" />
+                            <span>Add to Session</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setAssigningDrill(drill);
+                              setAssignModalOpen(true);
+                            }}
+                            className="cursor-pointer gap-2"
+                          >
+                            <Plus className="size-4" />
+                            <span>Assign to Athlete</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => handleCopyDrill(drill)}
+                        className="cursor-pointer gap-2"
                       >
-                        <Plus className="size-3" />
-                        Assign
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => setActiveDrill(drill)}
-                    className="h-9 sm:h-8 text-xs gap-1 font-medium"
-                  >
-                    View Plan
-                    <ArrowRight className="size-3" />
-                  </Button>
+                        {copiedId === drill.id ? (
+                          <Check className="size-4 text-emerald-600" />
+                        ) : (
+                          <Copy className="size-4" />
+                        )}
+                        <span>{copiedId === drill.id ? "Copied" : "Copy Details"}</span>
+                      </DropdownMenuItem>
 
-                  {drill.isCustom && isCoachOrAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteDrill(drill)}
-                      className="h-9 w-9 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      title="Delete drill"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
+                      {drill.isCustom && isCoachOrAdmin && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteDrill(drill)}
+                            className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="size-4" />
+                            <span>Delete Drill</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </CardFooter>
             </Card>

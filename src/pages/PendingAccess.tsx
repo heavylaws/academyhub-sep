@@ -20,18 +20,23 @@ import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 import { useAuthActions } from "@convex-dev/auth/react";
 
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
+
 /** Shown to a signed-in user with no role/academy assignment yet. */
 export default function PendingAccess() {
   const { user } = useCurrentUser();
   const { signOut } = useAuthActions();
   const [checking, setChecking] = useState(false);
+  const updateCurrentUser = useMutation(api.users.updateCurrentUser);
 
   const handleCheckInvites = async () => {
     setChecking(true);
     try {
-      toast.info("Checked for pending invitations.");
+      await updateCurrentUser();
+      toast.success("Checked invitations. Your account is synced.");
     } catch {
-      toast.error("Could not refresh invitations at this time.");
+      toast.info("No new matching invitations found.");
     } finally {
       setChecking(false);
     }

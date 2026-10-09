@@ -339,6 +339,22 @@ export default function TeamDetail() {
               <span>Deploy to Board</span>
             </Button>
             <Button
+              variant="outline"
+              onClick={() => setScheduleOpen(true)}
+              className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <CalendarDays className="size-4" />
+              <span>Schedule Session</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setRosterOpen(true)}
+              className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
+            >
+              <UserRoundPlus className="size-4" />
+              <span>Manage Roster</span>
+            </Button>
+            <Button
               variant="secondary"
               onClick={() => setEditOpen(true)}
               className="h-10 sm:h-9 text-xs sm:text-sm font-semibold gap-1.5"
@@ -381,12 +397,12 @@ export default function TeamDetail() {
 
       {/* Squad Positional Depth Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border bg-card p-3.5 flex flex-col justify-between border-amber-500/20 shadow-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Goalkeepers
           </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-bold font-mono">
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
               {positionalDepth.gk}
             </span>
             {positionalDepth.gk === 0 ? (
@@ -394,61 +410,61 @@ export default function TeamDetail() {
                 Missing GK
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px] text-primary">
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/30 bg-amber-500/10">
                 Covered
               </Badge>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border bg-card p-3.5 flex flex-col justify-between border-blue-500/20 shadow-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Defenders
           </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-bold font-mono">
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className="text-xl font-bold font-mono text-blue-600 dark:text-blue-400">
               {positionalDepth.def}
             </span>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-500/30 bg-blue-500/10">
               Backline
             </Badge>
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border bg-card p-3.5 flex flex-col justify-between border-emerald-500/20 shadow-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Midfielders
           </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-bold font-mono">
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
               {positionalDepth.mid}
             </span>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
               Engine
             </Badge>
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-3 flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="rounded-xl border bg-card p-3.5 flex flex-col justify-between border-rose-500/20 shadow-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Forwards
           </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-bold font-mono">
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className="text-xl font-bold font-mono text-rose-600 dark:text-rose-400">
               {positionalDepth.fwd}
             </span>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="outline" className="text-[10px] text-rose-600 border-rose-500/30 bg-rose-500/10">
               Attack
             </Badge>
           </div>
         </div>
 
-        <div className="col-span-2 sm:col-span-1 rounded-xl border bg-muted/40 p-3 flex flex-col justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="col-span-2 sm:col-span-1 rounded-xl border bg-muted/40 p-3.5 flex flex-col justify-between border-primary/20 shadow-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Squad Total
           </span>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-xl font-bold font-mono">
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className="text-xl font-bold font-mono text-primary">
               {positionalDepth.total}
             </span>
             <span className="text-xs text-muted-foreground">athletes</span>

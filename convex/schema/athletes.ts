@@ -29,6 +29,8 @@ export const athletes = defineTable({
   checkInPin: v.optional(v.string()),
   createdBy: v.id("users"),
   createdAt: v.string(),
+  deletedAt: v.optional(v.string()),
+  deletedBy: v.optional(v.id("users")),
 })
   .index("by_academy", ["academyId"])
   .index("by_academy_and_status", ["academyId", "status"])

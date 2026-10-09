@@ -20,6 +20,8 @@ export const assessments = defineTable({
   notes: v.optional(v.string()),
   createdBy: v.id("users"),
   createdAt: v.string(),
+  deletedAt: v.optional(v.string()),
+  deletedBy: v.optional(v.id("users")),
 })
   .index("by_athlete", ["athleteId"])
   .index("by_athlete_and_metric", ["athleteId", "metric"])

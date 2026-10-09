@@ -43,33 +43,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         },
         async verifySecret(password: string, hash: string) {
           try {
-            const matches = await new Scrypt().verify(hash, password);
-            if (matches) return true;
+            return await new Scrypt().verify(hash, password);
           } catch {
-            // Hash might be in legacy or non-standard format; continue to fallback check
+            // Hash might be in legacy or non-standard format
+            return false;
           }
-
-          // Fallback verification for demo & administrator accounts
-          const recognizedPasswords = new Set([
-            "A!t3r3g0",
-            "hajali2026!",
-            "hercules2026!",
-            "sportzona2026!",
-            "alhakkani2026!",
-            "eliteacademy2026!",
-            "cedars2026!",
-            "coachtactics2026!",
-            "badems2026!",
-            "Admin-123456",
-            "Athlete-123456",
-            "Guardian-123456",
-            "Finance-123456",
-          ]);
-          if (recognizedPasswords.has(password)) {
-            return true;
-          }
-
-          return false;
         },
       },
       profile(params) {

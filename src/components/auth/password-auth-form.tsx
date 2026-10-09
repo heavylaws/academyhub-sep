@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import { Sparkles, Shield, User, Users, GraduationCap } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 
 type Step =
@@ -16,52 +18,12 @@ type Step =
 
 const DEMO_PRESETS = [
   {
-    label: "Super Admin (Platform)",
-    email: "ah.baalbaki@gmail.com",
-    password: "A!t3r3g0",
-    role: "platform_admin",
-    icon: Shield,
-    badge: "Platform Admin",
-  },
-  {
-    label: "Hercules Head Coach",
+    label: "Hercules Sports Academy",
     email: "adminhercules@academieshub.com",
     password: "hercules2026!",
     role: "coach",
     icon: Sparkles,
     badge: "Hercules Coach",
-  },
-  {
-    label: "Academy Admin",
-    email: "alex.admin@test.local",
-    password: "Admin-123456",
-    role: "academy_admin",
-    icon: GraduationCap,
-    badge: "Academy Admin",
-  },
-  {
-    label: "Coach (Dave Miller)",
-    email: "dave.miller@test.local",
-    password: "hercules2026!",
-    role: "coach",
-    icon: Users,
-    badge: "Coach",
-  },
-  {
-    label: "Athlete (Marcus Vance)",
-    email: "marcus.vance@test.local",
-    password: "Athlete-123456",
-    role: "athlete",
-    icon: User,
-    badge: "Athlete",
-  },
-  {
-    label: "Guardian (Sarah Vance)",
-    email: "sarah.guardian@test.local",
-    password: "Guardian-123456",
-    role: "guardian",
-    icon: User,
-    badge: "Parent",
   },
 ];
 
@@ -69,6 +31,9 @@ function errorMessage(err: unknown, fallback: string): string {
   const msg = err instanceof Error ? err.message : String(err ?? "");
   if (err instanceof ConvexError && typeof err.data === "string") {
     return err.data;
+  }
+  if (msg.includes("Too many failed login attempts")) {
+    return msg;
   }
   // Convex Auth deliberately reports sign-in failures without details.
   if (/InvalidSecret|InvalidAccountId/i.test(msg)) {
@@ -80,6 +45,8 @@ function errorMessage(err: unknown, fallback: string): string {
 /** Email + password sign-in backed by Convex Auth (email verified by one-time code). */
 export function PasswordAuthForm() {
   const { signIn } = useAuthActions();
+  const checkRateLimit = useMutation(api.authRateLimit.checkLoginRateLimit);
+  const recordAttempt = useMutation(api.authRateLimit.recordLoginAttempt);
   const [step, setStep] = useState<Step>({ kind: "signIn" });
   const [busy, setBusy] = useState(false);
   const [emailVal, setEmailVal] = useState("");
@@ -101,18 +68,28 @@ export function PasswordAuthForm() {
     setPasswordVal(pass);
     await run(async () => {
       const normalizedEmail = email.trim().toLowerCase();
+      // Pre-check rate limit
+      try {
+        await checkRateLimit({ email: normalizedEmail });
+      } catch (rateErr) {
+        throw rateErr;
+      }
+
       try {
         const res = await signIn("password", {
           email: normalizedEmail,
           password: pass,
           flow: "signIn",
         });
+        await recordAttempt({ email: normalizedEmail, success: true }).catch(() => {});
         if (res && !res.signingIn) {
           setStep({ kind: "verify", email });
           toast.success(`We emailed a verification code to ${email}`);
           return;
         }
       } catch (cloudErr) {
+        // Record failed attempt
+        await recordAttempt({ email: normalizedEmail, success: false }).catch(() => {});
         // Offline / 404 / cloud server down fallback
         const localRes = localMockStore.authenticateWithPassword(normalizedEmail, pass);
         if (localRes.success && localRes.user) {
@@ -138,12 +115,20 @@ export function PasswordAuthForm() {
       void run(
         async () => {
           if (step.kind === "signIn") {
+            // Pre-check rate limit
+            try {
+              await checkRateLimit({ email });
+            } catch (rateErr) {
+              throw rateErr;
+            }
+
             try {
               const res = await signIn("password", {
                 email,
                 password,
                 flow: "signIn",
               });
+              await recordAttempt({ email, success: true }).catch(() => {});
               // A verification code was emailed instead of signing in.
               if (!res.signingIn) {
                 setStep({ kind: "verify", email });
@@ -151,6 +136,8 @@ export function PasswordAuthForm() {
                 return;
               }
             } catch (cloudErr) {
+              // Record failed attempt
+              await recordAttempt({ email, success: false }).catch(() => {});
               // Graceful fallback to local authentication when Convex Cloud is offline / 404
               const localRes = localMockStore.authenticateWithPassword(email, password);
               if (localRes.success && localRes.user) {
@@ -322,7 +309,7 @@ export function PasswordAuthForm() {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="size-3 text-primary" />
-              <span>Quick Sign-In Accounts (All Roles)</span>
+              <span>Hercules Academy Fast Login</span>
             </span>
             <span className="text-[10px] text-muted-foreground">1-Tap Fill & Sign In</span>
           </div>

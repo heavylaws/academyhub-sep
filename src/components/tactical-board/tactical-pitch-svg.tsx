@@ -29,15 +29,15 @@ export const TacticalPitchSvg: React.FC<TacticalPitchSvgProps> = ({
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
-        {/* Grass stripes for Soccer & Rugby */}
+        {/* Grass stripes for Soccer (Tactical Dark Slate) */}
         <pattern
           id="grassStripes"
           width={stripeWidth * 2}
           height={height}
           patternUnits="userSpaceOnUse"
         >
-          <rect width={stripeWidth} height={height} fill="#1b4d2e" />
-          <rect x={stripeWidth} width={stripeWidth} height={height} fill="#1e5433" />
+          <rect width={stripeWidth} height={height} fill="#0B1724" />
+          <rect x={stripeWidth} width={stripeWidth} height={height} fill="#0D1E30" />
         </pattern>
 
         {/* Rugby deep grass */}

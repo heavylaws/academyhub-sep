@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { requireAcademyMember, requireRole, requireUser } from "./lib/auth.ts";
+import { logAction } from "./lib/logger.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 /** Academy admin/coach/platform_admin: create a new team/group in their academy. */
@@ -25,13 +26,20 @@ export const createTeam = mutation({
         message: "Team name is required",
       });
     }
-    return await ctx.db.insert("teams", {
+    const teamId = await ctx.db.insert("teams", {
       academyId: targetAcademyId,
       name: args.name.trim(),
       sport: args.sport,
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
+    logAction("team:create", {
+      userId: user._id,
+      academyId: targetAcademyId,
+      teamId,
+      name: args.name.trim(),
+    });
+    return teamId;
   },
 });
 
@@ -67,37 +75,22 @@ export const updateTeam = mutation({
 export const deleteTeam = mutation({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
-    if (!team) {
+    if (!team || team.deletedAt) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
     await requireAcademyMember(ctx, team.academyId);
 
-    const members = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .collect();
-    for (const member of members) {
-      await ctx.db.delete("teamMembers", member._id);
-    }
-
-    const sessions = await ctx.db
-      .query("trainingSessions")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .collect();
-    for (const session of sessions) {
-      const records = await ctx.db
-        .query("attendanceRecords")
-        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-        .collect();
-      for (const record of records) {
-        await ctx.db.delete("attendanceRecords", record._id);
-      }
-      await ctx.db.delete("trainingSessions", session._id);
-    }
-
-    await ctx.db.delete("teams", args.teamId);
+    await ctx.db.patch("teams", args.teamId, {
+      deletedAt: new Date().toISOString(),
+      deletedBy: user._id,
+    });
+    logAction("team:delete", {
+      userId: user._id,
+      academyId: team.academyId,
+      teamId: args.teamId,
+    });
     return null;
   },
 });
@@ -112,11 +105,13 @@ export const listTeams = query({
     if (!user.academyId) {
       return [];
     }
-    const teams = await ctx.db
-      .query("teams")
-      .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
-      .order("desc")
-      .collect();
+    const teams = (
+      await ctx.db
+        .query("teams")
+        .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
+        .order("desc")
+        .collect()
+    ).filter((t) => !t.deletedAt);
 
     return await Promise.all(
       teams.map(async (team) => {
@@ -148,7 +143,7 @@ export const getTeam = query({
     activeTacticalPlan?: Doc<"tacticalPlans"> | null;
   }> => {
     const team = await ctx.db.get("teams", args.teamId);
-    if (!team) {
+    if (!team || team.deletedAt) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
     const user = await requireAcademyMember(ctx, team.academyId);

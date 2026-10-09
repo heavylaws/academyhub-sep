@@ -38,6 +38,8 @@ import {
   messages,
   conversationContextValidator,
 } from "./schema/messages.ts";
+import { loginAttempts } from "./schema/loginAttempts.ts";
+import { academySettings } from "./schema/academySettings.ts";
 
 export default defineSchema({
   ...authTables,
@@ -80,6 +82,8 @@ export default defineSchema({
   announcementReads,
   conversations,
   messages,
+  loginAttempts,
+  academySettings,
 });
 
 export {

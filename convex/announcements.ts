@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { requireAcademyMember, requireRole, requireUser } from "./lib/auth.ts";
+import { sanitizeString, sanitizeText } from "./lib/sanitize.ts";
 import {
   announcementCategoryValidator,
   announcementPriorityValidator,
@@ -125,17 +126,20 @@ export const createAnnouncement = mutation({
       });
     }
 
-    if (!args.title.trim()) {
+    const cleanTitle = sanitizeString(args.title, 150, "Title");
+    if (!cleanTitle) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "Title is required",
       });
     }
 
+    const cleanContent = sanitizeText(args.content, 5000, "Content");
+
     return await ctx.db.insert("announcements", {
       academyId: user.academyId,
-      title: args.title.trim(),
-      content: args.content.trim(),
+      title: cleanTitle,
+      content: cleanContent,
       category: args.category,
       priority: args.priority,
       targetTeamId: args.targetTeamId,

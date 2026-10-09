@@ -35,6 +35,11 @@ const config: UserConfig = {
       "react/jsx-dev-runtime",
     ],
   },
+  define: {
+    "import.meta.env.VITE_ENABLE_MOCK": JSON.stringify(
+      process.env.VITE_ENABLE_MOCK ?? "false",
+    ),
+  },
   build: {
     chunkSizeWarningLimit: 800,
     rollupOptions: {
@@ -48,6 +53,9 @@ const config: UserConfig = {
           }
           if (id.includes("node_modules/lucide-react")) {
             return "vendor-icons";
+          }
+          if (id.includes("local-mock-data") || id.includes("local-mock-store")) {
+            return "mock-store";
           }
         },
       },

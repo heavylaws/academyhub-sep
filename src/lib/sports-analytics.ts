@@ -29,6 +29,8 @@ export interface RadarAttribute {
   fullMark: number;
 }
 
+export type AthleticRadarPoint = RadarAttribute;
+
 /** Determines whether a lower numeric value represents a better athletic result (e.g. race times). */
 export function isLowerBetterMetric(metricName: string): boolean {
   const lower = metricName.toLowerCase();
@@ -125,18 +127,19 @@ export function computeTrend(points: AssessmentPoint[], lowerBetter = false) {
  */
 export function generateAthleticRadarProfile(
   groups: MetricGroup[],
+  customAverages?: Record<string, number>,
 ): RadarAttribute[] {
-  // Default base athletic competencies
+  // Base athletic competencies with configurable/computed academy averages
   const attributes: Record<
     string,
     { athleteScores: number[]; avg: number; elite: number }
   > = {
-    Speed: { athleteScores: [], avg: 72, elite: 92 },
-    Power: { athleteScores: [], avg: 68, elite: 90 },
-    Agility: { athleteScores: [], avg: 70, elite: 88 },
-    Strength: { athleteScores: [], avg: 65, elite: 86 },
-    Endurance: { athleteScores: [], avg: 75, elite: 94 },
-    Mobility: { athleteScores: [], avg: 78, elite: 90 },
+    Speed: { athleteScores: [], avg: customAverages?.Speed ?? 72, elite: 92 },
+    Power: { athleteScores: [], avg: customAverages?.Power ?? 68, elite: 90 },
+    Agility: { athleteScores: [], avg: customAverages?.Agility ?? 70, elite: 88 },
+    Strength: { athleteScores: [], avg: customAverages?.Strength ?? 65, elite: 86 },
+    Endurance: { athleteScores: [], avg: customAverages?.Endurance ?? 75, elite: 94 },
+    Mobility: { athleteScores: [], avg: customAverages?.Mobility ?? 78, elite: 90 },
   };
 
   for (const g of groups) {

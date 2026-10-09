@@ -73,6 +73,19 @@ export const listAcademies = query({
   },
 });
 
+import { paginationOptsValidator } from "convex/server";
+
+/** Platform admin: paginated list of academies for scalable browsing. */
+export const listAcademiesPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["platform_admin"]);
+    return await ctx.db.query("academies").order("desc").paginate(args.paginationOpts);
+  },
+});
+
 /**
  * Platform admin: every academy with head counts (athletes, managers, coaches,
  * accounting staff, guardians), for the platform-wide overview.

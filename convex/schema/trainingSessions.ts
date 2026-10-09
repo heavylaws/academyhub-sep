@@ -14,6 +14,8 @@ export const trainingSessions = defineTable({
   drillIds: v.optional(v.array(v.string())),
   createdBy: v.id("users"),
   createdAt: v.string(),
+  deletedAt: v.optional(v.string()),
+  deletedBy: v.optional(v.id("users")),
 })
   .index("by_academy", ["academyId"])
   .index("by_team", ["teamId"])
