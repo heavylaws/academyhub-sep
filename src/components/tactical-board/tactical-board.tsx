@@ -631,10 +631,10 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
 
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => setShowNotes(!showNotes)}
-            className="h-8 text-xs gap-1.5 bg-[#142337] border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
+            className="h-8 text-xs gap-1.5 bg-[#142337] border border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
             title="Coaching Notes & Instructions"
           >
             <FileText className="size-3.5 text-[#00E5FF]" />
@@ -642,10 +642,10 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           </Button>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={handleExportJSON}
-            className="h-8 text-xs gap-1.5 bg-[#142337] border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
+            className="h-8 text-xs gap-1.5 bg-[#142337] border border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
             title="Export Tactical Plan JSON"
           >
             <Download className="size-3.5" />
@@ -653,10 +653,10 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           </Button>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => setPrintSheetOpen(true)}
-            className="h-8 text-xs gap-1.5 font-medium bg-[#142337] border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
+            className="h-8 text-xs gap-1.5 font-medium bg-[#142337] border border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
             title="Print Tactical Clipboard Sheet"
           >
             <Printer className="size-3.5 text-[#00E5FF]" />
@@ -664,10 +664,10 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           </Button>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={toggleFullscreen}
-            className="size-8 bg-[#142337] border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
+            className="size-8 bg-[#142337] border border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
             title="Toggle Fullscreen"
           >
             {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}

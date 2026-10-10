@@ -400,7 +400,7 @@ const ROLE_TEST_SUITES: RoleTestSuite[] = [
         id: "platform_academies",
         title: "Inspect Multi-Tenant Academy Directory",
         description:
-          "Verifies all 3 academies (Hercules, Olympus, Titan) and tenant status toggles.",
+          "Verifies Hercules Sports Academy tenant status and management toggles.",
         actionLabel: "Inspect Academies",
         targetPath: "/admin/academies",
         run: async (nav) => {
@@ -408,9 +408,10 @@ const ROLE_TEST_SUITES: RoleTestSuite[] = [
           nav("/admin/academies");
           await sleep(400);
           const db = localMockStore.getDb();
+          const hasHercules = db.academies.some((a) => a._id === "acad_hercules" || a.slug === "hercules-sports");
           return {
-            success: db.academies.length === 3,
-            detail: `Verified ${db.academies.length} tenants: Hercules, Olympus, and Titan academies.`,
+            success: hasHercules,
+            detail: `Verified ${db.academies.length} tenant(s) including Hercules Sports Academy.`,
           };
         },
       },

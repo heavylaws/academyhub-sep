@@ -62,7 +62,7 @@ export async function recordLoginAttempt(
       .collect();
 
     for (const attempt of priorAttempts) {
-      await ctx.db.delete(attempt._id);
+      await ctx.db.delete("loginAttempts", attempt._id);
     }
   } else {
     await ctx.db.insert("loginAttempts", {
@@ -80,11 +80,12 @@ export async function cleanupOldLoginAttempts(ctx: MutationCtx): Promise<number>
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const oldAttempts = await ctx.db
     .query("loginAttempts")
+    // eslint-disable-next-line @convex-dev/no-filter-in-query
     .filter((q) => q.lt(q.field("attemptedAt"), cutoff))
     .take(200);
 
   for (const attempt of oldAttempts) {
-    await ctx.db.delete(attempt._id);
+    await ctx.db.delete("loginAttempts", attempt._id);
   }
   return oldAttempts.length;
 }

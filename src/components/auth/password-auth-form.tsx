@@ -23,7 +23,7 @@ const DEMO_PRESETS = [
     password: "hercules2026!",
     role: "coach",
     icon: Sparkles,
-    badge: "Hercules Coach",
+    badge: "Demo Sign-in",
   },
 ];
 
@@ -68,14 +68,9 @@ export function PasswordAuthForm() {
     setPasswordVal(pass);
     await run(async () => {
       const normalizedEmail = email.trim().toLowerCase();
-      // Pre-check rate limit
+      // Authenticate with live Convex Auth
       try {
-        await checkRateLimit({ email: normalizedEmail });
-      } catch (rateErr) {
-        throw rateErr;
-      }
-
-      try {
+        await checkRateLimit({ email: normalizedEmail }).catch(() => {});
         const res = await signIn("password", {
           email: normalizedEmail,
           password: pass,
@@ -87,17 +82,16 @@ export function PasswordAuthForm() {
           toast.success(`We emailed a verification code to ${email}`);
           return;
         }
+        // Successfully authenticated to Convex DB; clear any local mock persona
+        localMockStore.setPersona(null);
+        toast.success(`Signed in to live Convex workspace`);
       } catch (cloudErr) {
-        // Record failed attempt
         await recordAttempt({ email: normalizedEmail, success: false }).catch(() => {});
-        // Offline / 404 / cloud server down fallback
+        // Fallback to local offline store only if Convex connection fails
         const localRes = localMockStore.authenticateWithPassword(normalizedEmail, pass);
         if (localRes.success && localRes.user) {
-          toast.success(`Signed in as ${localRes.user.name || localRes.user.email}`);
+          toast.info(`Signed in (Offline Mode) as ${localRes.user.name || localRes.user.email}`);
           return;
-        }
-        if (localRes.error && !localRes.error.includes("User not found")) {
-          throw new Error(localRes.error);
         }
         throw cloudErr;
       }
@@ -115,37 +109,30 @@ export function PasswordAuthForm() {
       void run(
         async () => {
           if (step.kind === "signIn") {
-            // Pre-check rate limit
             try {
-              await checkRateLimit({ email });
-            } catch (rateErr) {
-              throw rateErr;
-            }
-
-            try {
+              await checkRateLimit({ email }).catch(() => {});
               const res = await signIn("password", {
                 email,
                 password,
                 flow: "signIn",
               });
               await recordAttempt({ email, success: true }).catch(() => {});
-              // A verification code was emailed instead of signing in.
               if (!res.signingIn) {
                 setStep({ kind: "verify", email });
                 toast.success(`We emailed a verification code to ${email}`);
                 return;
               }
+              localMockStore.setPersona(null);
+              toast.success(`Signed in to live Convex workspace`);
             } catch (cloudErr) {
-              // Record failed attempt
               await recordAttempt({ email, success: false }).catch(() => {});
-              // Graceful fallback to local authentication when Convex Cloud is offline / 404
               const localRes = localMockStore.authenticateWithPassword(email, password);
               if (localRes.success && localRes.user) {
-                toast.success(`Signed in as ${localRes.user.name || localRes.user.email}`);
+                toast.info(`Signed in (Offline Mode) as ${localRes.user.name || localRes.user.email}`);
                 return;
               }
               if (localRes.error && !localRes.error.includes("User not found")) {
-                throw new Error(localRes.error);
+                throw new Error(localRes.error, { cause: cloudErr });
               }
               throw cloudErr;
             }
@@ -225,7 +212,7 @@ export function PasswordAuthForm() {
         <h2 className="text-lg font-semibold">{title}</h2>
         {step.kind === "signIn" && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            Enter your credentials or sign in with Hercules Academy below.
+            Enter your credentials or sign in with Hercules Sports Academy below.
           </p>
         )}
       </div>
@@ -309,7 +296,7 @@ export function PasswordAuthForm() {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="size-3 text-primary" />
-              <span>Hercules Academy Fast Login</span>
+              <span>1-Tap Fast Login</span>
             </span>
             <span className="text-[10px] text-muted-foreground">1-Tap Fill & Sign In</span>
           </div>

@@ -121,6 +121,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
 
   // Laser points trail state
   const [laserPoints, setLaserPoints] = useState<LaserPoint[]>([]);
+  const [laserCurrentTime, setLaserCurrentTime] = useState(() => Date.now());
 
   // RAF optimization refs for smooth 60fps dragging
   const rafIdRef = useRef<number | null>(null);
@@ -139,6 +140,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     if (laserPoints.length === 0) return;
     const interval = setInterval(() => {
       const now = Date.now();
+      setLaserCurrentTime(now);
       setLaserPoints((prev) => prev.filter((lp) => now - lp.timestamp < 1200));
     }, 100);
     return () => clearInterval(interval);
@@ -214,7 +216,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
 
     if (isLaserMode) {
       containerRef.current?.setPointerCapture(e.pointerId);
-      setLaserPoints((prev) => [...prev, { x: coords.x, y: coords.y, timestamp: Date.now() }]);
+      const now = Date.now();
+      setLaserCurrentTime(now);
+      setLaserPoints((prev) => [...prev, { x: coords.x, y: coords.y, timestamp: now }]);
       return;
     }
 
@@ -256,7 +260,10 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     const coords = getPitchCoords(e);
 
     if (isLaserMode && (e.buttons & 1) === 1) {
-      setLaserPoints((prev) => [...prev, { x: coords.x, y: coords.y, timestamp: Date.now() }]);
+      // eslint-disable-next-line react-hooks/purity
+      const now = Date.now();
+      setLaserCurrentTime(now);
+      setLaserPoints((prev) => [...prev, { x: coords.x, y: coords.y, timestamp: now }]);
       return;
     }
 
@@ -820,7 +827,7 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
 
       {/* Laser Pointer Trail Effect */}
       {laserPoints.map((lp, idx) => {
-        const age = Date.now() - lp.timestamp;
+        const age = laserCurrentTime - lp.timestamp;
         const alpha = Math.max(0, 1 - age / 1200);
         return (
           <div

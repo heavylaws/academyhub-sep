@@ -2,6 +2,20 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 
 if (typeof window !== "undefined") {
+  if (typeof window.matchMedia !== "function") {
+    window.matchMedia = (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList;
+  }
+
   window.addEventListener("unhandledrejection", (event) => {
     const reasonMsg = String(event.reason?.message || event.reason || "");
     if (
@@ -15,7 +29,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/_service-worker.js", { scope: "/" }).catch(() => {
       // Fallback to /sw.js if needed

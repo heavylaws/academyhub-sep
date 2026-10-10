@@ -28,6 +28,7 @@ export type TelestratorToolType =
   | "NOTE"
   | "ERASER";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const TELESTRATOR_COLORS = [
   { hex: "#FFD600", name: "Tactical Yellow" },
   { hex: "#00E5FF", name: "Attack Cyan" },

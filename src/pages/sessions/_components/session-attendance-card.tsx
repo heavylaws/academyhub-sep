@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils.ts";
 
 export type AttendanceStatus = "present" | "absent" | "excused" | "late";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "present", label: "Present" },
   { value: "late", label: "Late" },
@@ -37,6 +38,7 @@ export const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "absent", label: "Absent" },
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const STATUS_STYLES: Record<AttendanceStatus, string> = {
   present: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
   late: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",

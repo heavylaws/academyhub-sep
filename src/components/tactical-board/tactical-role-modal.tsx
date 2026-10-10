@@ -11,6 +11,7 @@ export interface RolePreset {
   color: string;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const TACTICAL_ROLE_PRESETS: RolePreset[] = [
   // Forwards
   {

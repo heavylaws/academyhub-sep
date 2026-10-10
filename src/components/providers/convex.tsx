@@ -12,7 +12,7 @@ function getValidConvexUrl(url?: string): string {
   try {
     const parsed = new URL(url);
     if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return url;
+      return url.trim().replace(/\/+$/, "");
     }
   } catch {
     // invalid URL format fallback
@@ -36,7 +36,6 @@ export function getLiveConvexClient(): ConvexReactClient {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const originalAction = (baseClient as any).action.bind(baseClient);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (baseClient as any).watchQuery = (query: any, ...argsAndOptions: any[]) => {
       const name = resolveFunctionName(query);
@@ -90,11 +89,8 @@ export function getLiveConvexClient(): ConvexReactClient {
               }
               return res;
             }
-            // If real query is undefined (offline/404 cloud or not connected yet), check local store
-            if (localMockStore.getCurrentUser()) {
-              isFallback = true;
-              return localMockStore.evaluateQuery(name, args);
-            }
+            // If real query is undefined, it is currently in flight over Convex WebSocket / HTTP.
+            // Return undefined so React renders loading state until real Convex DB data arrives.
             return undefined;
           } catch (_err: unknown) {
             isFallback = true;

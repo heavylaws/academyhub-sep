@@ -268,14 +268,14 @@ export interface MockDrill {
   createdAt: string;
 }
 
-// Clean Initial Academies
+// Clean Initial Academies — only Hercules Sports Academy is allowed
 export const SEED_ACADEMIES: MockAcademy[] = [
   {
     _id: "acad_hercules",
-    name: "CoachTactics Academy",
-    slug: "coachtactics",
+    name: "Hercules Sports Academy",
+    slug: "hercules-sports",
     status: "active",
-    nextInvoiceNumber: 1,
+    nextInvoiceNumber: 101,
     createdAt: "2026-09-29T12:00:00.000Z",
   },
 ];
@@ -350,61 +350,6 @@ export const SEED_USERS: MockUser[] = [
     role: "accounting",
     academyId: "acad_hercules",
     tokenIdentifier: "mock|usr_accounting",
-  },
-  // Additional academy admins
-  {
-    _id: "usr_admin_hajali",
-    name: "Admin Haj Ali",
-    email: "adminhajali@academieshub.com",
-    password: "hajali2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_hajali",
-  },
-  {
-    _id: "usr_admin_alhakkani",
-    name: "Admin AL-Hakkani",
-    email: "adminalhakkani@academieshub.com",
-    password: "alhakkani2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_alhakkani",
-  },
-  {
-    _id: "usr_admin_sportzona",
-    name: "Admin SportZona",
-    email: "adminsportzona@academieshub.com",
-    password: "sportzona2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_sportzona",
-  },
-  {
-    _id: "usr_admin_elite",
-    name: "Admin Elite Academy",
-    email: "admineliteacademy@academieshub.com",
-    password: "eliteacademy2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_elite",
-  },
-  {
-    _id: "usr_admin_cedars",
-    name: "Admin Cedars",
-    email: "admincedars@academieshub.com",
-    password: "cedars2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_cedars",
-  },
-  {
-    _id: "usr_admin_badems",
-    name: "Admin BadEMS",
-    email: "adminbadems@academieshub.com",
-    password: "badems2026!",
-    role: "academy_admin",
-    academyId: "acad_hercules",
-    tokenIdentifier: "mock|usr_admin_badems",
   },
 ];
 

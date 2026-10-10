@@ -18,7 +18,7 @@ crons.daily(
 );
 crons.daily(
   "cleanup expired login attempts",
-  { hourUTC: 6, minuteUTC: 0 },
+  { hourUTC: 6, minuteUTC: 12 },
   internal.authRateLimit.cleanupExpiredAttempts,
   {},
 );

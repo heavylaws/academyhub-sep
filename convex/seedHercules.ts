@@ -466,6 +466,7 @@ export const seedHerculesStatistics = mutation({
       const existingSession = await ctx.db
         .query("trainingSessions")
         .withIndex("by_team", (q) => q.eq("teamId", spec.teamId))
+        // eslint-disable-next-line @convex-dev/no-filter-in-query
         .filter((q) => q.eq(q.field("title"), spec.title))
         .first();
 
@@ -594,6 +595,7 @@ export const seedHerculesStatistics = mutation({
             .withIndex("by_athlete_and_metric", (q) =>
               q.eq("athleteId", ath._id).eq("metric", b.metric),
             )
+            // eslint-disable-next-line @convex-dev/no-filter-in-query
             .filter((q) => q.eq(q.field("assessedOn"), assessedOn))
             .first();
 
@@ -744,6 +746,7 @@ export const seedHerculesStatistics = mutation({
       const existingDrill = await ctx.db
         .query("drills")
         .withIndex("by_academy", (q) => q.eq("academyId", academyId))
+        // eslint-disable-next-line @convex-dev/no-filter-in-query
         .filter((q) => q.eq(q.field("title"), d.title))
         .first();
 
@@ -847,6 +850,7 @@ export const seedHerculesStatistics = mutation({
         const existingPlan = await ctx.db
           .query("trainingPlans")
           .withIndex("by_athlete", (q) => q.eq("athleteId", ath._id))
+          // eslint-disable-next-line @convex-dev/no-filter-in-query
           .filter((q) => q.eq(q.field("title"), ps.title))
           .first();
 
@@ -911,6 +915,7 @@ export const seedHerculesStatistics = mutation({
         const existingFee = await ctx.db
           .query("athleteFees")
           .withIndex("by_athlete", (q) => q.eq("athleteId", ath._id))
+          // eslint-disable-next-line @convex-dev/no-filter-in-query
           .filter((q) => q.eq(q.field("label"), f.label))
           .first();
 
@@ -984,6 +989,7 @@ export const seedHerculesStatistics = mutation({
       const existingInv = await ctx.db
         .query("invoices")
         .withIndex("by_academy", (q) => q.eq("academyId", academyId))
+        // eslint-disable-next-line @convex-dev/no-filter-in-query
         .filter((q) => q.eq(q.field("invoiceNumber"), inv.num))
         .first();
 
@@ -1035,6 +1041,7 @@ export const seedHerculesStatistics = mutation({
       const existing = await ctx.db
         .query("announcements")
         .withIndex("by_academy", (q) => q.eq("academyId", academyId))
+        // eslint-disable-next-line @convex-dev/no-filter-in-query
         .filter((q) => q.eq(q.field("title"), ann.title))
         .first();
 

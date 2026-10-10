@@ -23,10 +23,7 @@ export interface CurrentUser {
   emailVerified?: boolean;
 }
 
-const ENABLE_MOCK =
-  import.meta.env.DEV &&
-  (import.meta.env.VITE_ENABLE_MOCK === "true" ||
-    import.meta.env.VITE_LOCAL_DEV === "true");
+const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK === "true";
 
 /** Current signed-in user's profile and academy role from Convex Auth or Local Mock. */
 export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoading: boolean } {
@@ -42,7 +39,6 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
 
   useEffect(() => {
     if (!ENABLE_MOCK) return;
-    setLocalUser(localMockStore.getCurrentUser());
     const unsub = localMockStore.subscribeAuth(() => {
       setLocalUser(localMockStore.getCurrentUser());
     });
@@ -68,7 +64,7 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
     }
   }
 
-  // 2. Fallback to localMockStore user
+  // 2. Fallback to localMockStore user only when ENABLE_MOCK is explicitly true
   if (ENABLE_MOCK && localUser) {
     return {
       user: {
@@ -81,6 +77,6 @@ export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoad
 
   return {
     user: null,
-    isLoading: convexLoading && !(ENABLE_MOCK && localUser),
+    isLoading: convexLoading,
   };
 }

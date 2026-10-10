@@ -431,7 +431,7 @@ export const seedAthleteDrillHistory = mutation({
         .first();
 
       if (!existingMember) {
-        let assignedTeamId = soccerTeamId;
+        let assignedTeamId: Id<"teams">;
         const s = (ath.sport || "").toLowerCase();
         if (s.includes("track") || s.includes("field") || s.includes("sprint")) {
           assignedTeamId = trackSprintTeamId;
@@ -466,6 +466,7 @@ export const seedAthleteDrillHistory = mutation({
         const existingSession = await ctx.db
           .query("trainingSessions")
           .withIndex("by_team", (q) => q.eq("teamId", t._id))
+          // eslint-disable-next-line @convex-dev/no-filter-in-query
           .filter((q) => q.eq(q.field("startsAt"), sessionStartsAt))
           .first();
 
@@ -568,6 +569,7 @@ export const seedAthleteDrillHistory = mutation({
             .withIndex("by_athlete_and_metric", (q) =>
               q.eq("athleteId", athlete._id).eq("metric", spec.metric),
             )
+            // eslint-disable-next-line @convex-dev/no-filter-in-query
             .filter((q) => q.eq(q.field("assessedOn"), assessedOn))
             .first();
 

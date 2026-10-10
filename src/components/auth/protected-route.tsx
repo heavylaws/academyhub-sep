@@ -1,12 +1,17 @@
 import { Navigate } from "react-router-dom";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Loader2 } from "lucide-react";
 import AppLayout from "@/components/layout/app-layout.tsx";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
 
 function LoadingScreen() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-6">
-      <Skeleton className="h-40 w-full max-w-md" />
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="size-8 animate-spin text-primary" />
+        <span className="text-xs text-muted-foreground font-medium animate-pulse">
+          Loading CoachTactics...
+        </span>
+      </div>
     </div>
   );
 }

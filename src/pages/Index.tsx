@@ -1,5 +1,4 @@
-import { Activity } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { Activity, Loader2 } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { PasswordAuthForm } from "@/components/auth/password-auth-form.tsx";
 import PendingAccess from "./PendingAccess.tsx";
@@ -34,9 +33,18 @@ export default function Index() {
   // 1. Loading state while authentication is being resolved
   if (isLoading) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background p-6">
-        <div className="flex flex-col items-center gap-3">
-          <Skeleton className="h-40 w-full max-w-md" />
+      <div className="flex min-h-svh w-full items-center justify-center bg-background p-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-xl shadow-primary/20">
+            <Activity className="size-7" />
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <h1 className="font-display text-2xl font-bold tracking-tight">CoachTactics</h1>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+              <Loader2 className="size-4 animate-spin text-primary" />
+              <span>Loading workspace...</span>
+            </div>
+          </div>
         </div>
       </div>
     );

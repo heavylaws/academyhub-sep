@@ -465,7 +465,7 @@ export const createCustomAcademyAdmin = mutation({
       )
       .collect();
     for (const invite of pendingInvites) {
-      await ctx.db.patch(invite._id, {
+      await ctx.db.patch("invites", invite._id, {
         status: "accepted",
         acceptedAt: new Date().toISOString(),
       });
@@ -557,9 +557,9 @@ export const provisionBademsAdmin = mutation({
         academyId: academy._id,
         emailVerificationTime: Date.now(),
       });
-      user = (await ctx.db.get(userId))!;
+      user = (await ctx.db.get("users", userId))!;
     } else {
-      await ctx.db.patch(user._id, {
+      await ctx.db.patch("users", user._id, {
         name,
         role: "academy_admin",
         academyId: academy._id,
@@ -576,7 +576,7 @@ export const provisionBademsAdmin = mutation({
       .collect();
 
     for (const invite of pendingInvites) {
-      await ctx.db.patch(invite._id, {
+      await ctx.db.patch("invites", invite._id, {
         status: "accepted",
         acceptedAt: new Date().toISOString(),
       });
@@ -599,7 +599,7 @@ export const provisionBademsAdmin = mutation({
         .first();
 
       if (existingAuth) {
-        await ctx.db.patch(existingAuth._id, {
+        await ctx.db.patch("authAccounts", existingAuth._id, {
           secret,
           userId: user._id,
           emailVerified: identifier,
@@ -631,9 +631,9 @@ export const provisionBademsAdmin = mutation({
         academyId: academy._id,
         emailVerificationTime: Date.now(),
       });
-      adminUser = (await ctx.db.get(adminUserId))!;
+      adminUser = (await ctx.db.get("users", adminUserId))!;
     } else {
-      await ctx.db.patch(adminUser._id, {
+      await ctx.db.patch("users", adminUser._id, {
         name: "AdminBadEMS (BadEMS)",
         role: "academy_admin",
         academyId: academy._id,
@@ -660,7 +660,7 @@ export const provisionBademsAdmin = mutation({
         .first();
 
       if (existingAuth) {
-        await ctx.db.patch(existingAuth._id, {
+        await ctx.db.patch("authAccounts", existingAuth._id, {
           secret,
           userId: adminUser._id,
           emailVerified: identifier,

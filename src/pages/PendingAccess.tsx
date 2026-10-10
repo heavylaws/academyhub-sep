@@ -52,7 +52,7 @@ export default function PendingAccess() {
         role: "coach",
         academyId: "acad_hercules",
       });
-      toast.success("Welcome to Hercules Academy!");
+      toast.success("Welcome to Hercules Sports Academy!");
       window.location.href = "/";
     } catch {
       toast.error("Could not assign academy access.");
@@ -122,7 +122,7 @@ export default function PendingAccess() {
                   className="w-full gap-2 font-semibold bg-primary text-primary-foreground shadow-sm"
                 >
                   <Building2 className="size-4" />
-                  Enter Hercules Academy
+                  Enter Hercules Sports Academy
                 </Button>
 
                 <Button

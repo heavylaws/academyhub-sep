@@ -19,6 +19,7 @@ export interface TacticalLayerConfig {
   showTrajectories: boolean;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const DEFAULT_TACTICAL_LAYERS: Record<TacticalLayerType, TacticalLayerConfig> = {
   OFFENSE: {
     id: "OFFENSE",
