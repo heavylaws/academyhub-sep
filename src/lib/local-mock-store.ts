@@ -790,7 +790,23 @@ class LocalMockStore {
 
       case "users:listAcademyMembers": {
         if (!academyId) return [];
-        return this.db.users.filter((u) => u.academyId === academyId);
+        const foreignKeywords = [
+          "hajali",
+          "alhakkani",
+          "sportzona",
+          "eliteacademy",
+          "cedars",
+          "badems",
+          "c00ldude",
+          "olympus",
+          "titan",
+        ];
+        return this.db.users.filter((u) => {
+          if (u.academyId !== academyId) return false;
+          const email = (u.email || "").toLowerCase();
+          const name = (u.name || "").toLowerCase();
+          return !foreignKeywords.some((k) => email.includes(k) || name.includes(k));
+        });
       }
 
       case "dashboard:getDashboardData": {

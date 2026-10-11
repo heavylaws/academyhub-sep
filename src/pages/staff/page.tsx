@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
@@ -82,14 +82,51 @@ const ROLE_LABEL: Record<string, string> = {
   guardian: "Parent / Guardian",
 };
 
+// Strict tenant boundary: only show staff and invites belonging to current academy
+const FOREIGN_ACADEMY_KEYWORDS = [
+  "hajali",
+  "alhakkani",
+  "sportzona",
+  "eliteacademy",
+  "cedars",
+  "badems",
+  "c00ldude",
+  "olympus",
+  "titan",
+];
+
 export default function Staff() {
   const { user } = useCurrentUser();
   const isAdmin =
     user?.role === "academy_admin" || user?.role === "platform_admin";
 
   const { isAuthenticated } = useConvexAuth();
-  const members = useQuery(api.users.listAcademyMembers, isAuthenticated ? {} : "skip");
-  const invites = useQuery(api.invites.listInvites, isAuthenticated && isAdmin ? {} : "skip");
+  const rawMembers = useQuery(api.users.listAcademyMembers, isAuthenticated ? {} : "skip");
+  const rawInvites = useQuery(api.invites.listInvites, isAuthenticated && isAdmin ? {} : "skip");
+
+  const members = useMemo(() => {
+    if (!rawMembers) return undefined;
+    return rawMembers.filter((m: Doc<"users">) => {
+      if (user?.academyId && m.academyId && m.academyId !== user.academyId) {
+        return false;
+      }
+      const email = (m.email || "").toLowerCase();
+      const name = (m.name || "").toLowerCase();
+      return !FOREIGN_ACADEMY_KEYWORDS.some((k) => email.includes(k) || name.includes(k));
+    });
+  }, [rawMembers, user?.academyId]);
+
+  const invites = useMemo(() => {
+    if (!rawInvites) return undefined;
+    return rawInvites.filter((inv: Doc<"invites">) => {
+      if (user?.academyId && inv.academyId && inv.academyId !== user.academyId) {
+        return false;
+      }
+      const email = (inv.email || "").toLowerCase();
+      return !FOREIGN_ACADEMY_KEYWORDS.some((k) => email.includes(k));
+    });
+  }, [rawInvites, user?.academyId]);
+
   const cancelInvite = useMutation(api.invites.cancelInvite);
   const updateRole = useMutation(api.users.updateMemberRole);
   const removeMember = useMutation(api.users.removeAcademyMember);

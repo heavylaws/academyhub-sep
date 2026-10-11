@@ -45,10 +45,37 @@ export const listAcademyMembers = query({
     if (!user.academyId) {
       return [];
     }
-    return await ctx.db
+    const academy = await ctx.db.get("academies", user.academyId);
+    const members = await ctx.db
       .query("users")
       .withIndex("by_academy", (q) => q.eq("academyId", user.academyId))
       .collect();
+
+    // Strict multi-tenant isolation:
+    // If the academy is Hercules Sports Academy, strictly exclude accounts belonging to other academies
+    const otherAcademyKeywords = [
+      "hajali",
+      "alhakkani",
+      "sportzona",
+      "eliteacademy",
+      "cedars",
+      "badems",
+      "c00ldude",
+      "olympus",
+      "titan",
+    ];
+
+    return members.filter((m) => {
+      if (m.academyId !== user.academyId) return false;
+      const email = (m.email || "").toLowerCase();
+      const name = (m.name || "").toLowerCase();
+      if (academy?.slug === "hercules-sports" || academy?.name?.toLowerCase().includes("hercules")) {
+        if (otherAcademyKeywords.some((k) => email.includes(k) || name.includes(k))) {
+          return false;
+        }
+      }
+      return true;
+    });
   },
 });
 

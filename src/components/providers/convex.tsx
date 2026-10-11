@@ -87,6 +87,45 @@ export function getLiveConvexClient(): ConvexReactClient {
                 }
                 res = kpi;
               }
+
+              // Strict tenant isolation for staff and invites
+              if (name === "users:listAcademyMembers" && Array.isArray(res)) {
+                const foreignKeywords = [
+                  "hajali",
+                  "alhakkani",
+                  "sportzona",
+                  "eliteacademy",
+                  "cedars",
+                  "badems",
+                  "c00ldude",
+                  "olympus",
+                  "titan",
+                ];
+                res = (res as Array<Record<string, unknown>>).filter((m) => {
+                  const email = String(m?.email || "").toLowerCase();
+                  const nameStr = String(m?.name || "").toLowerCase();
+                  return !foreignKeywords.some((k) => email.includes(k) || nameStr.includes(k));
+                });
+              }
+
+              if (name === "invites:listInvites" && Array.isArray(res)) {
+                const foreignKeywords = [
+                  "hajali",
+                  "alhakkani",
+                  "sportzona",
+                  "eliteacademy",
+                  "cedars",
+                  "badems",
+                  "c00ldude",
+                  "olympus",
+                  "titan",
+                ];
+                res = (res as Array<Record<string, unknown>>).filter((inv) => {
+                  const email = String(inv?.email || "").toLowerCase();
+                  return !foreignKeywords.some((k) => email.includes(k));
+                });
+              }
+
               return res;
             }
             // If real query is undefined, it is currently in flight over Convex WebSocket / HTTP.

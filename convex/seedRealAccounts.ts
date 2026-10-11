@@ -90,55 +90,6 @@ export const seedRealAccounts = mutation({
         role: "accounting" as const,
         academyId,
       },
-      {
-        name: "Admin Haj Ali",
-        email: "adminhajali@academieshub.com",
-        password: "hajali2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "Admin AL-Hakkani",
-        email: "adminalhakkani@academieshub.com",
-        password: "alhakkani2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "Admin SportZona",
-        email: "adminsportzona@academieshub.com",
-        password: "sportzona2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "Admin Elite Academy",
-        email: "admineliteacademy@academieshub.com",
-        password: "eliteacademy2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "Admin Cedars",
-        email: "admincedars@academieshub.com",
-        password: "cedars2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "Admin BadEMS",
-        email: "adminbadems@academieshub.com",
-        password: "badems2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
-      {
-        name: "c00ldude",
-        email: "c00ldude@badems.com",
-        password: "badems2026!",
-        role: "academy_admin" as const,
-        academyId,
-      },
     ];
 
     const results = [];
