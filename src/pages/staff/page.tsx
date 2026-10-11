@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/select.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import InviteStaffDialog from "./_components/invite-staff-dialog.tsx";
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 
 const ROLE_LABEL: Record<string, string> = {
   academy_admin: "Academy Admin",
@@ -81,19 +82,6 @@ const ROLE_LABEL: Record<string, string> = {
   athlete: "Athlete",
   guardian: "Parent / Guardian",
 };
-
-// Strict tenant boundary: only show staff and invites belonging to current academy
-const FOREIGN_ACADEMY_KEYWORDS = [
-  "hajali",
-  "alhakkani",
-  "sportzona",
-  "eliteacademy",
-  "cedars",
-  "badems",
-  "c00ldude",
-  "olympus",
-  "titan",
-];
 
 export default function Staff() {
   const { user } = useCurrentUser();
@@ -104,28 +92,29 @@ export default function Staff() {
   const rawMembers = useQuery(api.users.listAcademyMembers, isAuthenticated ? {} : "skip");
   const rawInvites = useQuery(api.invites.listInvites, isAuthenticated && isAdmin ? {} : "skip");
 
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
   const members = useMemo(() => {
     if (!rawMembers) return undefined;
     return rawMembers.filter((m: Doc<"users">) => {
-      if (user?.academyId && m.academyId && m.academyId !== user.academyId) {
-        return false;
-      }
-      const email = (m.email || "").toLowerCase();
-      const name = (m.name || "").toLowerCase();
-      return !FOREIGN_ACADEMY_KEYWORDS.some((k) => email.includes(k) || name.includes(k));
+      if (m.role === "platform_admin") return false;
+      if (m.academyId && currentAcademyId && m.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(m, currentAcademyId);
     });
-  }, [rawMembers, user?.academyId]);
+  }, [rawMembers, currentAcademyId]);
 
   const invites = useMemo(() => {
     if (!rawInvites) return undefined;
     return rawInvites.filter((inv: Doc<"invites">) => {
-      if (user?.academyId && inv.academyId && inv.academyId !== user.academyId) {
-        return false;
-      }
-      const email = (inv.email || "").toLowerCase();
-      return !FOREIGN_ACADEMY_KEYWORDS.some((k) => email.includes(k));
+      if (inv.academyId && currentAcademyId && inv.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(inv, currentAcademyId);
     });
-  }, [rawInvites, user?.academyId]);
+  }, [rawInvites, currentAcademyId]);
 
   const cancelInvite = useMutation(api.invites.cancelInvite);
   const updateRole = useMutation(api.users.updateMemberRole);

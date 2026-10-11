@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -154,12 +154,21 @@ type FeeWithAthlete = {
   remainingBalance?: number;
 };
 
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
+
 export default function FinancePage() {
   const { user } = useCurrentUser();
   const canManage =
     user?.role === "academy_admin" ||
     user?.role === "accounting" ||
     user?.role === "platform_admin";
+
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
 
   const [statusFilter, setStatusFilter] = useState<FeeStatus | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -169,11 +178,27 @@ export default function FinancePage() {
   const [deleteTarget, setDeleteTarget] = useState<FeeWithAthlete | null>(null);
 
   const { isAuthenticated } = useConvexAuth();
-  const fees = useQuery(
+  const rawFees = useQuery(
     api.fees.listFeesForAcademy,
     isAuthenticated ? (statusFilter === "all" ? {} : { status: statusFilter }) : "skip",
   );
-  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
+  const rawAthletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
+
+  const fees = useMemo(() => {
+    if (!rawFees) return undefined;
+    return rawFees.filter((f) => {
+      if (f.academyId && currentAcademyId && f.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(f, currentAcademyId);
+    });
+  }, [rawFees, currentAcademyId]);
+
+  const athletes = useMemo(() => {
+    if (!rawAthletes) return undefined;
+    return rawAthletes.filter((a) => {
+      if (a.academyId && currentAcademyId && a.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(a, currentAcademyId);
+    });
+  }, [rawAthletes, currentAcademyId]);
   const updateStatus = useMutation(api.fees.updateFeeStatus);
   const deleteFee = useMutation(api.fees.deleteFee);
 

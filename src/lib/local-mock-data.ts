@@ -282,16 +282,7 @@ export const SEED_ACADEMIES: MockAcademy[] = [
 
 // Clean user list for mock authentication
 export const SEED_USERS: MockUser[] = [
-  // Super Admin / Platform Admin
-  {
-    _id: "usr_superadmin",
-    name: "Platform Admin",
-    email: "ah.baalbaki@gmail.com",
-    password: "A!t3r3g0",
-    role: "platform_admin",
-    tokenIdentifier: "mock|usr_superadmin",
-  },
-  // Head Coach (Hercules Academy)
+  // Head Coach (Hercules Academy) - Primary demo account
   {
     _id: "usr_coach_hercules",
     name: "Dave Miller",
@@ -350,6 +341,16 @@ export const SEED_USERS: MockUser[] = [
     role: "accounting",
     academyId: "acad_hercules",
     tokenIdentifier: "mock|usr_accounting",
+  },
+  // Platform Admin (system test account)
+  {
+    _id: "usr_superadmin",
+    name: "Platform Admin",
+    email: "ah.baalbaki@gmail.com",
+    password: "A!t3r3g0",
+    role: "platform_admin",
+    academyId: "acad_hercules",
+    tokenIdentifier: "mock|usr_superadmin",
   },
 ];
 

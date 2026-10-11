@@ -182,6 +182,9 @@ class LocalMockStore {
       const savedPersona = window.localStorage.getItem(PERSONA_KEY);
       if (savedPersona === "null") {
         this.currentUserId = null;
+      } else if (savedPersona === "usr_superadmin") {
+        this.currentUserId = "usr_coach_hercules";
+        window.localStorage.setItem(PERSONA_KEY, "usr_coach_hercules");
       } else if (savedPersona) {
         this.currentUserId = savedPersona;
       }
@@ -790,22 +793,24 @@ class LocalMockStore {
 
       case "users:listAcademyMembers": {
         if (!academyId) return [];
-        const foreignKeywords = [
-          "hajali",
-          "alhakkani",
-          "sportzona",
-          "eliteacademy",
-          "cedars",
-          "badems",
-          "c00ldude",
-          "olympus",
-          "titan",
+        const foreignPatterns = [
+          /haj[\s_-]?ali/i,
+          /al[\s_-]?hakkani/i,
+          /sport[\s_-]?zona/i,
+          /elite[\s_-]?academy/i,
+          /cedar/i,
+          /bad[\s_-]?ems/i,
+          /c00ldude/i,
+          /olympus/i,
+          /titan/i,
         ];
         return this.db.users.filter((u) => {
+          if (u.role === "platform_admin") return false;
           if (u.academyId !== academyId) return false;
           const email = (u.email || "").toLowerCase();
           const name = (u.name || "").toLowerCase();
-          return !foreignKeywords.some((k) => email.includes(k) || name.includes(k));
+          if (email.includes("baalbaki") || email.includes("heavylaws")) return false;
+          return !foreignPatterns.some((p) => p.test(email) || p.test(name));
         });
       }
 

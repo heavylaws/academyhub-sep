@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 import {
   Search,
   SlidersHorizontal,
@@ -162,7 +163,7 @@ export default function DrillsPage() {
 
   // Queries & Mutations
   const { isAuthenticated } = useConvexAuth();
-  const athletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
+  const rawAthletes = useQuery(api.athletes.listAthletes, isAuthenticated ? {} : "skip");
   const customDrills = useQuery(
     api.drills.listDrills,
     isAuthenticated && user?.academyId ? { academyId: user.academyId } : "skip",
@@ -170,6 +171,21 @@ export default function DrillsPage() {
   const createPlan = useMutation(api.trainingPlans.createPlan);
   const addPlanItem = useMutation(api.trainingPlans.addPlanItem);
   const deleteDrill = useMutation(api.drills.deleteDrill);
+
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
+  const athletes = useMemo(() => {
+    if (!rawAthletes) return undefined;
+    return rawAthletes.filter((a) => {
+      if (a.academyId && currentAcademyId && a.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(a, currentAcademyId);
+    });
+  }, [rawAthletes, currentAcademyId]);
 
   const allDrills = useMemo(() => {
     return combineAllDrills(SOCCER_DRILLS, customDrills);

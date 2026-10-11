@@ -20,6 +20,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
 import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
+import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 
 interface ConversationListProps {
   activeConversationId?: string;
@@ -81,13 +83,29 @@ export default function ConversationList({
   onSelectConversation,
   onOpenNewDialog,
 }: ConversationListProps) {
+  const { user } = useCurrentUser();
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
   const { isAuthenticated } = useConvexAuth();
-  const conversations = useQuery(
+  const rawConversations = useQuery(
     api.messages.listConversations,
     isAuthenticated ? {} : "skip",
   );
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "unread">("all");
+
+  const conversations = useMemo(() => {
+    if (!rawConversations) return undefined;
+    return rawConversations.filter((c) => {
+      if (c.academyId && currentAcademyId && c.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(c, currentAcademyId);
+    });
+  }, [rawConversations, currentAcademyId]);
 
   const filtered = useMemo(() => {
     if (!conversations) return [];

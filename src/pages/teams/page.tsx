@@ -96,6 +96,8 @@ function exportTeamsToCsv(teams: Array<Doc<"teams"> & { memberCount: number }>) 
   toast.success(`Exported ${teams.length} teams to CSV`);
 }
 
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
+
 export default function Teams() {
   const navigate = useNavigate();
   const { user } = useCurrentUser();
@@ -105,7 +107,22 @@ export default function Teams() {
     user?.role === "platform_admin";
 
   const { isAuthenticated } = useConvexAuth();
-  const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
+  const rawTeams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
+
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
+  const teams = useMemo(() => {
+    if (!rawTeams) return undefined;
+    return rawTeams.filter((t) => {
+      if (t.academyId && currentAcademyId && t.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(t, currentAcademyId);
+    });
+  }, [rawTeams, currentAcademyId]);
   const [createOpen, setCreateOpen] = useState(false);
   const [scheduleTeamId, setScheduleTeamId] = useState<Id<"teams"> | null>(null);
   const [search, setSearch] = useState("");

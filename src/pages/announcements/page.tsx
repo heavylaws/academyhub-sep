@@ -51,6 +51,8 @@ const CATEGORIES = [
   { id: "general", label: "General Announcements", icon: Megaphone },
 ];
 
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
+
 export default function AnnouncementsPage() {
   const { user } = useCurrentUser();
   const canPost =
@@ -69,12 +71,21 @@ export default function AnnouncementsPage() {
   const markAsRead = useMutation(api.announcements.markAnnouncementAsRead);
   const deleteAnnouncement = useMutation(api.announcements.deleteAnnouncement);
 
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
   const teamMap = useMemo(() => {
     return new Map((teamsData ?? []).map((t) => [t._id, t.name]));
   }, [teamsData]);
 
   const filteredAnnouncements = useMemo(() => {
     return (announcementsData ?? []).filter((item) => {
+      if (item.academyId && currentAcademyId && item.academyId !== currentAcademyId) return false;
+      if (!isEntityInAcademy(item, currentAcademyId)) return false;
       if (selectedCategory !== "all" && item.category !== selectedCategory) {
         return false;
       }
@@ -93,7 +104,7 @@ export default function AnnouncementsPage() {
       }
       return true;
     });
-  }, [announcementsData, selectedCategory, priorityFilter, searchQuery]);
+  }, [announcementsData, selectedCategory, priorityFilter, searchQuery, currentAcademyId]);
 
   const handleMarkRead = async (id: string) => {
     try {

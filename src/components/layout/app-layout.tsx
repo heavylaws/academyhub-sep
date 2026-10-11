@@ -299,15 +299,9 @@ export default function AppLayout({
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             <SidebarTrigger className="h-9 w-9 shrink-0" />
             <Separator orientation="vertical" className="h-4 hidden sm:block" />
-            {role === "platform_admin" ? (
-              <div className="truncate max-w-[170px] sm:max-w-xs">
-                <AcademySwitcher currentAcademyId={user?.academyId} />
-              </div>
-            ) : (
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-                {role ? ROLE_LABEL[role] : ""} Workspace
-              </span>
-            )}
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+              {user?.academyName || "Hercules Sports Academy"} • {role ? ROLE_LABEL[role] : "Coach"}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {(role === "academy_admin" || role === "platform_admin" || role === "coach") && (

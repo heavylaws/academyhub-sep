@@ -37,6 +37,7 @@ import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
@@ -111,9 +112,32 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [scheduleOpen, setScheduleOpen] = useState(false);
 
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
   const { isAuthenticated } = useConvexAuth();
-  const allSessions = useQuery(api.trainingSessions.listSessionsForAcademy, isAuthenticated ? {} : "skip");
-  const teams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
+  const rawAllSessions = useQuery(api.trainingSessions.listSessionsForAcademy, isAuthenticated ? {} : "skip");
+  const rawTeams = useQuery(api.teams.listTeams, isAuthenticated ? {} : "skip");
+
+  const teams = useMemo(() => {
+    if (!rawTeams) return undefined;
+    return rawTeams.filter((t) => {
+      if (t.academyId && currentAcademyId && t.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(t, currentAcademyId);
+    });
+  }, [rawTeams, currentAcademyId]);
+
+  const allSessions = useMemo(() => {
+    if (!rawAllSessions) return undefined;
+    return rawAllSessions.filter((s) => {
+      if (s.academyId && currentAcademyId && s.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(s, currentAcademyId);
+    });
+  }, [rawAllSessions, currentAcademyId]);
 
   // Filter sessions by team
   const filteredSessions = useMemo(() => {

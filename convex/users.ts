@@ -52,25 +52,27 @@ export const listAcademyMembers = query({
       .collect();
 
     // Strict multi-tenant isolation:
-    // If the academy is Hercules Sports Academy, strictly exclude accounts belonging to other academies
-    const otherAcademyKeywords = [
-      "hajali",
-      "alhakkani",
-      "sportzona",
-      "eliteacademy",
-      "cedars",
-      "badems",
-      "c00ldude",
-      "olympus",
-      "titan",
+    // Exclude platform admins and foreign academy admins
+    const otherAcademyRegexes = [
+      /haj[\s_-]?ali/i,
+      /al[\s_-]?hakkani/i,
+      /sport[\s_-]?zona/i,
+      /elite[\s_-]?academy/i,
+      /cedar/i,
+      /bad[\s_-]?ems/i,
+      /c00ldude/i,
+      /olympus/i,
+      /titan/i,
     ];
 
     return members.filter((m) => {
+      if (m.role === "platform_admin") return false;
       if (m.academyId !== user.academyId) return false;
       const email = (m.email || "").toLowerCase();
       const name = (m.name || "").toLowerCase();
+      if (email.includes("baalbaki") || email.includes("heavylaws")) return false;
       if (academy?.slug === "hercules-sports" || academy?.name?.toLowerCase().includes("hercules")) {
-        if (otherAcademyKeywords.some((k) => email.includes(k) || name.includes(k))) {
+        if (otherAcademyRegexes.some((r) => r.test(email) || r.test(name))) {
           return false;
         }
       }

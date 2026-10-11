@@ -133,42 +133,6 @@ export default function InviteStaffDialog({
               onSubmit={form.handleSubmit(handleSubmit)}
               className="flex flex-col gap-4"
             >
-            {user?.role === "platform_admin" && academies && academies.length > 0 && (
-              <FormField
-                control={form.control}
-                name="academyId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-1.5">
-                      <Building2 className="size-3.5 text-primary" />
-                      <span>Target Academy</span>
-                    </FormLabel>
-                    <Select
-                      value={field.value || user?.academyId || ""}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Choose academy" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {academies.map((a: Doc<"academies">) => (
-                          <SelectItem key={a._id} value={a._id}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription className="text-xs">
-                      Choose which academy workspace this staff or admin belongs to.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
             <FormField
               control={form.control}
               name="email"

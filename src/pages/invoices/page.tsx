@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -88,6 +88,8 @@ import {
 } from "@/components/ui/empty.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { cn } from "@/lib/utils.ts";
+import { useCurrentUser } from "@/hooks/use-current-user.ts";
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 
 type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
 
@@ -504,11 +506,27 @@ export default function InvoicesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Id<"invoices"> | null>(null);
   const { isAuthenticated } = useConvexAuth();
 
-  const invoices = useQuery(
+  const { user } = useCurrentUser();
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
+  const rawInvoices = useQuery(
     api.invoices.listInvoicesForAcademy,
     isAuthenticated ? { status: statusFilter } : "skip",
   );
   const deleteInvoice = useMutation(api.invoices.deleteInvoice);
+
+  const invoices = useMemo(() => {
+    if (!rawInvoices) return undefined;
+    return rawInvoices.filter((inv) => {
+      if (inv.academyId && currentAcademyId && inv.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(inv, currentAcademyId);
+    });
+  }, [rawInvoices, currentAcademyId]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -530,11 +548,17 @@ export default function InvoicesPage() {
   };
 
   // When filtering, fetch all for counts on the unfiltered side
-  const allQuery = useQuery(
+  const rawAllQuery = useQuery(
     api.invoices.listInvoicesForAcademy,
     isAuthenticated ? {} : "skip",
   );
-  const allForCounts = allQuery ?? [];
+  const allForCounts = useMemo(() => {
+    if (!rawAllQuery) return [];
+    return rawAllQuery.filter((inv) => {
+      if (inv.academyId && currentAcademyId && inv.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(inv, currentAcademyId);
+    });
+  }, [rawAllQuery, currentAcademyId]);
   const totalCounts = {
     draft: allForCounts.filter((i) => i.status === "draft").length,
     sent: allForCounts.filter((i) => i.status === "sent").length,

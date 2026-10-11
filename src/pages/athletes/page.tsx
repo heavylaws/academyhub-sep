@@ -154,6 +154,8 @@ function exportAthletesToCsv(athletes: Doc<"athletes">[]) {
   toast.success(`Exported ${athletes.length} athletes to CSV`);
 }
 
+import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
+
 export default function Athletes() {
   const { user } = useCurrentUser();
   const canManage =
@@ -171,10 +173,25 @@ export default function Athletes() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>("all");
 
   const { isAuthenticated } = useConvexAuth();
-  const athletes = useQuery(
+  const rawAthletes = useQuery(
     api.athletes.listAthletes,
     isAuthenticated ? { search: search || undefined } : "skip",
   );
+
+  const currentAcademyId =
+    user?.academyId ||
+    (typeof window !== "undefined"
+      ? window.localStorage.getItem("coachtactics_active_academy_id")
+      : undefined) ||
+    "acad_hercules";
+
+  const athletes = useMemo(() => {
+    if (!rawAthletes) return undefined;
+    return rawAthletes.filter((a) => {
+      if (a.academyId && currentAcademyId && a.academyId !== currentAcademyId) return false;
+      return isEntityInAcademy(a, currentAcademyId);
+    });
+  }, [rawAthletes, currentAcademyId]);
   const analyticsAssessments = useQuery(
     api.assessments.listAssessmentsForAnalytics,
     canManage && isAuthenticated ? {} : "skip",

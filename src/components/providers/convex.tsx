@@ -2,6 +2,20 @@ import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 import { resolveFunctionName } from "@/lib/local-mock-convex-client.ts";
+import { isEntityInAcademy, isForeignEntityText } from "@/lib/tenant-isolation.ts";
+
+let activeTenantAcademyId: string | undefined = undefined;
+
+function getActiveAcademyId(): string | undefined {
+  if (activeTenantAcademyId) return activeTenantAcademyId;
+  const mockId = localMockStore.getActiveAcademyId();
+  if (mockId) return mockId;
+  if (typeof window !== "undefined") {
+    const saved = window.localStorage.getItem("coachtactics_active_academy_id");
+    if (saved && saved !== "undefined") return saved;
+  }
+  return "acad_hercules";
+}
 
 const rawConvexUrl =
   import.meta.env.VITE_CONVEX_URL?.trim() ||
@@ -88,41 +102,111 @@ export function getLiveConvexClient(): ConvexReactClient {
                 res = kpi;
               }
 
-              // Strict tenant isolation for staff and invites
+              // Track active academy ID from user profile or academy query
+              if (name === "users:getCurrentUser" && res && typeof res === "object") {
+                const uAcad = (res as { academyId?: string }).academyId;
+                if (uAcad) activeTenantAcademyId = uAcad;
+              }
+              if (name === "academies:listAcademies" && Array.isArray(res)) {
+                const hercules = (res as Array<{ _id?: string; slug?: string; name?: string }>).find(
+                  (a) => a?.slug === "hercules-sports" || a?.name?.toLowerCase().includes("hercules"),
+                );
+                if (hercules?._id) activeTenantAcademyId = hercules._id;
+              }
+
+              const targetAcademyId = getActiveAcademyId();
+
+              // Strict tenant isolation across all platform tabs and entities
               if (name === "users:listAcademyMembers" && Array.isArray(res)) {
-                const foreignKeywords = [
-                  "hajali",
-                  "alhakkani",
-                  "sportzona",
-                  "eliteacademy",
-                  "cedars",
-                  "badems",
-                  "c00ldude",
-                  "olympus",
-                  "titan",
-                ];
                 res = (res as Array<Record<string, unknown>>).filter((m) => {
-                  const email = String(m?.email || "").toLowerCase();
-                  const nameStr = String(m?.name || "").toLowerCase();
-                  return !foreignKeywords.some((k) => email.includes(k) || nameStr.includes(k));
+                  if (m?.role === "platform_admin") return false;
+                  if (m?.academyId && targetAcademyId && m.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(m as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "users:listAllUsers" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((m) => {
+                  if (m?.role === "platform_admin") return false;
+                  if (m?.academyId && targetAcademyId && m.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(m as Record<string, unknown>, targetAcademyId);
                 });
               }
 
               if (name === "invites:listInvites" && Array.isArray(res)) {
-                const foreignKeywords = [
-                  "hajali",
-                  "alhakkani",
-                  "sportzona",
-                  "eliteacademy",
-                  "cedars",
-                  "badems",
-                  "c00ldude",
-                  "olympus",
-                  "titan",
-                ];
                 res = (res as Array<Record<string, unknown>>).filter((inv) => {
-                  const email = String(inv?.email || "").toLowerCase();
-                  return !foreignKeywords.some((k) => email.includes(k));
+                  if (inv?.academyId && targetAcademyId && inv.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(inv as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "athletes:listAthletes" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((ath) => {
+                  if (ath?.academyId && targetAcademyId && ath.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(ath as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "teams:listTeams" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((team) => {
+                  if (team?.academyId && targetAcademyId && team.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(team as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (
+                (name === "trainingSessions:listSessionsForAcademy" ||
+                  name === "trainingSessions:listTodaySessions" ||
+                  name === "trainingSessions:listUpcomingSessions" ||
+                  name === "trainingSessions:getSessionKioskRoster") &&
+                Array.isArray(res)
+              ) {
+                res = (res as Array<Record<string, unknown>>).filter((session) => {
+                  if (session?.academyId && targetAcademyId && session.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(session as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "announcements:listAnnouncements" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((ann) => {
+                  if (ann?.academyId && targetAcademyId && ann.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(ann as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "academies:listAcademies" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((acad) => {
+                  const slug = String(acad?.slug || "").toLowerCase();
+                  const nameStr = String(acad?.name || "").toLowerCase();
+                  return slug.includes("hercules") || nameStr.includes("hercules");
+                });
+              }
+
+              if (name === "invoices:listInvoicesForAcademy" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((inv) => {
+                  if (inv?.academyId && targetAcademyId && inv.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(inv as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "fees:listFeesForAcademy" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((fee) => {
+                  if (fee?.academyId && targetAcademyId && fee.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(fee as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "messages:listConversations" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((conv) => {
+                  if (conv?.academyId && targetAcademyId && conv.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(conv as Record<string, unknown>, targetAcademyId);
+                });
+              }
+
+              if (name === "drills:listDrills" && Array.isArray(res)) {
+                res = (res as Array<Record<string, unknown>>).filter((drill) => {
+                  if (drill?.academyId && targetAcademyId && drill.academyId !== targetAcademyId) return false;
+                  return isEntityInAcademy(drill as Record<string, unknown>, targetAcademyId);
                 });
               }
 

@@ -76,10 +76,16 @@ export default function NewConversationDialog({
   const [initialMessage, setInitialMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Eligible recipients: other academy members (excluding current user)
+  // Eligible recipients: other academy members (excluding current user and platform admins)
   const eligibleMembers = useMemo(() => {
     if (!members) return [];
-    return members.filter((m) => m._id !== user?._id);
+    return members.filter((m) => {
+      if (m._id === user?._id) return false;
+      if (m.role === "platform_admin") return false;
+      const email = (m.email || "").toLowerCase();
+      if (email.includes("baalbaki") || email.includes("heavylaws")) return false;
+      return true;
+    });
   }, [members, user?._id]);
 
   const filteredMembers = useMemo(() => {
