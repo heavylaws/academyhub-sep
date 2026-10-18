@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 
 export interface LocalAuthUser {
   id?: string;
@@ -25,6 +26,7 @@ export function useAuth() {
   const [authTick, setAuthTick] = useState(0);
 
   useEffect(() => {
+    if (import.meta.env.PROD || !isLocalDev) return;
     const unsubMock = localMockStore.subscribeAuth(() => {
       setAuthTick((t) => t + 1);
     });
@@ -36,12 +38,15 @@ export function useAuth() {
 
   void authTick;
 
-  const mockUser = localMockStore.getCurrentUser();
+  const mockUser = !import.meta.env.PROD && isLocalDev ? localMockStore.getCurrentUser() : null;
   const isAuthenticated = convexIsAuth || Boolean(mockUser);
   const isLoading = convexLoading;
 
   const signinWithPassword = useCallback(
     async (email: string, pass: string) => {
+      if (import.meta.env.PROD || !isLocalDev) {
+        throw new Error("Password authentication mock is disabled in production environments.");
+      }
       const res = localMockStore.authenticateWithPassword(email, pass);
       if (res.success && res.user) {
         return res.user;
@@ -66,8 +71,10 @@ export function useAuth() {
     } catch {
       // Ignored
     }
-    localMockStore.setPersona(null);
-    localMockStore.wipe();
+    if (!import.meta.env.PROD && isLocalDev) {
+      localMockStore.setPersona(null);
+      localMockStore.wipe();
+    }
   }, [convexSignOut]);
 
   const effectiveEmail = mockUser?.email || undefined;

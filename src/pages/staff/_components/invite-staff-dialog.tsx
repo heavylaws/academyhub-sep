@@ -86,7 +86,10 @@ export default function InviteStaffDialog({
       });
 
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
-      const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
+      const generatedPassword =
+        !import.meta.env.PROD && isLocalDev
+          ? localMockStore.takeProvisionedPassword(values.email)
+          : undefined;
       form.reset({ academyId: user?.academyId ?? "", email: "", role: "coach" });
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

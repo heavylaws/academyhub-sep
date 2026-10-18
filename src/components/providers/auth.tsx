@@ -22,6 +22,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("coachtactics_auth_user");
       localStorage.removeItem("coachtactics_active_academy_id");
       sessionStorage.clear();
+      if (typeof window !== "undefined" && "serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "LOGOUT" });
+      }
     } catch {
       // Ignored
     }

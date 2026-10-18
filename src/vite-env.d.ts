@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_CONVEX_URL?: string;
   readonly VITE_LOCAL_DEV?: string;
+  readonly VITE_ENABLE_MOCK?: string;
   /**
    * Mock-mode demo admin password for test environments.
    * NOT a secret: every VITE_* value is embedded in the public JS bundle, and

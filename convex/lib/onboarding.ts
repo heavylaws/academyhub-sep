@@ -46,12 +46,16 @@ export async function onboardUser(
     if (platformAdminEmails().includes(email)) {
       role = "platform_admin";
     } else if (invite) {
-      role = invite.role;
-      academyId = invite.academyId;
-      await ctx.db.patch("invites", invite._id, {
-        status: "accepted",
-        acceptedAt: new Date().toISOString(),
-      });
+      if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
+        await ctx.db.patch("invites", invite._id, { status: "expired" });
+      } else {
+        role = invite.role;
+        academyId = invite.academyId;
+        await ctx.db.patch("invites", invite._id, {
+          status: "accepted",
+          acceptedAt: new Date().toISOString(),
+        });
+      }
     } else if (athleteRecord) {
       role = "athlete";
       academyId = athleteRecord.academyId;

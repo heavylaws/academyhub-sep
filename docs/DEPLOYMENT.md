@@ -53,8 +53,8 @@ Production → Settings → Environment Variables, or with `npx convex env set -
 | `RESEND_API_KEY`          | `re_...`                                    | yes                                             |
 | `EMAIL_FROM`              | `PeakForm Athletics <no-reply@example.com>` | yes — must be on your verified Resend domain    |
 | `JWT_PRIVATE_KEY`, `JWKS` | _(set by `npx @convex-dev/auth`)_           | yes                                             |
-| `OPENAI_API_KEY`          | `sk-...`                                    | only for video analysis                         |
-| `OPENAI_VISION_MODEL`     | `gpt-4o`                                    | optional; any OpenAI vision-capable model       |
+| `GEMINI_API_KEY`          | `AIza...`                                   | only for AI biomechanics video analysis         |
+| `GEMINI_MODEL`             | `gemini-2.5-flash`                          | optional; defaults to gemini-2.5-flash           |
 
 Deploy the backend:
 

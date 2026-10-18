@@ -742,3 +742,248 @@ describe("RBAC Permissions & Tenant Isolation helper suite", () => {
   });
 });
 
+describe("Financial RBAC & Idempotency Audit Suite", () => {
+  it("enforces FINANCE_ROLES on invoice and fee mutations", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId, childId } = await seed(t);
+
+    const coachId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "coach@academy.test",
+        emailVerificationTime: 1,
+        role: "coach",
+        academyId,
+      }),
+    );
+
+    // Coach cannot create invoice
+    await expect(
+      as(t, coachId).mutation(api.invoices.createInvoice, {
+        description: "Registration Fee",
+        amount: 100,
+        currency: "USD",
+        dueDate: "2026-11-01",
+      }),
+    ).rejects.toThrow();
+
+    // Coach cannot create athlete fee
+    await expect(
+      as(t, coachId).mutation(api.fees.createFee, {
+        athleteId: childId,
+        label: "Uniform Fee",
+        amountDue: 50,
+        currency: "USD",
+        dueDate: "2026-11-01",
+      }),
+    ).rejects.toThrow();
+
+    // Coach cannot create fee schedules
+    await expect(
+      as(t, coachId).mutation(api.feeAutomation.createFeeSchedules, {
+        athleteIds: [childId],
+        label: "Monthly Tuition",
+        amount: 150,
+        currency: "USD",
+        dueDay: 5,
+        startPeriod: "2026-10",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("enforces requireAcademyMember on invoices across different academies", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId, otherAcademyId, staffId } = await seed(t);
+
+    const accountingId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "accountant@academy.test",
+        emailVerificationTime: 1,
+        role: "accounting",
+        academyId,
+      }),
+    );
+
+    const foreignAthleteId = await t.run((ctx) =>
+      ctx.db.insert("athletes", {
+        academyId: otherAcademyId,
+        firstName: "Foreign",
+        lastName: "Athlete",
+        status: "active",
+        createdBy: staffId,
+        createdAt: now,
+      }),
+    );
+
+    // Cannot create invoice for an athlete of another academy
+    await expect(
+      as(t, accountingId).mutation(api.invoices.createInvoice, {
+        description: "Cross Academy Tuition",
+        amount: 200,
+        currency: "USD",
+        dueDate: "2026-11-01",
+        athleteId: foreignAthleteId,
+      }),
+    ).rejects.toThrow();
+
+    // Cannot update invoice belonging to another academy
+    const foreignInvoiceId = await t.run((ctx) =>
+      ctx.db.insert("invoices", {
+        academyId: otherAcademyId,
+        invoiceNumber: "INV-9999",
+        description: "Foreign Invoice",
+        amount: 300,
+        currency: "USD",
+        dueDate: "2026-11-01",
+        status: "draft",
+        issuedAt: now,
+        createdBy: staffId,
+      }),
+    );
+
+    await expect(
+      as(t, accountingId).mutation(api.invoices.updateInvoiceStatus, {
+        invoiceId: foreignInvoiceId,
+        status: "sent",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("prevents duplicate invoice creation on rapid double-clicks and respects idempotencyKey", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId } = await seed(t);
+
+    // 1. Double-click prevention: identical payload creates only one invoice
+    const inv1 = await as(t, staffId).mutation(api.invoices.createInvoice, {
+      description: "Annual Tournament Pass",
+      amount: 120,
+      currency: "USD",
+      dueDate: "2026-11-15",
+    });
+
+    const inv2 = await as(t, staffId).mutation(api.invoices.createInvoice, {
+      description: "Annual Tournament Pass",
+      amount: 120,
+      currency: "USD",
+      dueDate: "2026-11-15",
+    });
+
+    expect(inv1).toBe(inv2);
+
+    const invoices = await as(t, staffId).query(
+      api.invoices.listInvoicesForAcademy,
+      {},
+    );
+    expect(
+      invoices.filter((i) => i.description === "Annual Tournament Pass"),
+    ).toHaveLength(1);
+
+    // 2. Explicit idempotencyKey prevents duplicates
+    const inv3 = await as(t, staffId).mutation(api.invoices.createInvoice, {
+      description: "Kit Surcharge",
+      amount: 45,
+      currency: "USD",
+      dueDate: "2026-11-20",
+      idempotencyKey: "unique-key-12345",
+    });
+
+    const inv4 = await as(t, staffId).mutation(api.invoices.createInvoice, {
+      description: "Kit Surcharge",
+      amount: 45,
+      currency: "USD",
+      dueDate: "2026-11-20",
+      idempotencyKey: "unique-key-12345",
+    });
+
+    expect(inv3).toBe(inv4);
+  });
+
+  it("prevents duplicate fee creation and duplicate payment recording", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, childId } = await seed(t);
+
+    // 1. Fee double-click returns existing fee
+    const fee1 = await as(t, staffId).mutation(api.fees.createFee, {
+      athleteId: childId,
+      label: "Fall League Entry",
+      amountDue: 80,
+      currency: "USD",
+      dueDate: "2026-11-01",
+    });
+
+    const fee2 = await as(t, staffId).mutation(api.fees.createFee, {
+      athleteId: childId,
+      label: "Fall League Entry",
+      amountDue: 80,
+      currency: "USD",
+      dueDate: "2026-11-01",
+    });
+
+    expect(fee1).toBe(fee2);
+
+    // 2. Payment double-click does not record duplicate amount
+    await as(t, staffId).mutation(api.fees.recordPayment, {
+      feeId: fee1,
+      amountPaid: 40,
+      paidOn: "2026-10-18",
+      method: "Cash",
+    });
+
+    // Rapid second click with same parameters
+    await as(t, staffId).mutation(api.fees.recordPayment, {
+      feeId: fee1,
+      amountPaid: 40,
+      paidOn: "2026-10-18",
+      method: "Cash",
+    });
+
+    const feesList = await as(t, staffId).query(api.fees.listFeesForAthlete, {
+      athleteId: childId,
+    });
+    const fee = feesList.find((f) => f._id === fee1);
+    expect(fee?.totalPaid).toBe(40);
+    expect(fee?.payments).toHaveLength(1);
+  });
+
+  it("idempotently handles fee schedule creation and avoids duplicate recurring fees", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, childId } = await seed(t);
+
+    // First creation
+    const created1 = await as(t, staffId).mutation(
+      api.feeAutomation.createFeeSchedules,
+      {
+        athleteIds: [childId],
+        label: "Elite Training Monthly",
+        amount: 250,
+        currency: "USD",
+        dueDay: 1,
+        startPeriod: "2026-10",
+      },
+    );
+    expect(created1).toBe(1);
+
+    // Double-click retry
+    const created2 = await as(t, staffId).mutation(
+      api.feeAutomation.createFeeSchedules,
+      {
+        athleteIds: [childId],
+        label: "Elite Training Monthly",
+        amount: 250,
+        currency: "USD",
+        dueDay: 1,
+        startPeriod: "2026-10",
+      },
+    );
+    expect(created2).toBe(0);
+
+    const schedules = await as(t, staffId).query(
+      api.feeAutomation.listFeeSchedules,
+      {},
+    );
+    expect(
+      schedules.filter((s) => s.label === "Elite Training Monthly"),
+    ).toHaveLength(1);
+  });
+});
+
+

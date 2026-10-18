@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
-import { requireRole, requireUser } from "./lib/auth.ts";
+import { requireAcademyMember, requireRole, requireUser } from "./lib/auth.ts";
 import { benchmarkTargetValidator } from "./schema/academySettings.ts";
 
 /** Get academy settings (benchmarks, currencies, branding, feature flags) */
@@ -10,10 +10,7 @@ export const getAcademySettings = query({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    const targetAcademyId =
-      user.role === "platform_admin" && args.academyId
-        ? args.academyId
-        : user.academyId;
+    const targetAcademyId = args.academyId ?? user.academyId;
 
     if (!targetAcademyId) {
       return null;
@@ -49,10 +46,7 @@ export const updateAcademySettings = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["academy_admin", "platform_admin"]);
-    const targetAcademyId =
-      user.role === "platform_admin" && args.academyId
-        ? args.academyId
-        : user.academyId;
+    const targetAcademyId = args.academyId ?? user.academyId;
 
     if (!targetAcademyId) {
       throw new ConvexError({
@@ -107,10 +101,7 @@ export const setBenchmarkTarget = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["academy_admin", "platform_admin"]);
-    const targetAcademyId =
-      user.role === "platform_admin" && args.academyId
-        ? args.academyId
-        : user.academyId;
+    const targetAcademyId = args.academyId ?? user.academyId;
 
     if (!targetAcademyId) {
       throw new ConvexError({

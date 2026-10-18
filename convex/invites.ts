@@ -3,6 +3,13 @@ import { mutation, query } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import { requireRole, requireUser } from "./lib/auth.ts";
 import { userRoleValidator } from "./schema.ts";
+import { assertInviteRateLimit, recordInviteAttempt } from "./lib/rateLimit.ts";
+
+function generateSecureToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 /**
  * Invite a new staff member.
@@ -69,6 +76,9 @@ export const createInvite = mutation({
       });
     }
 
+    const token = generateSecureToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
     // Only a verified email may receive the role right away; an unverified
     // account with this email could belong to someone else. Otherwise the
     // invite stays pending and is applied when the email is verified.
@@ -99,6 +109,8 @@ export const createInvite = mutation({
         role: args.role,
         invitedBy: user._id,
         status: "accepted",
+        token,
+        expiresAt,
         createdAt: new Date().toISOString(),
         acceptedAt: new Date().toISOString(),
       });
@@ -121,11 +133,13 @@ export const createInvite = mutation({
       )
       .first();
     if (existingInvite) {
-      // Resend: update createdAt and fire a new email instead of blocking
+      // Resend: refresh token, expiration, and fire a new email
       await ctx.db.patch("invites", existingInvite._id, {
         academyId: args.academyId,
         role: args.role,
         invitedBy: user._id,
+        token,
+        expiresAt,
         createdAt: new Date().toISOString(),
       });
 
@@ -147,6 +161,8 @@ export const createInvite = mutation({
       role: args.role,
       invitedBy: user._id,
       status: "pending",
+      token,
+      expiresAt,
       createdAt: new Date().toISOString(),
     });
 
@@ -160,6 +176,156 @@ export const createInvite = mutation({
     });
 
     return inviteId;
+  },
+});
+
+/**
+ * Validates an invite token without redeeming it.
+ * Rate-limited against enumeration attacks.
+ */
+export const validateInviteToken = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const token = args.token.trim();
+    if (!token || token.length < 32 || token.length > 128) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Invalid invite token format",
+      });
+    }
+
+    // Rate-limit token lookups against enumeration attacks
+    await assertInviteRateLimit(ctx, token.slice(0, 16));
+
+    const invite = await ctx.db
+      .query("invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+
+    if (!invite) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Invite not found or invalid",
+      });
+    }
+
+    if (invite.status !== "pending") {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "This invite has already been accepted or cancelled",
+      });
+    }
+
+    if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "This invite has expired. Please request a new invite.",
+      });
+    }
+
+    const academy = await ctx.db.get("academies", invite.academyId);
+    return {
+      valid: true,
+      email: invite.email,
+      role: invite.role,
+      academyName: academy?.name ?? "the academy",
+    };
+  },
+});
+
+/**
+ * Accepts an invite by token, single-use, binding the authenticated user
+ * strictly to the invite's academyId and role.
+ */
+export const acceptInviteByToken = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const token = args.token.trim();
+    if (!token || token.length < 32 || token.length > 128) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Invalid invite token format",
+      });
+    }
+
+    // Rate-limit redemption against enumeration
+    await assertInviteRateLimit(ctx, token.slice(0, 16));
+
+    const invite = await ctx.db
+      .query("invites")
+      .withIndex("by_token", (q) => q.eq("token", token))
+      .first();
+
+    if (!invite) {
+      await recordInviteAttempt(ctx, token.slice(0, 16), false);
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Invite not found or invalid",
+      });
+    }
+
+    // Single-use check
+    if (invite.status !== "pending") {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "This invite has already been accepted or cancelled",
+      });
+    }
+
+    // Expiration check
+    if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
+      await ctx.db.patch("invites", invite._id, { status: "expired" });
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "This invite has expired. Please request a new invite.",
+      });
+    }
+
+    // User email verification and binding check
+    const userEmail = (user.email ?? "").trim().toLowerCase();
+    const inviteEmail = invite.email.trim().toLowerCase();
+    if (userEmail !== inviteEmail) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: `This invite was issued for ${invite.email}. Please sign in with that email.`,
+      });
+    }
+
+    // Single-use: Mark invite as accepted atomically
+    await ctx.db.patch("invites", invite._id, {
+      status: "accepted",
+      acceptedAt: new Date().toISOString(),
+    });
+
+    // Strictly bind the user to the invite's academyId and role
+    await ctx.db.patch("users", user._id, {
+      role: invite.role,
+      academyId: invite.academyId,
+    });
+
+    // If an athlete record matches this email in this academy, link them
+    if (invite.role === "athlete") {
+      const athlete = await ctx.db
+        .query("athletes")
+        .withIndex("by_academy_and_email", (q) =>
+          q.eq("academyId", invite.academyId).eq("email", inviteEmail),
+        )
+        .first();
+      if (athlete && !athlete.userId) {
+        await ctx.db.patch("athletes", athlete._id, {
+          userId: user._id,
+        });
+      }
+    }
+
+    await recordInviteAttempt(ctx, token.slice(0, 16), true);
+
+    return {
+      success: true,
+      role: invite.role,
+      academyId: invite.academyId,
+    };
   },
 });
 
@@ -199,3 +365,4 @@ export const cancelInvite = mutation({
     return null;
   },
 });
+

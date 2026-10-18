@@ -39,6 +39,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy compiled frontend dist from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Remove development / demo onboarding tools in production image
+RUN rm -f /usr/share/nginx/html/invite-cards.html
+
 
 # Expose HTTP port (80 for standard, Cloud Run binds to $PORT or 8080)
 EXPOSE 80

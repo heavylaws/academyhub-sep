@@ -15,9 +15,18 @@ export const invites = defineTable({
   email: v.string(),
   role: userRoleValidator,
   invitedBy: v.id("users"),
-  status: v.union(v.literal("pending"), v.literal("accepted")),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("accepted"),
+    v.literal("cancelled"),
+    v.literal("expired"),
+  ),
+  token: v.optional(v.string()),
+  expiresAt: v.optional(v.string()),
   createdAt: v.string(),
   acceptedAt: v.optional(v.string()),
 })
   .index("by_email_and_status", ["email", "status"])
-  .index("by_academy", ["academyId"]);
+  .index("by_academy", ["academyId"])
+  .index("by_token", ["token"]);
+

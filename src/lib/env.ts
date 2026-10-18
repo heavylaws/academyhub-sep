@@ -5,6 +5,8 @@
 const convexUrl = import.meta.env.VITE_CONVEX_URL?.trim();
 
 export const isLocalDev = Boolean(
-  (!convexUrl || convexUrl === "") && import.meta.env.VITE_LOCAL_DEV === "true",
+  !import.meta.env.PROD &&
+    (!convexUrl || convexUrl === "") &&
+    import.meta.env.VITE_LOCAL_DEV === "true",
 );
 

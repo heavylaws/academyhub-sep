@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { useCurrentUser, type UserRole } from "@/hooks/use-current-user.ts";
 import { useAdminTutorial } from "@/components/tutorial/tutorial-context.ts";
@@ -172,13 +173,18 @@ export default function AppLayout({
       console.warn("Legacy signOut error:", e);
     }
     try {
-      localMockStore.setPersona(null);
-      localMockStore.wipe();
+      if (!import.meta.env.PROD && isLocalDev) {
+        localMockStore.setPersona(null);
+        localMockStore.wipe();
+      }
       localStorage.removeItem("coachtactics_email_bypassed");
       localStorage.removeItem("coachtactics_persona_id_v3");
       localStorage.removeItem("coachtactics_auth_user");
       localStorage.removeItem("coachtactics_active_academy_id");
       sessionStorage.clear();
+      if (typeof window !== "undefined" && "serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "LOGOUT" });
+      }
     } catch {
       // Ignored
     }

@@ -3,18 +3,21 @@ import { ConvexReactClient } from "convex/react";
 import { localMockStore } from "@/lib/local-mock-store.ts";
 import { resolveFunctionName } from "@/lib/local-mock-convex-client.ts";
 import { isEntityInAcademy, isForeignEntityText } from "@/lib/tenant-isolation.ts";
+import { isLocalDev } from "@/lib/env.ts";
 
 let activeTenantAcademyId: string | undefined = undefined;
 
 function getActiveAcademyId(): string | undefined {
   if (activeTenantAcademyId) return activeTenantAcademyId;
-  const mockId = localMockStore.getActiveAcademyId();
-  if (mockId) return mockId;
+  if (!import.meta.env.PROD && isLocalDev) {
+    const mockId = localMockStore.getActiveAcademyId();
+    if (mockId) return mockId;
+  }
   if (typeof window !== "undefined") {
     const saved = window.localStorage.getItem("coachtactics_active_academy_id");
     if (saved && saved !== "undefined") return saved;
   }
-  return "acad_hercules";
+  return !import.meta.env.PROD && isLocalDev ? "acad_hercules" : undefined;
 }
 
 const rawConvexUrl =
@@ -62,9 +65,12 @@ export function getLiveConvexClient(): ConvexReactClient {
           const unsubReal = realWatch.onUpdate(() => {
             callback();
           });
-          const unsubMock = localMockStore.subscribe(() => {
-            callback();
-          });
+          const unsubMock =
+            !import.meta.env.PROD && isLocalDev
+              ? localMockStore.subscribe(() => {
+                  callback();
+                })
+              : () => {};
           return () => {
             unsubReal();
             unsubMock();
@@ -215,7 +221,10 @@ export function getLiveConvexClient(): ConvexReactClient {
             // If real query is undefined, it is currently in flight over Convex WebSocket / HTTP.
             // Return undefined so React renders loading state until real Convex DB data arrives.
             return undefined;
-          } catch (_err: unknown) {
+          } catch (err: unknown) {
+            if (import.meta.env.PROD || !isLocalDev) {
+              return undefined;
+            }
             isFallback = true;
             return localMockStore.evaluateQuery(name, args);
           }
@@ -243,7 +252,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).mutation = async (mutation: any, ...argsAndOptions: any[]) => {
       try {
         return await originalMutation(mutation, ...argsAndOptions);
-      } catch (_err: unknown) {
+      } catch (err: unknown) {
+        if (import.meta.env.PROD || !isLocalDev) {
+          throw err;
+        }
         const name = resolveFunctionName(mutation);
         const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
         return await localMockStore.executeMutation(name, args);
@@ -254,7 +266,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).query = async (query: any, ...argsAndOptions: any[]) => {
       try {
         return await originalQuery(query, ...argsAndOptions);
-      } catch (_err: unknown) {
+      } catch (err: unknown) {
+        if (import.meta.env.PROD || !isLocalDev) {
+          throw err;
+        }
         const name = resolveFunctionName(query);
         const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
         return localMockStore.evaluateQuery(name, args);
@@ -265,7 +280,10 @@ export function getLiveConvexClient(): ConvexReactClient {
     (baseClient as any).action = async (action: any, ...argsAndOptions: any[]) => {
       try {
         return await originalAction(action, ...argsAndOptions);
-      } catch (_err: unknown) {
+      } catch (err: unknown) {
+        if (import.meta.env.PROD || !isLocalDev) {
+          throw err;
+        }
         const name = resolveFunctionName(action);
         const args = (argsAndOptions[0] || {}) as Record<string, unknown>;
         return await localMockStore.executeMutation(name, args);

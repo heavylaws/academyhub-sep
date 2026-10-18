@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button.tsx";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 import { useAuthActions } from "@convex-dev/auth/react";
 
 import { useMutation } from "convex/react";
@@ -43,6 +44,7 @@ export default function PendingAccess() {
   };
 
   const handleEnterAcademy = () => {
+    if (import.meta.env.PROD || !isLocalDev) return;
     setChecking(true);
     try {
       localMockStore.setCurrentUser({
@@ -67,8 +69,10 @@ export default function PendingAccess() {
     } catch {
       // Ignored
     }
-    localMockStore.setPersona(null);
-    localMockStore.wipe();
+    if (!import.meta.env.PROD && isLocalDev) {
+      localMockStore.setPersona(null);
+      localMockStore.wipe();
+    }
     window.location.href = "/";
   };
 
@@ -116,14 +120,16 @@ export default function PendingAccess() {
               </div>
 
               <div className="flex flex-col gap-2 w-full mt-4">
-                <Button
-                  onClick={handleEnterAcademy}
-                  disabled={checking}
-                  className="w-full gap-2 font-semibold bg-primary text-primary-foreground shadow-sm"
-                >
-                  <Building2 className="size-4" />
-                  Enter Hercules Sports Academy
-                </Button>
+                {!import.meta.env.PROD && isLocalDev && (
+                  <Button
+                    onClick={handleEnterAcademy}
+                    disabled={checking}
+                    className="w-full gap-2 font-semibold bg-primary text-primary-foreground shadow-sm"
+                  >
+                    <Building2 className="size-4" />
+                    Enter Hercules Sports Academy (Local Dev)
+                  </Button>
+                )}
 
                 <Button
                   variant="outline"

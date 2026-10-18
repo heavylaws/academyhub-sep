@@ -26,6 +26,29 @@ Include 2-4 strengths, 2-4 improvement areas, 2-5 metrics, and 2-4 recommendatio
 Be specific and use professional sports science terminology where appropriate.
 If the frames are low quality or the movement is unclear, still provide your best assessment based on what is visible.`;
 
+const AI_TIMEOUT_MS = 60_000;
+
+function getSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes("GEMINI_API_KEY")) {
+      return "AI service is currently unconfigured. Please configure GEMINI_API_KEY in the backend environment.";
+    }
+    if (
+      error.message.toLowerCase().includes("timed out") ||
+      error.message.toLowerCase().includes("timeout")
+    ) {
+      return "AI video analysis request timed out. Please try again with shorter video clips or fewer frames.";
+    }
+    // Redact sensitive patterns like Google API keys and strip long stack traces
+    const sanitized = error.message
+      .replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]")
+      .replace(/key=[^&\s]+/gi, "key=[REDACTED]")
+      .slice(0, 250);
+    return `AI analysis encountered an error: ${sanitized}`;
+  }
+  return "AI analysis failed due to an unexpected provider error.";
+}
+
 export const runAiAnalysis = internalAction({
   args: {
     analysisId: v.id("videoAnalyses"),
@@ -58,14 +81,23 @@ export const runAiAnalysis = internalAction({
         },
       }));
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [...imageParts, userText],
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          responseMimeType: "application/json",
-        },
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("AI video analysis request timed out after 60 seconds"));
+        }, AI_TIMEOUT_MS);
       });
+
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: [...imageParts, userText],
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            responseMimeType: "application/json",
+          },
+        }),
+        timeoutPromise,
+      ]);
 
       raw = response.text ?? "{}";
 
@@ -115,17 +147,19 @@ export const runAiAnalysis = internalAction({
         },
       });
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unknown error during AI analysis";
-      await ctx.runMutation(internal.videoAnalyses.patchAnalysis, {
-        analysisId: args.analysisId,
-        patch: {
-          status: "failed" as const,
-          errorMessage: message,
-        },
-      });
+      const safeMessage = getSafeErrorMessage(error);
+      try {
+        await ctx.runMutation(internal.videoAnalyses.patchAnalysis, {
+          analysisId: args.analysisId,
+          patch: {
+            status: "failed" as const,
+            errorMessage: safeMessage,
+            completedAt: new Date().toISOString(),
+          },
+        });
+      } catch (patchErr) {
+        console.error("Failed to transition analysis document to failed status:", patchErr);
+      }
     }
   },
 });

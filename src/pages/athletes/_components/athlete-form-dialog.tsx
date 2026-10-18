@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 import {
   CredentialsSuccessDialog,
   type GeneratedCredentials,
@@ -166,7 +167,10 @@ export default function AthleteFormDialog({
         toast.success("Athlete added");
 
         if (values.email) {
-          const provisionedPassword = localMockStore.takeProvisionedPassword(values.email);
+          const provisionedPassword =
+            !import.meta.env.PROD && isLocalDev
+              ? localMockStore.takeProvisionedPassword(values.email)
+              : undefined;
           const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
           if (provisionedPassword) {
             setGeneratedCreds({

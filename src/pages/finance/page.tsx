@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { generateIdempotencyKey } from "@/lib/idempotency.ts";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -642,6 +643,8 @@ function NewFeeDialog({
 
   const handleSubmit = async (values: NewFeeValues) => {
     try {
+      const idempotencyKey = generateIdempotencyKey("fee");
+
       await createFee({
         athleteId: values.athleteId as Id<"athletes">,
         label: values.label,
@@ -649,6 +652,7 @@ function NewFeeDialog({
         currency: values.currency,
         dueDate: values.dueDate,
         notes: values.notes || undefined,
+        idempotencyKey,
       });
       toast.success("Fee created", {
         description: "Athlete will be notified by email.",

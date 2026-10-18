@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/form.tsx";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 import {
   CredentialsSuccessDialog,
   type GeneratedCredentials,
@@ -62,7 +63,10 @@ export default function InviteAcademyAdminDialog({
         role: "academy_admin",
       });
 
-      const generatedPassword = localMockStore.takeProvisionedPassword(values.email);
+      const generatedPassword =
+        !import.meta.env.PROD && isLocalDev
+          ? localMockStore.takeProvisionedPassword(values.email)
+          : undefined;
       form.reset();
       if (!generatedPassword) {
         toast.success(`Invite sent to ${values.email}`);

@@ -4,6 +4,7 @@ import { useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { localMockStore } from "@/lib/local-mock-store.ts";
+import { isLocalDev } from "@/lib/env.ts";
 
 export type UserRole =
   | "platform_admin"
@@ -23,7 +24,11 @@ export interface CurrentUser {
   emailVerified?: boolean;
 }
 
-const ENABLE_MOCK = import.meta.env.VITE_ENABLE_MOCK === "true";
+const ENABLE_MOCK = Boolean(
+  !import.meta.env.PROD &&
+    isLocalDev &&
+    (import.meta.env.VITE_ENABLE_MOCK === "true" || !import.meta.env.VITE_CONVEX_URL),
+);
 
 /** Current signed-in user's profile and academy role from Convex Auth or Local Mock. */
 export function useCurrentUser(): { user: CurrentUser | null | undefined; isLoading: boolean } {

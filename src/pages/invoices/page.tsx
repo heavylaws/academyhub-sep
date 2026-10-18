@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { generateIdempotencyKey } from "@/lib/idempotency.ts";
 import AppLayout from "@/components/layout/app-layout.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -222,6 +223,8 @@ function CreateInvoiceDialog({
 
   const onSubmit = async (values: NewInvoiceValues) => {
     try {
+      const idempotencyKey = generateIdempotencyKey("inv");
+
       await createInvoice({
         description: values.description,
         amount: values.amount,
@@ -231,6 +234,7 @@ function CreateInvoiceDialog({
           ? (values.athleteId as Id<"athletes">)
           : undefined,
         note: values.note || undefined,
+        idempotencyKey,
       });
       toast.success("Invoice created");
       form.reset();

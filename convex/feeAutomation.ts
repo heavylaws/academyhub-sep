@@ -7,7 +7,7 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc } from "./_generated/dataModel.d.ts";
-import { requireRole } from "./lib/auth.ts";
+import { FINANCE_ROLES, requireAcademyMember, requireRole } from "./lib/auth.ts";
 
 /** Days before the due date that the "due soon" reminder is emailed. */
 const REMINDER_DAYS_BEFORE = 3;
@@ -62,6 +62,9 @@ async function generateFee(
 ): Promise<boolean> {
   if (!schedule.active || period < schedule.startPeriod) return false;
 
+  const expectedLabel = `${schedule.label} – ${periodLabel(period)}`;
+
+  // 1. Check by scheduleId and period
   const existing = await ctx.db
     .query("athleteFees")
     .withIndex("by_schedule_and_period", (q) =>
@@ -69,6 +72,18 @@ async function generateFee(
     )
     .first();
   if (existing) return false;
+
+  // 2. Secondary idempotency check: ensure athlete doesn't already have a fee for this exact period and label
+  const athleteFeesList = await ctx.db
+    .query("athleteFees")
+    .withIndex("by_athlete", (q) => q.eq("athleteId", schedule.athleteId))
+    .take(50);
+  const duplicateAthleteFee = athleteFeesList.find(
+    (f) =>
+      f.period === period &&
+      (f.scheduleId === schedule._id || f.label === expectedLabel),
+  );
+  if (duplicateAthleteFee) return false;
 
   const athlete = await ctx.db.get("athletes", schedule.athleteId);
   if (!athlete || athlete.status !== "active") return false;
@@ -83,7 +98,7 @@ async function generateFee(
   const feeId = await ctx.db.insert("athleteFees", {
     academyId: schedule.academyId,
     athleteId: schedule.athleteId,
-    label: `${schedule.label} – ${periodLabel(period)}`,
+    label: expectedLabel,
     amountDue: schedule.amount,
     currency: schedule.currency,
     dueDate,
@@ -102,17 +117,13 @@ async function generateFee(
 
 // ── Staff functions ──────────────────────────────────────────────────────────
 
-const FINANCE_ROLES: Array<"academy_admin" | "accounting"> = [
-  "academy_admin",
-  "accounting",
-];
-
 /** Lists the academy's recurring fee schedules with athlete names. */
 export const listFeeSchedules = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     if (!user.academyId) return [];
+    await requireAcademyMember(ctx, user.academyId);
     const schedules = await ctx.db
       .query("feeSchedules")
       .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
@@ -149,6 +160,8 @@ export const createFeeSchedules = mutation({
     if (!user.academyId) {
       throw new ConvexError({ code: "FORBIDDEN", message: "No academy" });
     }
+    await requireAcademyMember(ctx, user.academyId);
+
     const label = args.label.trim();
     if (!label) {
       throw new ConvexError({
@@ -191,21 +204,42 @@ export const createFeeSchedules = mutation({
           message: "Athlete not in your academy",
         });
       }
-      const scheduleId = await ctx.db.insert("feeSchedules", {
-        academyId: user.academyId,
-        athleteId,
-        label,
-        amount: args.amount,
-        currency: args.currency,
-        dueDay: args.dueDay,
-        startPeriod: args.startPeriod,
-        active: true,
-        createdBy: user._id,
-        createdAt: new Date().toISOString(),
-      });
-      const schedule = (await ctx.db.get("feeSchedules", scheduleId))!;
-      await generateFee(ctx, schedule, periodOf(today), today);
-      created++;
+      await requireAcademyMember(ctx, athlete.academyId);
+
+      // Prevent duplicate schedule creation on double clicks
+      const athleteSchedules = await ctx.db
+        .query("feeSchedules")
+        .withIndex("by_athlete", (q) => q.eq("athleteId", athleteId))
+        .collect();
+
+      const existingSchedule = athleteSchedules.find(
+        (s) =>
+          s.active &&
+          s.label === label &&
+          s.amount === args.amount &&
+          s.dueDay === args.dueDay &&
+          s.startPeriod === args.startPeriod,
+      );
+
+      let targetSchedule = existingSchedule;
+      if (!targetSchedule) {
+        const scheduleId = await ctx.db.insert("feeSchedules", {
+          academyId: user.academyId,
+          athleteId,
+          label,
+          amount: args.amount,
+          currency: args.currency,
+          dueDay: args.dueDay,
+          startPeriod: args.startPeriod,
+          active: true,
+          createdBy: user._id,
+          createdAt: new Date().toISOString(),
+        });
+        targetSchedule = (await ctx.db.get("feeSchedules", scheduleId))!;
+        created++;
+      }
+
+      await generateFee(ctx, targetSchedule, periodOf(today), today);
     }
     return created;
   },
@@ -217,12 +251,13 @@ export const setFeeScheduleActive = mutation({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     const schedule = await ctx.db.get("feeSchedules", args.scheduleId);
-    if (!schedule || schedule.academyId !== user.academyId) {
+    if (!schedule) {
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Schedule not found",
       });
     }
+    await requireAcademyMember(ctx, schedule.academyId);
     await ctx.db.patch("feeSchedules", args.scheduleId, {
       active: args.active,
     });
@@ -236,12 +271,13 @@ export const deleteFeeSchedule = mutation({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     const schedule = await ctx.db.get("feeSchedules", args.scheduleId);
-    if (!schedule || schedule.academyId !== user.academyId) {
+    if (!schedule) {
       throw new ConvexError({
         code: "NOT_FOUND",
         message: "Schedule not found",
       });
     }
+    await requireAcademyMember(ctx, schedule.academyId);
     await ctx.db.delete("feeSchedules", args.scheduleId);
     return null;
   },

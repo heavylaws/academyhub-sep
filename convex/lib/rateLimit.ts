@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server.js";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const WINDOW_MINUTES = 15;
+const MAX_STORED_ATTEMPTS_PER_WINDOW = 10;
 
 /**
  * Checks if the given email is currently rate-limited due to repeated failed login attempts.
@@ -13,15 +14,18 @@ export async function assertLoginRateLimit(
   email: string,
 ): Promise<void> {
   const normalized = email.trim().toLowerCase();
+  if (!normalized || normalized.length > 255) {
+    throw new ConvexError("Invalid email address.");
+  }
   const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
 
-  // Retrieve attempts in the sliding window
+  // Retrieve attempts in the sliding window bounded to prevent memory exhaustion
   const recentAttempts = await ctx.db
     .query("loginAttempts")
     .withIndex("by_email_and_time", (q) =>
       q.eq("email", normalized).gte("attemptedAt", windowStart),
     )
-    .collect();
+    .take(MAX_STORED_ATTEMPTS_PER_WINDOW + 1);
 
   const failedAttempts = recentAttempts.filter((a) => !a.success);
 
@@ -44,7 +48,69 @@ export async function assertLoginRateLimit(
 }
 
 /**
+ * Checks if invite token redemption or validation is rate-limited against enumeration attacks.
+ */
+export async function assertInviteRateLimit(
+  ctx: QueryCtx | MutationCtx,
+  identifier: string,
+): Promise<void> {
+  const rateLimitKey = `invite:${identifier.trim().toLowerCase()}`;
+  const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
+
+  const recentAttempts = await ctx.db
+    .query("loginAttempts")
+    .withIndex("by_email_and_time", (q) =>
+      q.eq("email", rateLimitKey).gte("attemptedAt", windowStart),
+    )
+    .take(15);
+
+  const failedAttempts = recentAttempts.filter((a) => !a.success);
+  if (failedAttempts.length >= 10) {
+    throw new ConvexError("Too many invite validation attempts. Please try again in 15 minutes.");
+  }
+}
+
+/**
+ * Records an invite redemption or lookup attempt to guard against enumeration.
+ */
+export async function recordInviteAttempt(
+  ctx: MutationCtx,
+  identifier: string,
+  success: boolean,
+): Promise<void> {
+  const rateLimitKey = `invite:${identifier.trim().toLowerCase()}`;
+  const now = new Date().toISOString();
+  if (success) {
+    const prior = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_email", (q) => q.eq("email", rateLimitKey))
+      .take(50);
+    for (const a of prior) {
+      await ctx.db.delete("loginAttempts", a._id);
+    }
+  } else {
+    // Bound stored failures per identifier
+    const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
+    const existingRecent = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_email_and_time", (q) =>
+        q.eq("email", rateLimitKey).gte("attemptedAt", windowStart),
+      )
+      .take(15);
+
+    if (existingRecent.length < 15) {
+      await ctx.db.insert("loginAttempts", {
+        email: rateLimitKey,
+        attemptedAt: now,
+        success: false,
+      });
+    }
+  }
+}
+
+/**
  * Records a login attempt. If successful, clears past failed attempts for this email.
+ * Includes bounding against spam insertions when already locked out.
  */
 export async function recordLoginAttempt(
   ctx: MutationCtx,
@@ -52,6 +118,9 @@ export async function recordLoginAttempt(
   success: boolean,
 ): Promise<void> {
   const normalized = email.trim().toLowerCase();
+  if (!normalized || normalized.length > 255) {
+    return;
+  }
   const now = new Date().toISOString();
 
   if (success) {
@@ -59,17 +128,28 @@ export async function recordLoginAttempt(
     const priorAttempts = await ctx.db
       .query("loginAttempts")
       .withIndex("by_email", (q) => q.eq("email", normalized))
-      .collect();
+      .take(50);
 
     for (const attempt of priorAttempts) {
       await ctx.db.delete("loginAttempts", attempt._id);
     }
   } else {
-    await ctx.db.insert("loginAttempts", {
-      email: normalized,
-      attemptedAt: now,
-      success: false,
-    });
+    // Anti-spam bounding: Do not insert infinite records if already locked out
+    const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
+    const existingRecent = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_email_and_time", (q) =>
+        q.eq("email", normalized).gte("attemptedAt", windowStart),
+      )
+      .take(MAX_STORED_ATTEMPTS_PER_WINDOW);
+
+    if (existingRecent.length < MAX_STORED_ATTEMPTS_PER_WINDOW) {
+      await ctx.db.insert("loginAttempts", {
+        email: normalized,
+        attemptedAt: now,
+        success: false,
+      });
+    }
   }
 }
 

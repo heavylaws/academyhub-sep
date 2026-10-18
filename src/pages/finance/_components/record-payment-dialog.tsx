@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
+import { generateIdempotencyKey } from "@/lib/idempotency.ts";
 import {
   Dialog,
   DialogContent,
@@ -87,12 +88,15 @@ export default function RecordPaymentDialog({
 
   const handleSubmit = async (values: Values) => {
     try {
+      const idempotencyKey = generateIdempotencyKey("pay");
+
       await recordPayment({
         feeId: fee._id,
         amountPaid: values.amountPaid,
         paidOn: values.paidOn,
         method: values.method || undefined,
         note: values.note || undefined,
+        idempotencyKey,
       });
       toast.success("Payment recorded", {
         description: `${fee.athleteName} will be notified by email.`,

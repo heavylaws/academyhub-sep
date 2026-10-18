@@ -1,15 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import { requireAthleteAccess, requireRole } from "./lib/auth.ts";
+import {
+  FINANCE_ROLES,
+  requireAcademyMember,
+  requireAthleteAccess,
+  requireRole,
+} from "./lib/auth.ts";
 import { feeStatusValidator } from "./schema.ts";
-import type { Doc } from "./_generated/dataModel.d.ts";
-
-type FinanceRole = "academy_admin" | "accounting";
-const FINANCE_ROLES: Array<Doc<"users">["role"]> = [
-  "academy_admin",
-  "accounting",
-];
 
 /** Create a new fee record for an athlete. */
 export const createFee = mutation({
@@ -20,11 +18,13 @@ export const createFee = mutation({
     currency: v.string(),
     dueDate: v.string(),
     notes: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<string> => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     if (!user.academyId)
       throw new ConvexError({ code: "FORBIDDEN", message: "No academy" });
+    await requireAcademyMember(ctx, user.academyId);
 
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete || athlete.academyId !== user.academyId) {
@@ -33,16 +33,53 @@ export const createFee = mutation({
         message: "Athlete not in your academy",
       });
     }
+    await requireAcademyMember(ctx, athlete.academyId);
+
+    // 1. Explicit idempotencyKey match
+    if (args.idempotencyKey) {
+      const existingKeyFee = await ctx.db
+        .query("athleteFees")
+        .withIndex("by_idempotencyKey", (q) =>
+          q.eq("idempotencyKey", args.idempotencyKey),
+        )
+        .first();
+      if (existingKeyFee) {
+        return existingKeyFee._id;
+      }
+    }
+
+    // 2. Strict idempotency / double-click prevention (within 30 seconds)
+    const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString();
+    const recentFees = await ctx.db
+      .query("athleteFees")
+      .withIndex("by_athlete", (q) => q.eq("athleteId", args.athleteId))
+      .order("desc")
+      .take(15);
+
+    const existingRecentFee = recentFees.find(
+      (f) =>
+        f.label === args.label.trim() &&
+        f.amountDue === args.amountDue &&
+        f.currency === args.currency &&
+        f.dueDate === args.dueDate &&
+        f.status === "unpaid" &&
+        f.createdAt >= thirtySecondsAgo,
+    );
+
+    if (existingRecentFee) {
+      return existingRecentFee._id;
+    }
 
     const feeId = await ctx.db.insert("athleteFees", {
       academyId: user.academyId,
       athleteId: args.athleteId,
-      label: args.label,
+      label: args.label.trim(),
       amountDue: args.amountDue,
       currency: args.currency,
       dueDate: args.dueDate,
       status: "unpaid",
       notes: args.notes,
+      idempotencyKey: args.idempotencyKey,
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
@@ -69,9 +106,7 @@ export const updateFeeStatus = mutation({
     const fee = await ctx.db.get("athleteFees", args.feeId);
     if (!fee)
       throw new ConvexError({ code: "NOT_FOUND", message: "Fee not found" });
-    if (fee.academyId !== user.academyId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not your academy" });
-    }
+    await requireAcademyMember(ctx, fee.academyId);
 
     await ctx.db.patch("athleteFees", args.feeId, {
       status: args.status,
@@ -97,21 +132,54 @@ export const recordPayment = mutation({
     paidOn: v.string(),
     method: v.optional(v.string()),
     note: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<null> => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     const fee = await ctx.db.get("athleteFees", args.feeId);
     if (!fee)
       throw new ConvexError({ code: "NOT_FOUND", message: "Fee not found" });
-    if (fee.academyId !== user.academyId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not your academy" });
-    }
+    await requireAcademyMember(ctx, fee.academyId);
 
     if (args.amountPaid <= 0) {
       throw new ConvexError({
         code: "BAD_REQUEST",
         message: "Amount paid must be greater than zero",
       });
+    }
+
+    // 1. Explicit idempotency key match
+    if (args.idempotencyKey) {
+      const existingKeyPayment = await ctx.db
+        .query("feePayments")
+        .withIndex("by_idempotencyKey", (q) =>
+          q.eq("idempotencyKey", args.idempotencyKey),
+        )
+        .first();
+      if (existingKeyPayment) {
+        return null;
+      }
+    }
+
+    // 2. Double-click prevention: duplicate payment recorded within last 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+    const recentPayments = await ctx.db
+      .query("feePayments")
+      .withIndex("by_fee", (q) => q.eq("feeId", args.feeId))
+      .order("desc")
+      .take(10);
+
+    const existingRecentPayment = recentPayments.find(
+      (p) =>
+        p.amountPaid === args.amountPaid &&
+        p.paidOn === args.paidOn &&
+        p.method === args.method &&
+        p.recordedBy === user._id &&
+        p.recordedAt >= tenSecondsAgo,
+    );
+
+    if (existingRecentPayment) {
+      return null;
     }
 
     await ctx.db.insert("feePayments", {
@@ -123,6 +191,7 @@ export const recordPayment = mutation({
       paidOn: args.paidOn,
       method: args.method,
       note: args.note,
+      idempotencyKey: args.idempotencyKey,
       recordedBy: user._id,
       recordedAt: new Date().toISOString(),
     });
@@ -159,9 +228,7 @@ export const deleteFee = mutation({
     const fee = await ctx.db.get("athleteFees", args.feeId);
     if (!fee)
       throw new ConvexError({ code: "NOT_FOUND", message: "Fee not found" });
-    if (fee.academyId !== user.academyId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not your academy" });
-    }
+    await requireAcademyMember(ctx, fee.academyId);
     const payments = await ctx.db
       .query("feePayments")
       .withIndex("by_fee", (q) => q.eq("feeId", args.feeId))
@@ -180,6 +247,7 @@ export const listFeesForAcademy = query({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, [...FINANCE_ROLES, "coach"]);
     if (!user.academyId) return [];
+    await requireAcademyMember(ctx, user.academyId);
 
     const fees = args.status
       ? await ctx.db

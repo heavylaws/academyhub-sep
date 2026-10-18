@@ -25,6 +25,7 @@ export const athleteFees = defineTable({
   // which billing month ("YYYY-MM"), so a month is never billed twice.
   scheduleId: v.optional(v.id("feeSchedules")),
   period: v.optional(v.string()),
+  idempotencyKey: v.optional(v.string()),
   // When the "due soon" reminder / overdue notice were emailed.
   reminderSentAt: v.optional(v.string()),
   overdueNotifiedAt: v.optional(v.string()),
@@ -33,7 +34,8 @@ export const athleteFees = defineTable({
   .index("by_athlete", ["athleteId"])
   .index("by_academy_and_status", ["academyId", "status"])
   .index("by_status_and_dueDate", ["status", "dueDate"])
-  .index("by_schedule_and_period", ["scheduleId", "period"]);
+  .index("by_schedule_and_period", ["scheduleId", "period"])
+  .index("by_idempotencyKey", ["idempotencyKey"]);
 
 /** A recurring monthly fee for one athlete (e.g. "Monthly membership"). */
 export const feeSchedules = defineTable({
@@ -64,9 +66,11 @@ export const feePayments = defineTable({
   paidOn: v.string(), // YYYY-MM-DD
   method: v.optional(v.string()), // e.g. "Cash", "Bank Transfer"
   note: v.optional(v.string()),
+  idempotencyKey: v.optional(v.string()),
   recordedBy: v.id("users"),
   recordedAt: v.string(),
 })
   .index("by_fee", ["feeId"])
   .index("by_athlete", ["athleteId"])
-  .index("by_academy", ["academyId"]);
+  .index("by_academy", ["academyId"])
+  .index("by_idempotencyKey", ["idempotencyKey"]);

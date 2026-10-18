@@ -132,6 +132,8 @@ export const patchAnalysis = internalMutation({
     }),
   },
   handler: async (ctx, args): Promise<void> => {
+    const existing = await ctx.db.get("videoAnalyses", args.analysisId);
+    if (!existing) return;
     await ctx.db.patch("videoAnalyses", args.analysisId, args.patch);
   },
 });

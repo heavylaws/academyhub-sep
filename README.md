@@ -12,7 +12,7 @@
 | **Styling & UI**             | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) + [Radix UI](https://www.radix-ui.com/) |
 | **Backend & Database**       | [Convex](https://www.convex.dev/) (Serverless Reactive Database & Functions)                                              |
 | **Authentication**           | Convex Auth (email + password, email verified by one-time code)                                                           |
-| **AI Biomechanics Analysis** | OpenAI Vision (`OPENAI_API_KEY`)                                                                                          |
+| **AI Biomechanics Analysis** | Google Gemini Vision (`GEMINI_API_KEY`) on Convex                                         |
 | **Testing**                  | [Vitest](https://vitest.dev/) (Edge-runtime for Convex backend + jsdom for React frontend)                                |
 | **Package Manager**          | [pnpm v9](https://pnpm.io/)                                                                                               |
 
@@ -34,7 +34,7 @@
 │   ├── trainingPlans.ts    # Custom workout plans & exercise items
 │   ├── assessments.ts      # Metric tracking (vertical jump, sprint, etc.)
 │   ├── videoAnalyses.ts    # AI video upload & report querying
-│   ├── videoAnalysis.ts    # Node.js action invoking OpenAI Vision
+│   ├── videoAnalysis.ts    # Node.js action invoking Google Gemini Vision
 │   ├── fees.ts             # Fee tracking, payment recording & notifications
 │   ├── invoices.ts         # Invoice lifecycle (draft, sent, paid, overdue)
 │   └── emails.ts           # Email dispatch for invites and fee updates
@@ -108,7 +108,7 @@ VITE_LOCAL_DEV=true
 VITE_CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
-Backend secrets (Resend, OpenAI, auth keys, admin emails) are set on the Convex
+Backend secrets (Resend, Google Gemini `GEMINI_API_KEY`, auth keys, admin emails) are set on the Convex
 deployment, not in this file. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### 4. Running the Convex Backend

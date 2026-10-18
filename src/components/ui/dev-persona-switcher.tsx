@@ -54,17 +54,17 @@ export function DevPersonaSwitcher() {
   const [expanded, setExpanded] = useState(false);
   const [customEmail, setCustomEmail] = useState("");
   const [currentUser, setCurrentUser] = useState(() =>
-    localMockStore.getCurrentUser(),
+    !import.meta.env.PROD && isLocalDev ? localMockStore.getCurrentUser() : null,
   );
 
   useEffect(() => {
-    if (!isLocalDev) return;
+    if (import.meta.env.PROD || !isLocalDev) return;
     return localMockStore.subscribeAuth(() => {
       setCurrentUser(localMockStore.getCurrentUser());
     });
   }, []);
 
-  if (!isLocalDev) return null;
+  if (import.meta.env.PROD || !isLocalDev) return null;
 
   const currentPersona = PERSONAS.find((p) => p.id === currentUser?._id);
 

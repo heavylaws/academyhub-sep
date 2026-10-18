@@ -20,9 +20,11 @@ export const invoices = defineTable({
   status: invoiceStatusValidator,
   /** Optional free-text note, e.g. reason for paid/sent action */
   note: v.optional(v.string()),
+  idempotencyKey: v.optional(v.string()),
   issuedAt: v.string(), // ISO 8601
   createdBy: v.id("users"),
 })
   .index("by_academy", ["academyId"])
   .index("by_academy_and_status", ["academyId", "status"])
-  .index("by_athlete", ["athleteId"]);
+  .index("by_athlete", ["athleteId"])
+  .index("by_idempotencyKey", ["idempotencyKey"]);

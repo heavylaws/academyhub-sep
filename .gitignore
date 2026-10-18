@@ -39,8 +39,14 @@ archives/
 # Build artifacts (build locally; never commit bundles)
 dist.zip
 
-# Local test credentials (never commit)
+# Local test credentials and sensitive exports (never commit)
 credentials.md
+*.csv
+*.ods
+*.xlsx
+academy_admins.*
+*credential*
+*passwords*
 
 # Visual test screenshots
 tactical_board_*.png

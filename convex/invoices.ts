@@ -1,14 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
-import { requireRole } from "./lib/auth.ts";
+import { FINANCE_ROLES, requireAcademyMember, requireRole } from "./lib/auth.ts";
 import { invoiceStatusValidator } from "./schema.ts";
-import type { Doc, Id } from "./_generated/dataModel.d.ts";
+import type { Id } from "./_generated/dataModel.d.ts";
 import type { MutationCtx } from "./_generated/server.js";
-
-const FINANCE_ROLES: Array<Doc<"users">["role"]> = [
-  "academy_admin",
-  "accounting",
-];
 
 /** Generate a zero-padded invoice number for an academy using an atomic counter on the academy record. */
 async function buildInvoiceNumber(
@@ -39,11 +34,13 @@ export const createInvoice = mutation({
     dueDate: v.string(),
     athleteId: v.optional(v.id("athletes")),
     note: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<string> => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     if (!user.academyId)
       throw new ConvexError({ code: "FORBIDDEN", message: "No academy" });
+    await requireAcademyMember(ctx, user.academyId);
 
     if (args.athleteId) {
       const athlete = await ctx.db.get("athletes", args.athleteId);
@@ -53,6 +50,45 @@ export const createInvoice = mutation({
           message: "Athlete not in your academy",
         });
       }
+      await requireAcademyMember(ctx, athlete.academyId);
+    }
+
+    // 1. Explicit idempotency key match if supplied
+    if (args.idempotencyKey) {
+      const existingKeyMatch = await ctx.db
+        .query("invoices")
+        .withIndex("by_idempotencyKey", (q) =>
+          q.eq("idempotencyKey", args.idempotencyKey),
+        )
+        .first();
+      if (existingKeyMatch) {
+        return existingKeyMatch._id;
+      }
+    }
+
+    // 2. Double-click prevention: check for duplicate invoice with identical parameters
+    // created by this user in the same academy within the last 30 seconds
+    const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString();
+    const recentInvoices = await ctx.db
+      .query("invoices")
+      .withIndex("by_academy", (q) => q.eq("academyId", user.academyId!))
+      .order("desc")
+      .take(20);
+
+    const existingRecentDuplicate = recentInvoices.find(
+      (inv) =>
+        inv.description === args.description.trim() &&
+        inv.amount === args.amount &&
+        inv.dueDate === args.dueDate &&
+        inv.currency === args.currency &&
+        inv.athleteId === args.athleteId &&
+        inv.createdBy === user._id &&
+        inv.status === "draft" &&
+        inv.issuedAt >= thirtySecondsAgo,
+    );
+
+    if (existingRecentDuplicate) {
+      return existingRecentDuplicate._id;
     }
 
     const invoiceNumber = await buildInvoiceNumber(ctx, user.academyId);
@@ -61,12 +97,13 @@ export const createInvoice = mutation({
       academyId: user.academyId,
       athleteId: args.athleteId,
       invoiceNumber,
-      description: args.description,
+      description: args.description.trim(),
       amount: args.amount,
       currency: args.currency,
       dueDate: args.dueDate,
       status: "draft",
       note: args.note,
+      idempotencyKey: args.idempotencyKey,
       issuedAt: new Date().toISOString(),
       createdBy: user._id,
     });
@@ -90,9 +127,7 @@ export const updateInvoiceStatus = mutation({
         code: "NOT_FOUND",
         message: "Invoice not found",
       });
-    if (invoice.academyId !== user.academyId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not your academy" });
-    }
+    await requireAcademyMember(ctx, invoice.academyId);
 
     await ctx.db.patch("invoices", args.invoiceId, {
       status: args.status,
@@ -114,9 +149,7 @@ export const deleteInvoice = mutation({
         code: "NOT_FOUND",
         message: "Invoice not found",
       });
-    if (invoice.academyId !== user.academyId) {
-      throw new ConvexError({ code: "FORBIDDEN", message: "Not your academy" });
-    }
+    await requireAcademyMember(ctx, invoice.academyId);
     await ctx.db.delete("invoices", args.invoiceId);
     return null;
   },
@@ -128,6 +161,7 @@ export const listInvoicesForAcademy = query({
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, FINANCE_ROLES);
     if (!user.academyId) return [];
+    await requireAcademyMember(ctx, user.academyId);
 
     const invoiceList = args.status
       ? await ctx.db

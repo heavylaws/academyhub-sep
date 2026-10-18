@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
     "prettier-fix": "prettier --write .",
     "prettier-check": "prettier --check ."
   },

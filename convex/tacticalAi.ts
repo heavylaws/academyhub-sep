@@ -207,16 +207,25 @@ Where each phase in phases contains:
 - Player Count: ${args.playerCount || 10}
 - Specific Notes: ${args.promptNotes || "None"}`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: [
-            { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
-          ],
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.2,
-          },
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error("Gemini AI tactical generation request timed out after 30 seconds"));
+          }, 30_000);
         });
+
+        const response = await Promise.race([
+          ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: [
+              { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
+            ],
+            config: {
+              responseMimeType: "application/json",
+              temperature: 0.2,
+            },
+          }),
+          timeoutPromise,
+        ]);
 
         const textOutput = response.text?.trim();
         if (textOutput) {

@@ -63,14 +63,34 @@ export function PasswordAuthForm() {
     }
   };
 
+const isRateLimitError = (err: unknown): boolean => {
+  const msg =
+    err instanceof ConvexError
+      ? typeof err.data === "string"
+        ? err.data
+        : (err.data as { message?: string })?.message || err.message
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  return /too many|rate limit|try again in/i.test(msg);
+};
+
   const handleQuickSignIn = async (email: string, pass: string) => {
     setEmailVal(email);
     setPasswordVal(pass);
     await run(async () => {
       const normalizedEmail = email.trim().toLowerCase();
+      // Check rate limit first - halt if rate-limited
+      try {
+        await checkRateLimit({ email: normalizedEmail });
+      } catch (rlErr) {
+        if (isRateLimitError(rlErr)) {
+          throw rlErr;
+        }
+      }
+
       // Authenticate with live Convex Auth
       try {
-        await checkRateLimit({ email: normalizedEmail }).catch(() => {});
         const res = await signIn("password", {
           email: normalizedEmail,
           password: pass,
@@ -86,6 +106,9 @@ export function PasswordAuthForm() {
         localMockStore.setPersona(null);
         toast.success(`Signed in to live Convex workspace`);
       } catch (cloudErr) {
+        if (isRateLimitError(cloudErr)) {
+          throw cloudErr;
+        }
         await recordAttempt({ email: normalizedEmail, success: false }).catch(() => {});
         // Fallback to local offline store only if Convex connection fails
         const localRes = localMockStore.authenticateWithPassword(normalizedEmail, pass);
@@ -110,7 +133,14 @@ export function PasswordAuthForm() {
         async () => {
           if (step.kind === "signIn") {
             try {
-              await checkRateLimit({ email }).catch(() => {});
+              await checkRateLimit({ email });
+            } catch (rlErr) {
+              if (isRateLimitError(rlErr)) {
+                throw rlErr;
+              }
+            }
+
+            try {
               const res = await signIn("password", {
                 email,
                 password,
@@ -125,6 +155,9 @@ export function PasswordAuthForm() {
               localMockStore.setPersona(null);
               toast.success(`Signed in to live Convex workspace`);
             } catch (cloudErr) {
+              if (isRateLimitError(cloudErr)) {
+                throw cloudErr;
+              }
               await recordAttempt({ email, success: false }).catch(() => {});
               const localRes = localMockStore.authenticateWithPassword(email, password);
               if (localRes.success && localRes.user) {
