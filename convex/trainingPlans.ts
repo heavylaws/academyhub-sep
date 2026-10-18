@@ -151,8 +151,7 @@ export const getPlan = query({
     const plan = await ctx.db.get("trainingPlans", args.planId);
     if (!plan) return null;
     await requireAcademyMember(ctx, plan.academyId);
-    const athlete = await ctx.db.get("athletes", plan.athleteId);
-    if (!athlete) return null;
+    const { athlete } = await requireAthleteAccess(ctx, plan.athleteId);
     const items = await ctx.db
       .query("planItems")
       .withIndex("by_plan_and_order", (q) => q.eq("planId", args.planId))

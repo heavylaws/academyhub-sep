@@ -10,12 +10,12 @@
  */
 
 import { v, ConvexError } from "convex/values";
-import { action, mutation, query } from "./_generated/server.js";
-import { api } from "./_generated/api.js";
+import { action, internalMutation, internalQuery } from "./_generated/server.js";
+import { internal } from "./_generated/api.js";
 import { GoogleGenAI } from "@google/genai";
 import { validateServerTacticalPlan, type TacticalPlan } from "./lib/tacticalValidation.ts";
 import { generateTacticalCacheKey } from "./lib/tacticalFingerprint.ts";
-import { requireRole } from "./lib/auth.ts";
+import { validateIdentity } from "./lib/permissions.ts";
 
 export interface TacticalDrillMetadata {
   title: string;
@@ -57,9 +57,9 @@ export interface TacticalAiResponse {
 }
 
 /**
- * Checks cache for existing tactical generation
+ * Checks cache for existing tactical generation (internal to backend action)
  */
-export const getCachedDrill = query({
+export const getCachedDrill = internalQuery({
   args: {
     fingerprint: v.string(),
   },
@@ -87,9 +87,9 @@ export const getCachedDrill = query({
 });
 
 /**
- * Stores a validated tactical generation in cache
+ * Stores a validated tactical generation in cache (internal to backend action)
  */
-export const saveCachedDrill = mutation({
+export const saveCachedDrill = internalMutation({
   args: {
     fingerprint: v.string(),
     canonicalKey: v.string(),
@@ -128,7 +128,7 @@ export const saveCachedDrill = mutation({
 
 /**
  * Generates an authentic soccer tactical routine with strict AI pipeline validation
- * and versioned cache lookup.
+ * and versioned cache lookup. Requires authenticated user identity.
  */
 export const generateTacticalDrillAction = action({
   args: {
@@ -141,6 +141,9 @@ export const generateTacticalDrillAction = action({
     promptNotes: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<TacticalAiResponse> => {
+    // Strictly validate caller identity
+    await validateIdentity(ctx);
+
     // 1. Compute Deterministic Versioned Fingerprint (Rule 10)
     const { cacheKey, fingerprint, canonicalKey } = generateTacticalCacheKey({
       ageGroup: args.ageGroup,
@@ -153,13 +156,13 @@ export const generateTacticalDrillAction = action({
     });
 
     // 2. Check Versioned Cache
-    const cached = await ctx.runQuery(api.tacticalAi.getCachedDrill, {
+    const cached = await ctx.runQuery(internal.tacticalAi.getCachedDrill, {
       fingerprint: cacheKey,
     });
 
     if (cached) {
       // Increment hit count
-      await ctx.runMutation(api.tacticalAi.saveCachedDrill, {
+      await ctx.runMutation(internal.tacticalAi.saveCachedDrill, {
         fingerprint: cacheKey,
         canonicalKey,
         drillData: JSON.stringify(cached.drill),
@@ -316,7 +319,7 @@ Where each phase in phases contains:
     const finalPlan = validationResult.normalizedPlan || generatedPlan;
 
     // 6. Persist to Versioned Tactical Cache (Rule 10)
-    await ctx.runMutation(api.tacticalAi.saveCachedDrill, {
+    await ctx.runMutation(internal.tacticalAi.saveCachedDrill, {
       fingerprint: cacheKey,
       canonicalKey,
       drillData: JSON.stringify(generatedDrill),

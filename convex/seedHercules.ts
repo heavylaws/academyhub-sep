@@ -1,8 +1,8 @@
-import { mutation } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 
-export const seedHerculesStatistics = mutation({
+export const seedHerculesStatistics = internalMutation({
   args: {},
   handler: async (ctx) => {
     // 1. Locate Hercules Sports Academy

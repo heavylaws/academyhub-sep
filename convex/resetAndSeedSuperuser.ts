@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
 import { ConvexError, v } from "convex/values";
 import { Scrypt } from "lucia";
 import type { Id } from "./_generated/dataModel.d.ts";
@@ -34,7 +34,7 @@ const TABLES_TO_CLEAR = [
   "users",
 ] as const;
 
-export const resetAndCreateSuperuser = mutation({
+export const resetAndCreateSuperuser = internalMutation({
   args: {},
   handler: async (ctx) => {
     const deletedCounts: Record<string, number> = {};
@@ -90,7 +90,7 @@ export const resetAndCreateSuperuser = mutation({
   },
 });
 
-export const ensureAdminCredentials = mutation({
+export const ensureAdminCredentials = internalMutation({
   args: {},
   handler: async (ctx) => {
     const scrypt = new Scrypt();
@@ -151,7 +151,7 @@ export const ensureAdminCredentials = mutation({
   },
 });
 
-export const createSingleAcademyAdmin = mutation({
+export const createSingleAcademyAdmin = internalMutation({
   args: {
     slug: v.string(),
   },
@@ -377,7 +377,7 @@ export const createSingleAcademyAdmin = mutation({
   },
 });
 
-export const createCustomAcademyAdmin = mutation({
+export const createCustomAcademyAdmin = internalMutation({
   args: {
     academySlug: v.string(),
     name: v.string(),
@@ -522,7 +522,7 @@ export const createCustomAcademyAdmin = mutation({
   },
 });
 
-export const provisionBademsAdmin = mutation({
+export const provisionBademsAdmin = internalMutation({
   args: {},
   handler: async (ctx) => {
     const scrypt = new Scrypt();

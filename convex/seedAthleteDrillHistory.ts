@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
 import { ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 
@@ -358,7 +358,7 @@ const ALL_PLAYBOOK_DRILL_SPECS: DrillSpec[] = [
   },
 ];
 
-export const seedAthleteDrillHistory = mutation({
+export const seedAthleteDrillHistory = internalMutation({
   args: {},
   handler: async (ctx) => {
     // 1. Locate Hercules Sports Academy

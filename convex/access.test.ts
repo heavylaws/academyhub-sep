@@ -5,6 +5,7 @@ import { modules } from "./test.setup.ts";
 import { api } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { onboardUser } from "./lib/onboarding.ts";
+import { requirePermission } from "./lib/permissions.ts";
 
 type T = ReturnType<typeof convexTest>;
 
@@ -639,3 +640,105 @@ describe("dashboard access and scoping", () => {
     expect(kpis?.totalInvoiceCount).toBe(0);
   });
 });
+
+describe("RBAC Permissions & Tenant Isolation helper suite", () => {
+  it("requirePermission validates role and academy tenant scoping", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, academyId, otherAcademyId } = await seed(t);
+    const coachId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "coach@academy.test",
+        emailVerificationTime: 1,
+        role: "coach",
+        academyId,
+      }),
+    );
+
+    // Staff in same academy passes allowed roles
+    await as(t, coachId).run(async (ctx) => {
+      const u = await requirePermission(ctx, ["coach", "academy_admin"], academyId);
+      expect(u._id).toBe(coachId);
+    });
+
+    // Staff disallowed role throws FORBIDDEN
+    await expect(
+      as(t, coachId).run(async (ctx) => {
+        await requirePermission(ctx, ["accounting"], academyId);
+      }),
+    ).rejects.toThrow();
+
+    // Staff querying a different academy throws FORBIDDEN
+    await expect(
+      as(t, coachId).run(async (ctx) => {
+        await requirePermission(ctx, ["coach"], otherAcademyId);
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("blocks non-platform admins from viewing other academy settings", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, otherAcademyId } = await seed(t);
+
+    await expect(
+      as(t, staffId).query(api.academySettings.getAcademySettings, {
+        academyId: otherAcademyId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("blocks users from reading announcements from foreign academies", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, otherAcademyId } = await seed(t);
+
+    const foreignAnnouncementId = await t.run((ctx) =>
+      ctx.db.insert("announcements", {
+        academyId: otherAcademyId,
+        title: "Secret Strategy",
+        content: "Top secret playbook",
+        category: "general",
+        priority: "normal",
+        isPinned: false,
+        createdBy: staffId,
+        createdAt: now,
+      }),
+    );
+
+    await expect(
+      as(t, staffId).mutation(api.announcements.markAnnouncementAsRead, {
+        announcementId: foreignAnnouncementId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("forces team creation into caller's own academy unless platform admin", async () => {
+    const t = convexTest(schema, modules);
+    const { staffId, academyId, otherAcademyId } = await seed(t);
+
+    const teamId = await as(t, staffId).mutation(api.teams.createTeam, {
+      name: "Squad A",
+      academyId: otherAcademyId, // attempting foreign academy injection
+    });
+
+    const createdTeam = await t.run((ctx) => ctx.db.get("teams", teamId));
+    expect(createdTeam?.academyId).toBe(academyId); // enforced to staffId's own academy!
+  });
+
+  it("athlete cannot read another athlete's training plan", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId, childId, selfId, staffId } = await seed(t);
+
+    const athleteUser = await newUser(t, "self@athlete.test", true);
+    await t.run((ctx) => onboardUser(ctx, athleteUser));
+
+    const planId = await as(t, staffId).mutation(api.trainingPlans.createPlan, {
+      athleteId: childId, // Plan belongs to childId, NOT selfId
+      title: "Private Speed Training",
+    });
+
+    // Athlete selfId cannot access childId's plan
+    await expect(
+      as(t, athleteUser).query(api.trainingPlans.getPlan, { planId }),
+    ).rejects.toThrow();
+  });
+});
+

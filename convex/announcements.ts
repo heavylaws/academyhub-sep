@@ -136,6 +136,16 @@ export const createAnnouncement = mutation({
 
     const cleanContent = sanitizeText(args.content, 5000, "Content");
 
+    if (args.targetTeamId) {
+      const team = await ctx.db.get("teams", args.targetTeamId);
+      if (!team || team.academyId !== user.academyId) {
+        throw new ConvexError({
+          code: "BAD_REQUEST",
+          message: "Target team does not belong to your academy",
+        });
+      }
+    }
+
     return await ctx.db.insert("announcements", {
       academyId: user.academyId,
       title: cleanTitle,
@@ -165,6 +175,15 @@ export const markAnnouncementAsRead = mutation({
         message: "User does not belong to an academy",
       });
     }
+
+    const announcement = await ctx.db.get("announcements", args.announcementId);
+    if (!announcement) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Announcement not found",
+      });
+    }
+    await requireAcademyMember(ctx, announcement.academyId);
 
     const existing = await ctx.db
       .query("announcementReads")

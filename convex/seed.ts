@@ -1,6 +1,6 @@
-import { mutation } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
 
-export const seedDatabase = mutation({
+export const seedDatabase = internalMutation({
   args: {},
   handler: async (ctx) => {
     const existing = await ctx.db.query("academies").first();
@@ -306,7 +306,7 @@ export const seedDatabase = mutation({
   },
 });
 
-export const seedUserInitialAcademies = mutation({
+export const seedUserInitialAcademies = internalMutation({
   args: {},
   handler: async (ctx) => {
     const adminUser = await ctx.db

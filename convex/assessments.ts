@@ -192,6 +192,10 @@ export const recordBatchSessionAssessments = mutation({
 
     for (const entry of args.entries) {
       if (entry.value !== undefined && !isNaN(entry.value)) {
+        const athlete = await ctx.db.get("athletes", entry.athleteId);
+        if (!athlete || athlete.academyId !== session.academyId) {
+          continue;
+        }
         const id = await ctx.db.insert("assessments", {
           academyId: session.academyId,
           athleteId: entry.athleteId,
@@ -334,7 +338,10 @@ export const getAcademyAverages = query({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    const targetAcademyId = args.academyId || user.academyId;
+    const targetAcademyId =
+      user.role === "platform_admin" && args.academyId
+        ? args.academyId
+        : user.academyId;
 
     const defaultAverages = {
       Speed: 72,
@@ -348,6 +355,7 @@ export const getAcademyAverages = query({
     if (!targetAcademyId) {
       return defaultAverages;
     }
+    await requireAcademyMember(ctx, targetAcademyId);
 
     const records = await ctx.db
       .query("assessments")

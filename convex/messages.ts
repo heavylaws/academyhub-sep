@@ -258,6 +258,23 @@ export const getOrCreateConversation = mutation({
       });
     }
 
+    if (user.role !== "platform_admin" && targetUser.academyId !== user.academyId) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: "Target user belongs to a different academy",
+      });
+    }
+
+    if (args.athleteId) {
+      const athlete = await ctx.db.get("athletes", args.athleteId);
+      if (!athlete || (user.role !== "platform_admin" && athlete.academyId !== user.academyId)) {
+        throw new ConvexError({
+          code: "FORBIDDEN",
+          message: "Athlete does not belong to your academy",
+        });
+      }
+    }
+
     const cleanTitle = sanitizeOptionalString(args.title, 120, "Title");
     const cleanContextTitle = sanitizeOptionalString(args.contextTitle, 120, "Context title");
     const cleanInitialMessage = sanitizeOptionalText(args.initialMessage, 4000, "Initial message");
@@ -343,6 +360,27 @@ export const markConversationRead = mutation({
   args: { conversationId: v.id("conversations") },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
+    const conversation = await ctx.db.get("conversations", args.conversationId);
+    if (!conversation) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Conversation not found",
+      });
+    }
+
+    if (
+      !conversation.participantIds.includes(user._id) &&
+      user.role !== "academy_admin" &&
+      user.role !== "platform_admin"
+    ) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: "You are not a participant in this conversation",
+      });
+    }
+
+    await requireAcademyMember(ctx, conversation.academyId);
+
     const unread = await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) =>

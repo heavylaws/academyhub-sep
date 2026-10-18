@@ -10,11 +10,15 @@ export const getAcademySettings = query({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
-    const targetAcademyId = args.academyId || user.academyId;
+    const targetAcademyId =
+      user.role === "platform_admin" && args.academyId
+        ? args.academyId
+        : user.academyId;
 
     if (!targetAcademyId) {
       return null;
     }
+    await requireAcademyMember(ctx, targetAcademyId);
 
     const settings = await ctx.db
       .query("academySettings")
@@ -56,6 +60,7 @@ export const updateAcademySettings = mutation({
         message: "Academy ID is required to update settings",
       });
     }
+    await requireAcademyMember(ctx, targetAcademyId);
 
     const existing = await ctx.db
       .query("academySettings")
@@ -113,6 +118,7 @@ export const setBenchmarkTarget = mutation({
         message: "Academy ID is required",
       });
     }
+    await requireAcademyMember(ctx, targetAcademyId);
 
     const existing = await ctx.db
       .query("academySettings")

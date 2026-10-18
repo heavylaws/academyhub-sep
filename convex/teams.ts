@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
-import { requireAcademyMember, requireRole, requireUser } from "./lib/auth.ts";
+import { requireAcademyMember, requireAthleteAccess, requireRole, requireUser } from "./lib/auth.ts";
 import { logAction } from "./lib/logger.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
@@ -13,7 +13,7 @@ export const createTeam = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
-    const targetAcademyId = args.academyId ?? user.academyId;
+    const targetAcademyId = (user.role === "platform_admin" && args.academyId) ? args.academyId : user.academyId;
     if (!targetAcademyId) {
       throw new ConvexError({
         code: "FORBIDDEN",
@@ -392,14 +392,7 @@ export const listTeamsForAthlete = query({
       }
     >
   > => {
-    const athlete = await ctx.db.get("athletes", args.athleteId);
-    if (!athlete) {
-      throw new ConvexError({
-        code: "NOT_FOUND",
-        message: "Athlete not found",
-      });
-    }
-    await requireAcademyMember(ctx, athlete.academyId);
+    const { athlete } = await requireAthleteAccess(ctx, args.athleteId);
     const memberships = await ctx.db
       .query("teamMembers")
       .withIndex("by_athlete", (q) => q.eq("athleteId", args.athleteId))

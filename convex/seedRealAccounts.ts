@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server.js";
+import { internalMutation } from "./_generated/server.js";
 
 const PRECOMPUTED_SECRETS: Record<string, string> = {
   "A!t3r3g0": "32250a8ebc0b352d05503e7b8dd09011:d5584be5cd308fe01893821848abd23c312436956abe6c93e87e0baf191ec238ce4ea964c1aa2f7f09ef098ae2bc9de374d07506f2a0412d5d1e4f6f137c952d",
@@ -15,7 +15,7 @@ const PRECOMPUTED_SECRETS: Record<string, string> = {
   "badems2026!": "908e30ae663b16cec0d7e1a0f0ac3b04:1db8fb89a0f164afc7b53af6a080236c1c40078ad9523bdfa8c71e3381ca7cf84ad9f1fe8bd60025f70f1e5f39f7670d1133daabee4521f29c501e1746bf59be",
 };
 
-export const seedRealAccounts = mutation({
+export const seedRealAccounts = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
