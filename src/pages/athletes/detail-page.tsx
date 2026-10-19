@@ -32,6 +32,9 @@ import {
   Video,
   KeyRound,
   FileText,
+  HeartPulse,
+  Stethoscope,
+  Dumbbell,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
@@ -81,6 +84,9 @@ import AthleteAssessments from "./_components/athlete-assessments.tsx";
 import AthletePerformanceAnalytics from "./_components/athlete-performance-analytics.tsx";
 import VideoAnalysisSection from "./_components/video-analysis-section.tsx";
 import AthleteAttendanceCard from "./_components/athlete-attendance-card.tsx";
+import AthleteReadinessCard from "./_components/athlete-readiness-card.tsx";
+import AthleteInjuriesCard from "./_components/athlete-injuries-card.tsx";
+import LogWorkoutDialog from "./_components/log-workout-dialog.tsx";
 
 function calculateAge(dateOfBirth: string | undefined): number | null {
   if (!dateOfBirth) return null;
@@ -131,6 +137,10 @@ export default function AthleteDetail() {
     user?.role === "coach" ||
     user?.role === "platform_admin";
 
+  const canEditMedical =
+    user?.role === "platform_admin" ||
+    user?.role === "medical_staff";
+
   const athlete = useQuery(
     api.athletes.getAthlete,
     athleteId ? { athleteId: athleteId as Id<"athletes"> } : "skip",
@@ -172,6 +182,7 @@ export default function AthleteDetail() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [logWorkoutPlan, setLogWorkoutPlan] = useState<PlanWithCounts | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkEmail, setLinkEmail] = useState("");
   const [isLinking, setIsLinking] = useState(false);
@@ -468,10 +479,15 @@ export default function AthleteDetail() {
 
       {/* Main Tabbed Sections */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-5 h-11 p-1 bg-muted/70 rounded-xl">
+        <TabsList className="grid grid-cols-3 sm:grid-cols-6 h-auto sm:h-11 p-1 bg-muted/70 rounded-xl">
           <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 font-medium">
             <UserRound className="size-4" />
             <span>Overview</span>
+          </TabsTrigger>
+
+          <TabsTrigger value="medical" className="text-xs sm:text-sm gap-1.5 font-medium">
+            <HeartPulse className="size-4 text-rose-500" />
+            <span>Medical & ACWR</span>
           </TabsTrigger>
 
           <TabsTrigger value="performance" className="text-xs sm:text-sm gap-1.5 font-medium">
@@ -512,6 +528,13 @@ export default function AthleteDetail() {
 
         {/* Tab 1: Overview */}
         <TabsContent value="overview" className="space-y-6 pt-4">
+          {/* Readiness, ACWR & Availability Section */}
+          <AthleteReadinessCard
+            athleteId={athlete._id}
+            athleteName={`${athlete.firstName} ${athlete.lastName}`}
+            canEditMedical={canEditMedical}
+          />
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Left 2 Cols: Physical & Contact */}
             <div className="md:col-span-2 space-y-6">
@@ -771,6 +794,21 @@ export default function AthleteDetail() {
           </div>
         </TabsContent>
 
+        {/* Tab: Medical Room & Workload Engine */}
+        <TabsContent value="medical" className="space-y-6 pt-4">
+          <AthleteReadinessCard
+            athleteId={athlete._id}
+            athleteName={`${athlete.firstName} ${athlete.lastName}`}
+            canEditMedical={canEditMedical}
+          />
+
+          <AthleteInjuriesCard
+            athleteId={athlete._id}
+            athleteName={`${athlete.firstName} ${athlete.lastName}`}
+            canEditMedical={canEditMedical}
+          />
+        </TabsContent>
+
         {/* Tab 2: Performance & Radar */}
         <TabsContent value="performance" className="space-y-6 pt-4">
           <AthletePerformanceAnalytics
@@ -837,7 +875,11 @@ export default function AthleteDetail() {
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {plans.map((plan) => (
-                    <PlanCard key={plan._id} plan={plan} />
+                    <PlanCard
+                      key={plan._id}
+                      plan={plan}
+                      onLogWorkout={() => setLogWorkoutPlan(plan)}
+                    />
                   ))}
                 </div>
               )}
@@ -913,6 +955,19 @@ export default function AthleteDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Log Workout Completion Dialog */}
+      {logWorkoutPlan && (
+        <LogWorkoutDialog
+          open={logWorkoutPlan !== null}
+          onOpenChange={(open) => {
+            if (!open) setLogWorkoutPlan(null);
+          }}
+          athleteId={athlete._id}
+          planId={logWorkoutPlan._id}
+          planTitle={logWorkoutPlan.title}
+        />
+      )}
     </div>
   );
 }
@@ -928,13 +983,19 @@ type PlanWithCounts = Doc<"trainingPlans"> & {
   completedCount: number;
 };
 
-function PlanCard({ plan }: { plan: PlanWithCounts }) {
+function PlanCard({
+  plan,
+  onLogWorkout,
+}: {
+  plan: PlanWithCounts;
+  onLogWorkout?: () => void;
+}) {
   return (
-    <Link
-      to={`/plans/${plan._id}`}
-      className="flex items-center justify-between gap-3 rounded-xl border p-4 transition-all hover:border-primary/40 hover:bg-muted/30"
-    >
-      <div className="flex flex-col gap-1 min-w-0">
+    <div className="flex items-center justify-between gap-3 rounded-xl border p-4 transition-all hover:border-primary/40 hover:bg-muted/30">
+      <Link
+        to={`/plans/${plan._id}`}
+        className="flex flex-col gap-1 min-w-0 flex-1"
+      >
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm truncate">{plan.title}</span>
           <Badge
@@ -959,8 +1020,24 @@ function PlanCard({ plan }: { plan: PlanWithCounts }) {
             </span>
           )}
         </div>
-      </div>
-    </Link>
+      </Link>
+
+      {onLogWorkout && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onLogWorkout();
+          }}
+          className="text-xs gap-1.5 shrink-0 h-8"
+        >
+          <Dumbbell className="size-3.5 text-primary" />
+          <span>Log Workout</span>
+        </Button>
+      )}
+    </div>
   );
 }
 

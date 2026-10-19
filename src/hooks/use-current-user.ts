@@ -9,6 +9,8 @@ import { isLocalDev } from "@/lib/env.ts";
 export type UserRole =
   | "platform_admin"
   | "academy_admin"
+  | "sporting_director"
+  | "medical_staff"
   | "coach"
   | "athlete"
   | "accounting"
@@ -22,6 +24,13 @@ export interface CurrentUser {
   academyId?: Id<"academies">;
   academyName?: string;
   emailVerified?: boolean;
+  staffCompliance?: {
+    coachingLicenseLevel?: string;
+    licenseExpiryDate?: number;
+    safeguardingVerified: boolean;
+    safeguardingExpiryDate?: number;
+    medicalCertification?: string;
+  };
 }
 
 const ENABLE_MOCK = Boolean(

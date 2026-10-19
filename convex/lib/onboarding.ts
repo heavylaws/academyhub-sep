@@ -42,6 +42,10 @@ export async function onboardUser(
       .query("athletes")
       .withIndex("by_guardian_email", (q) => q.eq("guardianEmail", email))
       .first();
+    const guardianLink = await ctx.db
+      .query("guardianLinks")
+      .withIndex("by_invited_email", (q) => q.eq("invitedEmail", email))
+      .first();
 
     if (platformAdminEmails().includes(email)) {
       role = "platform_admin";
@@ -59,9 +63,9 @@ export async function onboardUser(
     } else if (athleteRecord) {
       role = "athlete";
       academyId = athleteRecord.academyId;
-    } else if (guardianOf) {
+    } else if (guardianOf || guardianLink) {
       role = "guardian";
-      academyId = guardianOf.academyId;
+      academyId = guardianOf?.academyId ?? guardianLink?.academyId;
     }
 
     if (role) {
@@ -78,6 +82,19 @@ async function linkAthleteRecords(
   user: Doc<"users">,
   email: string,
 ): Promise<void> {
+  // Automatically bind any pending guardianLinks matching the user's verified email
+  const pendingGuardianLinks = await ctx.db
+    .query("guardianLinks")
+    .withIndex("by_invited_email", (q) => q.eq("invitedEmail", email))
+    .collect();
+  for (const link of pendingGuardianLinks) {
+    if (!link.guardianUserId) {
+      await ctx.db.patch("guardianLinks", link._id, {
+        guardianUserId: user._id,
+      });
+    }
+  }
+
   if (user.role === "athlete" && user.academyId) {
     const athlete = await ctx.db
       .query("athletes")

@@ -1,30 +1,49 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { requireAcademyMember, requireAthleteAccess, requireRole, requireUser } from "./lib/auth.ts";
-import { planStatusValidator } from "./schema.ts";
+import { planStatusValidator, periodizationPhaseValidator } from "./schema.ts";
 import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 // ─── Plans ───────────────────────────────────────────────────────────────────
 
-/** Academy admin/coach: create a new training plan for an athlete. */
+/** Academy admin/coach: create a new training plan for an athlete or template. */
 export const createPlan = mutation({
   args: {
-    athleteId: v.id("athletes"),
+    athleteId: v.optional(v.id("athletes")),
     title: v.string(),
     description: v.optional(v.string()),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
+    phase: v.optional(periodizationPhaseValidator),
+    microcycleTag: v.optional(v.string()),
+    targetAgeGroup: v.optional(v.string()),
+    isTemplate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
-    const athlete = await ctx.db.get("athletes", args.athleteId);
-    if (!athlete) {
+    const user = await requireRole(ctx, [
+      "academy_admin",
+      "sporting_director",
+      "coach",
+      "platform_admin",
+    ]);
+    let targetAcademyId = user.academyId;
+    if (args.athleteId) {
+      const athlete = await ctx.db.get("athletes", args.athleteId);
+      if (!athlete) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Athlete not found",
+        });
+      }
+      targetAcademyId = athlete.academyId;
+    }
+    if (!targetAcademyId) {
       throw new ConvexError({
-        code: "NOT_FOUND",
-        message: "Athlete not found",
+        code: "FORBIDDEN",
+        message: "You are not associated with an academy",
       });
     }
-    await requireAcademyMember(ctx, athlete.academyId);
+    await requireAcademyMember(ctx, targetAcademyId);
     if (!args.title.trim()) {
       throw new ConvexError({
         code: "BAD_REQUEST",
@@ -32,13 +51,17 @@ export const createPlan = mutation({
       });
     }
     return await ctx.db.insert("trainingPlans", {
-      academyId: athlete.academyId,
+      academyId: targetAcademyId,
       athleteId: args.athleteId,
       title: args.title.trim(),
       description: args.description,
       status: "active",
       startDate: args.startDate,
       endDate: args.endDate,
+      phase: args.phase,
+      microcycleTag: args.microcycleTag,
+      targetAgeGroup: args.targetAgeGroup,
+      isTemplate: args.isTemplate,
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
@@ -54,9 +77,18 @@ export const updatePlan = mutation({
     status: planStatusValidator,
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
+    phase: v.optional(periodizationPhaseValidator),
+    microcycleTag: v.optional(v.string()),
+    targetAgeGroup: v.optional(v.string()),
+    isTemplate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, [
+      "academy_admin",
+      "sporting_director",
+      "coach",
+      "platform_admin",
+    ]);
     const { planId, ...updates } = args;
     const plan = await ctx.db.get("trainingPlans", planId);
     if (!plan) {
@@ -81,7 +113,12 @@ export const updatePlan = mutation({
 export const deletePlan = mutation({
   args: { planId: v.id("trainingPlans") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, [
+      "academy_admin",
+      "sporting_director",
+      "coach",
+      "platform_admin",
+    ]);
     const plan = await ctx.db.get("trainingPlans", args.planId);
     if (!plan) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Plan not found" });
@@ -146,18 +183,148 @@ export const getPlan = query({
   ): Promise<{
     plan: Doc<"trainingPlans">;
     items: Doc<"planItems">[];
-    athlete: Doc<"athletes">;
+    athlete: Doc<"athletes"> | null;
   } | null> => {
     const plan = await ctx.db.get("trainingPlans", args.planId);
     if (!plan) return null;
     await requireAcademyMember(ctx, plan.academyId);
-    const { athlete } = await requireAthleteAccess(ctx, plan.athleteId);
+    let athlete: Doc<"athletes"> | null = null;
+    if (plan.athleteId) {
+      const access = await requireAthleteAccess(ctx, plan.athleteId);
+      athlete = access.athlete;
+    }
     const items = await ctx.db
       .query("planItems")
       .withIndex("by_plan_and_order", (q) => q.eq("planId", args.planId))
       .order("asc")
       .collect();
     return { plan, items, athlete };
+  },
+});
+
+/** Coaching roles: Assign / clone a periodized plan across an entire team roster. */
+export const assignPlanToTeam = mutation({
+  args: {
+    sourcePlanId: v.id("trainingPlans"),
+    teamId: v.id("teams"),
+    skipInjuredOutAthletes: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, [
+      "platform_admin",
+      "academy_admin",
+      "sporting_director",
+      "coach",
+    ]);
+
+    const sourcePlan = await ctx.db.get("trainingPlans", args.sourcePlanId);
+    if (!sourcePlan) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Source training plan not found",
+      });
+    }
+    await requireAcademyMember(ctx, sourcePlan.academyId);
+
+    const team = await ctx.db.get("teams", args.teamId);
+    if (!team || team.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Team not found",
+      });
+    }
+    if (team.academyId !== sourcePlan.academyId) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: "Source plan and target team must belong to the same academy",
+      });
+    }
+
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+      .collect();
+
+    const sourceItems = await ctx.db
+      .query("planItems")
+      .withIndex("by_plan", (q) => q.eq("planId", args.sourcePlanId))
+      .collect();
+    sourceItems.sort((a, b) => a.order - b.order);
+
+    let assignedCount = 0;
+    let skippedInjuredCount = 0;
+
+    for (const member of members) {
+      // Check if athlete already has an active clone of this sourcePlanId
+      const existingPlans = await ctx.db
+        .query("trainingPlans")
+        .withIndex("by_athlete", (q) => q.eq("athleteId", member.athleteId))
+        .collect();
+
+      const alreadyHasPlan = existingPlans.some(
+        (p) =>
+          p.sourceTemplateId === args.sourcePlanId && p.status === "active",
+      );
+      if (alreadyHasPlan) {
+        continue;
+      }
+
+      // Check for unresolved injured_out injury
+      if (args.skipInjuredOutAthletes) {
+        const activeInjuries = await ctx.db
+          .query("injuries")
+          .withIndex("by_athlete_and_resolved", (q) =>
+            q.eq("athleteId", member.athleteId).eq("isResolved", false),
+          )
+          .collect();
+
+        const isInjuredOut = activeInjuries.some(
+          (i) => i.availabilityStatus === "injured_out",
+        );
+        if (isInjuredOut) {
+          skippedInjuredCount++;
+          continue;
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      const clonedPlanId = await ctx.db.insert("trainingPlans", {
+        academyId: sourcePlan.academyId,
+        athleteId: member.athleteId,
+        title: sourcePlan.title,
+        description: sourcePlan.description,
+        status: "active",
+        startDate: sourcePlan.startDate,
+        endDate: sourcePlan.endDate,
+        phase: sourcePlan.phase,
+        microcycleTag: sourcePlan.microcycleTag,
+        targetAgeGroup: sourcePlan.targetAgeGroup,
+        sourceTemplateId: args.sourcePlanId,
+        isTemplate: false,
+        createdBy: user._id,
+        createdAt: nowIso,
+      });
+
+      for (const item of sourceItems) {
+        await ctx.db.insert("planItems", {
+          planId: clonedPlanId,
+          academyId: sourcePlan.academyId,
+          order: item.order,
+          name: item.name,
+          sets: item.sets,
+          reps: item.reps,
+          durationSeconds: item.durationSeconds,
+          notes: item.notes,
+        });
+      }
+
+      assignedCount++;
+    }
+
+    return {
+      assignedCount,
+      skippedInjuredCount,
+    };
   },
 });
 
@@ -174,7 +341,7 @@ export const addPlanItem = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const plan = await ctx.db.get("trainingPlans", args.planId);
     if (!plan) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Plan not found" });
@@ -216,7 +383,7 @@ export const updatePlanItem = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const { itemId, ...updates } = args;
     const item = await ctx.db.get("planItems", itemId);
     if (!item) {
@@ -241,7 +408,7 @@ export const updatePlanItem = mutation({
 export const deletePlanItem = mutation({
   args: { itemId: v.id("planItems") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const item = await ctx.db.get("planItems", args.itemId);
     if (!item) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Item not found" });
@@ -259,7 +426,7 @@ export const recordItemResult = mutation({
     result: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const item = await ctx.db.get("planItems", args.itemId);
     if (!item) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Item not found" });
@@ -279,7 +446,7 @@ export const recordItemResult = mutation({
 export const reorderPlanItems = mutation({
   args: { planId: v.id("trainingPlans"), itemIds: v.array(v.id("planItems")) },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const plan = await ctx.db.get("trainingPlans", args.planId);
     if (!plan) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Plan not found" });

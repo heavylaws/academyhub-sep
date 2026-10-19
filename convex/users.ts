@@ -112,6 +112,8 @@ export const listAllUsers = query({
  * Academy admin: update a staff member's role within their academy.
  */
 const ACADEMY_ADMIN_ASSIGNABLE_ROLES: Array<Doc<"users">["role"]> = [
+  "sporting_director",
+  "medical_staff",
   "coach",
   "accounting",
   "athlete",
@@ -174,12 +176,59 @@ export const updateMemberRole = mutation({
       throw new ConvexError({
         code: "FORBIDDEN",
         message:
-          "Academy admins can only assign coach, accounting, athlete or guardian roles",
+          "Academy admins can only assign sporting_director, medical_staff, coach, accounting, athlete or guardian roles",
       });
     }
 
     await ctx.db.patch("users", args.targetUserId, {
       role: args.newRole,
+    });
+
+    return null;
+  },
+});
+
+/**
+ * Update staff compliance record for a user in the academy.
+ * Requires "verify_staff_compliance" permission (platform_admin, academy_admin, sporting_director).
+ */
+export const updateStaffCompliance = mutation({
+  args: {
+    targetUserId: v.id("users"),
+    compliance: v.object({
+      coachingLicenseLevel: v.optional(v.string()),
+      licenseExpiryDate: v.optional(v.number()),
+      safeguardingVerified: v.boolean(),
+      safeguardingExpiryDate: v.optional(v.number()),
+      medicalCertification: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const caller = await requireRole(ctx, [
+      "platform_admin",
+      "academy_admin",
+      "sporting_director",
+    ]);
+
+    const targetUser = await ctx.db.get("users", args.targetUserId);
+    if (!targetUser) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    if (caller.role !== "platform_admin") {
+      if (!caller.academyId || caller.academyId !== targetUser.academyId) {
+        throw new ConvexError({
+          code: "FORBIDDEN",
+          message: "You can only manage staff compliance in your own academy",
+        });
+      }
+    }
+
+    await ctx.db.patch("users", args.targetUserId, {
+      staffCompliance: args.compliance,
     });
 
     return null;

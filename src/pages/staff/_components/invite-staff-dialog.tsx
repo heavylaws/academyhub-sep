@@ -46,7 +46,15 @@ import {
 const formSchema = z.object({
   academyId: z.string().optional(),
   email: z.string().trim().email("Enter a valid email address"),
-  role: z.enum(["academy_admin", "coach", "athlete", "accounting", "guardian"]),
+  role: z.enum([
+    "academy_admin",
+    "sporting_director",
+    "medical_staff",
+    "coach",
+    "athlete",
+    "accounting",
+    "guardian",
+  ]),
 });
 
 export default function InviteStaffDialog({
@@ -82,7 +90,7 @@ export default function InviteStaffDialog({
       await createInvite({
         academyId: targetAcademyId,
         email: values.email,
-        role: values.role as "academy_admin" | "coach" | "athlete" | "accounting",
+        role: values.role,
       });
 
       const targetAcademyObj = academies?.find((a: Doc<"academies">) => a._id === targetAcademyId);
@@ -127,7 +135,7 @@ export default function InviteStaffDialog({
           <DialogHeader>
             <DialogTitle>Invite staff / admin</DialogTitle>
             <DialogDescription>
-              Invite an academy admin, coach, athlete, or accountant to join an academy workspace.
+              Invite an academy admin, sporting director, medical staff, coach, athlete, or accountant to join an academy workspace.
               A secure login password will be generated automatically and displayed for easy sharing.
             </DialogDescription>
           </DialogHeader>
@@ -167,6 +175,12 @@ export default function InviteStaffDialog({
                           Academy Admin
                         </SelectItem>
                       )}
+                      <SelectItem value="sporting_director">
+                        Sporting Director
+                      </SelectItem>
+                      <SelectItem value="medical_staff">
+                        Medical / Physio
+                      </SelectItem>
                       <SelectItem value="coach">Coach</SelectItem>
                       <SelectItem value="athlete">Athlete</SelectItem>
                       <SelectItem value="accounting">Accounting</SelectItem>

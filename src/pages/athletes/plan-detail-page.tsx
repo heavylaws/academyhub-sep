@@ -9,9 +9,11 @@ import {
   CheckCircle2,
   Circle,
   ClipboardList,
+  Dumbbell,
   Pencil,
   Plus,
   Trash2,
+  Users,
 } from "lucide-react";
 import { format } from "date-fns";
 import { api } from "@/convex/_generated/api.js";
@@ -57,6 +59,8 @@ import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { cn } from "@/lib/utils.ts";
 import { EditPlanDialog } from "./_components/plan-dialogs.tsx";
 import PlanItemDialog from "./_components/plan-item-dialog.tsx";
+import LogWorkoutDialog from "./_components/log-workout-dialog.tsx";
+import { AssignPlanToTeamDialog } from "./_components/assign-plan-to-team-dialog.tsx";
 
 const STATUS_STYLES: Record<string, string> = {
   active: "bg-secondary text-secondary-foreground",
@@ -230,6 +234,7 @@ export default function PlanDetail() {
   const canManage =
     user?.role === "academy_admin" ||
     user?.role === "coach" ||
+    user?.role === "sporting_director" ||
     user?.role === "platform_admin";
 
   const data = useQuery(
@@ -240,7 +245,9 @@ export default function PlanDetail() {
   const deleteItem = useMutation(api.trainingPlans.deletePlanItem);
 
   const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [assignTeamOpen, setAssignTeamOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
+  const [logWorkoutOpen, setLogWorkoutOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Doc<"planItems"> | undefined>(
     undefined,
   );
@@ -322,10 +329,12 @@ export default function PlanDetail() {
         variant="ghost"
         size="sm"
         className="w-fit"
-        onClick={() => navigate(`/athletes/${athlete._id}`)}
+        onClick={() =>
+          navigate(athlete ? `/athletes/${athlete._id}` : "/athletes")
+        }
       >
         <ArrowLeft className="size-4" />
-        Back to {athlete.firstName} {athlete.lastName}
+        Back to {athlete ? `${athlete.firstName} ${athlete.lastName}` : "Athletes"}
       </Button>
 
       {/* Plan header card */}
@@ -340,14 +349,46 @@ export default function PlanDetail() {
                 <Badge className={cn("text-xs", STATUS_STYLES[plan.status])}>
                   {plan.status.charAt(0).toUpperCase() + plan.status.slice(1)}
                 </Badge>
+                {plan.isTemplate && (
+                  <Badge
+                    variant="outline"
+                    className="border-primary/40 bg-primary/10 text-primary text-xs"
+                  >
+                    Squad Template
+                  </Badge>
+                )}
+                {plan.phase && (
+                  <Badge variant="outline" className="text-xs capitalize">
+                    Phase: {plan.phase.replace("_", " ")}
+                  </Badge>
+                )}
+                {plan.microcycleTag && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs font-mono font-bold"
+                  >
+                    {plan.microcycleTag}
+                  </Badge>
+                )}
+                {plan.targetAgeGroup && (
+                  <Badge variant="outline" className="text-xs">
+                    {plan.targetAgeGroup}
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                <Link
-                  to={`/athletes/${athlete._id}`}
-                  className="hover:text-foreground transition-colors"
-                >
-                  {athlete.firstName} {athlete.lastName}
-                </Link>
+                {athlete ? (
+                  <Link
+                    to={`/athletes/${athlete._id}`}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    {athlete.firstName} {athlete.lastName}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-primary">
+                    Master Squad Template
+                  </span>
+                )}
                 {(startFmt || endFmt) && (
                   <span className="flex items-center gap-1">
                     <CalendarRange className="size-3.5" />
@@ -365,44 +406,67 @@ export default function PlanDetail() {
                 </p>
               )}
             </div>
-            {canManage && (
-              <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {athlete && (
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  onClick={() => setEditPlanOpen(true)}
+                  onClick={() => setLogWorkoutOpen(true)}
+                  className="gap-1.5 text-xs font-semibold"
                 >
-                  <Pencil className="size-4" />
-                  Edit
+                  <Dumbbell className="size-4 text-primary" />
+                  Log Workout
                 </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="secondary" size="sm">
-                      <Trash2 className="size-4" />
-                      Delete
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete this plan?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This removes the plan and all its exercises. This cannot
-                        be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        variant="destructive"
-                        onClick={handleDeletePlan}
-                      >
-                        Delete plan
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
+              )}
+
+              {canManage && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssignTeamOpen(true)}
+                    className="gap-1.5 text-xs font-semibold"
+                  >
+                    <Users className="size-4 text-primary" />
+                    Assign to Team
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditPlanOpen(true)}
+                  >
+                    <Pencil className="size-4" />
+                    Edit
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="secondary" size="sm">
+                        <Trash2 className="size-4" />
+                        Delete
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this plan?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This removes the plan and all its exercises. This cannot
+                          be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          variant="destructive"
+                          onClick={handleDeletePlan}
+                        >
+                          Delete plan
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -488,6 +552,24 @@ export default function PlanDetail() {
           />
         </>
       )}
+
+      {/* Log Workout Dialog */}
+      {athlete && (
+        <LogWorkoutDialog
+          open={logWorkoutOpen}
+          onOpenChange={setLogWorkoutOpen}
+          athleteId={athlete._id}
+          planId={plan._id}
+          planTitle={plan.title}
+        />
+      )}
+
+      {/* Assign Plan To Team Dialog */}
+      <AssignPlanToTeamDialog
+        open={assignTeamOpen}
+        onOpenChange={setAssignTeamOpen}
+        plan={plan}
+      />
     </div>
   );
 }

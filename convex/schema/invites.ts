@@ -4,6 +4,8 @@ import { v } from "convex/values";
 export const userRoleValidator = v.union(
   v.literal("platform_admin"),
   v.literal("academy_admin"),
+  v.literal("sporting_director"),
+  v.literal("medical_staff"),
   v.literal("coach"),
   v.literal("athlete"),
   v.literal("accounting"),

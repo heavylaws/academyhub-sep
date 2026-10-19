@@ -27,11 +27,9 @@ import SessionSheetExportModal from "./_components/session-sheet-export-modal.ts
 import { SessionHeaderCard } from "./_components/session-header-card.tsx";
 import { SessionTacticalRoutine } from "./_components/session-tactical-routine.tsx";
 import { SessionDrillItinerary } from "./_components/session-drill-itinerary.tsx";
-import {
-  SessionAttendanceCard,
-  type AttendanceStatus,
-} from "./_components/session-attendance-card.tsx";
+import { SessionAttendanceCard, type AttendanceStatus } from "./_components/session-attendance-card.tsx";
 import { DrillInspectionModal } from "./_components/drill-inspection-modal.tsx";
+import { MatchCenterCard } from "./_components/match-center-card.tsx";
 
 export default function SessionDetail() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -51,10 +49,35 @@ export default function SessionDetail() {
     data?.session?.teamId ? { teamId: data.session.teamId } : "skip",
   );
   const tacticalPlans = useQuery(api.tacticalPlans.listTacticalPlans, canManage ? {} : "skip");
+  const medicalSummary = useQuery(
+    api.injuries.getAcademyMedicalRoomSummary,
+    data?.session?.academyId ? { academyId: data.session.academyId } : "skip",
+  );
   const setAttendance = useMutation(api.trainingSessions.setAttendance);
   const deleteSession = useMutation(api.trainingSessions.deleteSession);
   const linkTacticalPlan = useMutation(api.trainingSessions.linkTacticalPlanToSession);
   const removeDrill = useMutation(api.trainingSessions.removeDrillFromSession);
+
+  const medicalAvailabilityMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        availabilityStatus: string;
+        coachingRestrictions?: string;
+        bodyPart: string;
+      }
+    >();
+    if (medicalSummary) {
+      for (const item of medicalSummary) {
+        map.set(item.athleteId, {
+          availabilityStatus: item.availabilityStatus,
+          coachingRestrictions: item.coachingRestrictions,
+          bodyPart: item.bodyPart,
+        });
+      }
+    }
+    return map;
+  }, [medicalSummary]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [addDrillOpen, setAddDrillOpen] = useState(false);
@@ -65,6 +88,8 @@ export default function SessionDetail() {
   const handleSetStatus = async (
     athleteId: Id<"athletes">,
     status: AttendanceStatus,
+    durationMinutes?: number,
+    rpe?: number,
   ) => {
     if (!sessionId) return;
     try {
@@ -72,6 +97,8 @@ export default function SessionDetail() {
         sessionId: sessionId as Id<"trainingSessions">,
         athleteId,
         status,
+        durationMinutes,
+        rpe,
       });
     } catch (error) {
       toast.error(
@@ -177,6 +204,7 @@ export default function SessionDetail() {
       {/* Session Top Header Card */}
       <SessionHeaderCard
         session={session}
+        facility={data.facility}
         start={start}
         end={end}
         canManage={canManage}
@@ -185,6 +213,14 @@ export default function SessionDetail() {
         onKioskMode={() => navigate(`/kiosk/${session._id}`)}
         onEdit={() => setEditOpen(true)}
         onDelete={handleDelete}
+      />
+
+      {/* Match Center (if match session or fixture) */}
+      <MatchCenterCard
+        session={session}
+        roster={roster}
+        attendance={attendance}
+        canManage={canManage}
       />
 
       {/* Tactical Routine & Playbook Link Card with Drill Itinerary */}
@@ -244,6 +280,8 @@ export default function SessionDetail() {
         attendance={attendance}
         attendanceByAthlete={attendanceByAthlete}
         canManage={canManage}
+        medicalAvailabilityByAthlete={medicalAvailabilityMap}
+        sessionDurationMinutes={session?.durationMinutes}
         onSetStatus={handleSetStatus}
       />
 

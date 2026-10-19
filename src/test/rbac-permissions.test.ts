@@ -33,6 +33,34 @@ const ROLE_PERMISSIONS: Record<UserRole, { allowed: string[]; forbidden: string[
     ],
     forbidden: ["/admin/academies", "/admin/billing", "/finance", "/invoices", "/finance/my-fees"],
   },
+  sporting_director: {
+    allowed: [
+      "/",
+      "/athletes",
+      "/teams",
+      "/schedule",
+      "/video-hub",
+      "/staff",
+    ],
+    forbidden: ["/admin/academies", "/admin/billing", "/finance", "/invoices", "/finance/my-fees"],
+  },
+  medical_staff: {
+    allowed: [
+      "/",
+      "/athletes",
+      "/teams",
+      "/schedule",
+      "/video-hub",
+    ],
+    forbidden: [
+      "/admin/academies",
+      "/admin/billing",
+      "/staff",
+      "/finance",
+      "/invoices",
+      "/finance/my-fees",
+    ],
+  },
   accounting: {
     allowed: ["/", "/finance", "/invoices"],
     forbidden: [
@@ -169,6 +197,46 @@ describe("RBAC Permissions & Route Authorization Suite", () => {
       expect(isRouteAllowed(role, "/finance")).toBe(false);
       expect(isRouteAllowed(role, "/invoices")).toBe(false);
       expect(isRouteAllowed(role, "/video-hub")).toBe(false);
+      expect(isRouteAllowed(role, "/admin/academies")).toBe(false);
+    });
+  });
+
+  describe("Sporting Director access", () => {
+    const role: UserRole = "sporting_director";
+
+    it("allows athletes, teams, schedule, video hub, and staff directory access", () => {
+      expect(isRouteAllowed(role, "/")).toBe(true);
+      expect(isRouteAllowed(role, "/athletes")).toBe(true);
+      expect(isRouteAllowed(role, "/teams")).toBe(true);
+      expect(isRouteAllowed(role, "/schedule")).toBe(true);
+      expect(isRouteAllowed(role, "/video-hub")).toBe(true);
+      expect(isRouteAllowed(role, "/staff")).toBe(true);
+    });
+
+    it("restricts finance invoices, platform admin routes, and personal fee payment view", () => {
+      expect(isRouteAllowed(role, "/admin/academies")).toBe(false);
+      expect(isRouteAllowed(role, "/admin/billing")).toBe(false);
+      expect(isRouteAllowed(role, "/finance")).toBe(false);
+      expect(isRouteAllowed(role, "/invoices")).toBe(false);
+      expect(isRouteAllowed(role, "/finance/my-fees")).toBe(false);
+    });
+  });
+
+  describe("Medical Staff access", () => {
+    const role: UserRole = "medical_staff";
+
+    it("allows athletes, teams, schedule, and video hub for clinical assessment", () => {
+      expect(isRouteAllowed(role, "/")).toBe(true);
+      expect(isRouteAllowed(role, "/athletes")).toBe(true);
+      expect(isRouteAllowed(role, "/teams")).toBe(true);
+      expect(isRouteAllowed(role, "/schedule")).toBe(true);
+      expect(isRouteAllowed(role, "/video-hub")).toBe(true);
+    });
+
+    it("restricts staff hiring management and finance administration", () => {
+      expect(isRouteAllowed(role, "/staff")).toBe(false);
+      expect(isRouteAllowed(role, "/finance")).toBe(false);
+      expect(isRouteAllowed(role, "/invoices")).toBe(false);
       expect(isRouteAllowed(role, "/admin/academies")).toBe(false);
     });
   });

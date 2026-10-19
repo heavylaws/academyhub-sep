@@ -21,7 +21,7 @@ export const recordAssessment = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({
@@ -65,7 +65,7 @@ export const recordAssessment = mutation({
 export const deleteAssessment = mutation({
   args: { assessmentId: v.id("assessments") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const record = await ctx.db.get("assessments", args.assessmentId);
     if (!record || record.deletedAt) {
       throw new ConvexError({
@@ -171,7 +171,7 @@ export const recordBatchSessionAssessments = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({
@@ -257,7 +257,7 @@ export const listAssessmentsForAnalytics = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach", "platform_admin"]);
     const fetchLimit = Math.min(Math.max(args.limit ?? 500, 1), 2000);
 
     let records: Doc<"assessments">[];
@@ -299,7 +299,7 @@ export const listAssessmentsForAnalyticsPaginated = query({
     metric: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach", "platform_admin"]);
     const queryBase =
       user.role === "platform_admin" && !user.academyId
         ? ctx.db.query("assessments")

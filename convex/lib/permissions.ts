@@ -8,6 +8,8 @@ export type Role = NonNullable<Doc<"users">["role"]>;
 export const ALL_ROLES: Role[] = [
   "platform_admin",
   "academy_admin",
+  "sporting_director",
+  "medical_staff",
   "coach",
   "accounting",
   "athlete",
@@ -17,6 +19,8 @@ export const ALL_ROLES: Role[] = [
 /** Roles that may read any athlete record inside their own academy. */
 export const ACADEMY_STAFF_ROLES: Role[] = [
   "academy_admin",
+  "sporting_director",
+  "medical_staff",
   "coach",
   "accounting",
 ];
@@ -28,8 +32,106 @@ export const FINANCE_ROLES: Role[] = [
 
 export const COACHING_ROLES: Role[] = [
   "academy_admin",
+  "sporting_director",
   "coach",
 ];
+
+export const MEDICAL_ROLES: Role[] = [
+  "platform_admin",
+  "sporting_director",
+  "medical_staff",
+];
+
+export type PermissionKey =
+  | "verify_staff_compliance"
+  | "view_clinical_medical_notes"
+  | "edit_medical_records"
+  | "manage_roster"
+  | "manage_sessions"
+  | "manage_plans"
+  | "manage_assessments"
+  | "manage_video_analysis"
+  | "manage_finance";
+
+export const ROLE_PERMISSIONS: Record<Role, PermissionKey[]> = {
+  platform_admin: [
+    "verify_staff_compliance",
+    "view_clinical_medical_notes",
+    "edit_medical_records",
+    "manage_roster",
+    "manage_sessions",
+    "manage_plans",
+    "manage_assessments",
+    "manage_video_analysis",
+    "manage_finance",
+  ],
+  academy_admin: [
+    "verify_staff_compliance",
+    "manage_roster",
+    "manage_sessions",
+    "manage_plans",
+    "manage_assessments",
+    "manage_video_analysis",
+    "manage_finance",
+  ],
+  sporting_director: [
+    "verify_staff_compliance",
+    "view_clinical_medical_notes",
+    "manage_roster",
+    "manage_sessions",
+    "manage_plans",
+    "manage_assessments",
+    "manage_video_analysis",
+  ],
+  medical_staff: [
+    "view_clinical_medical_notes",
+    "edit_medical_records",
+    "manage_assessments",
+    "manage_video_analysis",
+  ],
+  coach: [
+    "manage_roster",
+    "manage_sessions",
+    "manage_plans",
+    "manage_assessments",
+    "manage_video_analysis",
+  ],
+  accounting: [
+    "manage_finance",
+  ],
+  athlete: [],
+  guardian: [],
+};
+
+export function hasPermission(role: Role | undefined, permission: PermissionKey): boolean {
+  if (!role) return false;
+  if (role === "platform_admin") return true;
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
+}
+
+export async function requireGranularPermission(
+  ctx: QueryCtx | MutationCtx,
+  permission: PermissionKey,
+  targetAcademyId?: Id<"academies"> | null,
+): Promise<Doc<"users">> {
+  const user = await requireUser(ctx);
+  if (user.role === "platform_admin") {
+    return user;
+  }
+  if (!user.role || !hasPermission(user.role, permission)) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: `You do not have permission for '${permission}'`,
+    });
+  }
+  if (targetAcademyId && user.academyId !== targetAcademyId) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have access to this academy",
+    });
+  }
+  return user;
+}
 
 /**
  * Validates caller identity using ctx.auth.getUserIdentity().
@@ -143,7 +245,7 @@ export async function requireAcademyMember(
  * Whether `user` may read `athlete`'s personal data (profile, fees, attendance,
  * plans, assessments, video analyses):
  * - platform_admin: always
- * - academy staff: athletes in their own academy
+ * - academy staff (admin, sporting_director, medical_staff, coach, accounting): athletes in their own academy
  * - athlete: only their own linked record
  * - guardian: only athletes they are linked to as guardian
  */
@@ -170,13 +272,23 @@ export async function requireAthleteAccess(
   if (!athlete) {
     throw new ConvexError({ code: "NOT_FOUND", message: "Athlete not found" });
   }
-  if (!canAccessAthlete(user, athlete)) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: "You cannot view this athlete",
-    });
+  if (canAccessAthlete(user, athlete)) {
+    return { user, athlete };
   }
-  return { user, athlete };
+  if (user.role === "guardian") {
+    const link = await ctx.db
+      .query("guardianLinks")
+      .withIndex("by_guardian_user", (q) => q.eq("guardianUserId", user._id))
+      .filter((q) => q.eq(q.field("athleteId"), athleteId))
+      .first();
+    if (link) {
+      return { user, athlete };
+    }
+  }
+  throw new ConvexError({
+    code: "FORBIDDEN",
+    message: "You cannot view this athlete",
+  });
 }
 
 /** Athlete records the user sees as "mine": their own record, or their children for guardians. */
@@ -185,10 +297,30 @@ export async function listOwnAthletes(
   user: Doc<"users">,
 ): Promise<Doc<"athletes">[]> {
   if (user.role === "guardian") {
-    return await ctx.db
+    const legacyChildren = await ctx.db
       .query("athletes")
       .withIndex("by_guardian_user", (q) => q.eq("guardianUserId", user._id))
       .collect();
+    const links = await ctx.db
+      .query("guardianLinks")
+      .withIndex("by_guardian_user", (q) => q.eq("guardianUserId", user._id))
+      .collect();
+    const linkAthleteIds = new Set(links.map((l) => l.athleteId));
+    const linkedAthletes = (
+      await Promise.all(
+        Array.from(linkAthleteIds).map((id) => ctx.db.get("athletes", id)),
+      )
+    ).filter((a): a is Doc<"athletes"> => a !== null && !a.deletedAt);
+
+    const seen = new Set<string>();
+    const result: Doc<"athletes">[] = [];
+    for (const a of [...legacyChildren, ...linkedAthletes]) {
+      if (!seen.has(a._id)) {
+        seen.add(a._id);
+        result.push(a);
+      }
+    }
+    return result;
   }
   return await ctx.db
     .query("athletes")

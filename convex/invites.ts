@@ -35,24 +35,30 @@ export const createInvite = mutation({
       if (
         args.role !== "coach" &&
         args.role !== "athlete" &&
-        args.role !== "accounting"
+        args.role !== "accounting" &&
+        args.role !== "sporting_director" &&
+        args.role !== "medical_staff" &&
+        args.role !== "guardian"
       ) {
         throw new ConvexError({
           code: "FORBIDDEN",
           message:
-            "Academy admins can only invite coaches, accounting staff, or athletes",
+            "Academy admins can only invite coaches, sporting directors, medical staff, accounting staff, athletes, or guardians",
         });
       }
     } else if (
       args.role !== "academy_admin" &&
       args.role !== "coach" &&
       args.role !== "athlete" &&
-      args.role !== "accounting"
+      args.role !== "accounting" &&
+      args.role !== "sporting_director" &&
+      args.role !== "medical_staff" &&
+      args.role !== "guardian"
     ) {
       throw new ConvexError({
         code: "FORBIDDEN",
         message:
-          "Invites can be for academy managers, coaches, accounting staff, or athletes",
+          "Invites can be for academy managers, sporting directors, medical staff, coaches, accounting staff, athletes, or guardians",
       });
     }
 

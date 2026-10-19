@@ -48,5 +48,11 @@ academy_admins.*
 *credential*
 *passwords*
 
+# Security: Block admin credential dumps and spreadsheet exports
+*admins*.csv
+*admins*.ods
+*credentials*.csv
+*credentials*.json
+
 # Visual test screenshots
 tactical_board_*.png

@@ -7,14 +7,27 @@ export const planStatusValidator = v.union(
   v.literal("archived"),
 );
 
+export const periodizationPhaseValidator = v.union(
+  v.literal("pre_season"),
+  v.literal("in_season_early"),
+  v.literal("in_season_peak"),
+  v.literal("transition_off_season"),
+  v.literal("rehab_return_to_play"),
+);
+
 export const trainingPlans = defineTable({
   academyId: v.id("academies"),
-  athleteId: v.id("athletes"),
+  athleteId: v.optional(v.id("athletes")),
   title: v.string(),
   description: v.optional(v.string()),
   status: planStatusValidator,
   startDate: v.optional(v.string()), // YYYY-MM-DD
   endDate: v.optional(v.string()), // YYYY-MM-DD
+  isTemplate: v.optional(v.boolean()),
+  phase: v.optional(periodizationPhaseValidator),
+  microcycleTag: v.optional(v.string()),
+  targetAgeGroup: v.optional(v.string()),
+  sourceTemplateId: v.optional(v.id("trainingPlans")),
   createdBy: v.id("users"),
   createdAt: v.string(),
 })

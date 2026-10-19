@@ -20,6 +20,8 @@ export interface MockUser {
   role?:
     | "platform_admin"
     | "academy_admin"
+    | "sporting_director"
+    | "medical_staff"
     | "coach"
     | "athlete"
     | "accounting"
@@ -68,6 +70,19 @@ export interface MockTeamMember {
   joinedAt: string;
 }
 
+export interface MockFacility {
+  _id: string;
+  academyId: string;
+  name: string;
+  type: "pitch" | "court" | "gym" | "pool" | "classroom" | "other";
+  surfaceType?: string;
+  capacity?: number;
+  status: "available" | "maintenance" | "closed";
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface MockTrainingSession {
   _id: string;
   academyId: string;
@@ -77,23 +92,96 @@ export interface MockTrainingSession {
   durationMinutes: number;
   location?: string;
   notes?: string;
+  tacticalPlanId?: string;
+  drillIds?: string[];
+  facilityId?: string;
+  sessionType?: "training" | "match_competitive" | "match_friendly" | "recovery" | "testing";
+  microcycleDay?: "MD-4" | "MD-3" | "MD-2" | "MD-1" | "MD" | "MD+1" | "MD+2" | "general";
+  matchDetails?: {
+    opponentName: string;
+    homeAway: "home" | "away" | "neutral";
+    competitionName?: string;
+    goalsFor?: number;
+    goalsAgainst?: number;
+    formation?: string;
+    matchSummary?: string;
+  };
   createdBy: string;
   createdAt: string;
+  deletedAt?: string;
+  deletedBy?: string;
 }
 
 export interface MockAttendanceRecord {
   _id: string;
   sessionId: string;
   athleteId: string;
+  academyId?: string;
   status: "present" | "late" | "excused" | "absent";
-  markedAt: string;
-  markedBy: string;
+  markedAt?: string;
+  markedBy?: string;
+  recordedAt?: string;
+  recordedBy?: string;
+  durationMinutes?: number;
+  rpe?: number;
+  sessionLoad?: number;
+  wellnessFatigue?: number;
+  wellnessSoreness?: number;
+  loggedAt?: number;
+  matchStats?: {
+    started: boolean;
+    minutesPlayed: number;
+    goalsOrPoints?: number;
+    assists?: number;
+    yellowCards?: number;
+    redCards?: number;
+    coachRating?: number;
+  };
 }
+
+export interface MockInjury {
+  _id: string;
+  academyId: string;
+  athleteId: string;
+  availabilityStatus: "fit" | "modified_training" | "injured_out" | "illness";
+  bodyPart: string;
+  laterality?: "left" | "right" | "bilateral" | "midline" | "not_applicable";
+  mechanism: "contact" | "non_contact_overload" | "non_contact_acute" | "illness" | "other";
+  severity: "minor_1_7_days" | "moderate_8_28_days" | "severe_28_plus_days";
+  injuryDate: number;
+  expectedReturnDate?: number;
+  actualReturnDate?: number;
+  isResolved: boolean;
+  coachingRestrictions?: string;
+  clinicalNotes?: string;
+  recordedByUserId: string;
+  updatedAt: number;
+}
+
+export interface MockWorkoutLog {
+  _id: string;
+  academyId: string;
+  athleteId: string;
+  trainingPlanId: string;
+  completedAt: number;
+  durationMinutes: number;
+  rpe: number;
+  calculatedLoad: number;
+  completedExercises: {
+    exerciseName: string;
+    setsCompleted: number;
+    repsCompleted: string;
+    weightKg?: number;
+  }[];
+  athleteNotes?: string;
+  loggedByUserId: string;
+}
+
 
 export interface MockTrainingPlan {
   _id: string;
   academyId: string;
-  athleteId: string;
+  athleteId?: string;
   title: string;
   description?: string;
   startDate?: string;
@@ -103,6 +191,11 @@ export interface MockTrainingPlan {
   assignedBy?: string;
   createdBy?: string;
   createdAt: string;
+  phase?: "pre_season" | "in_season_early" | "in_season_peak" | "transition_off_season" | "rehab_return_to_play";
+  microcycleTag?: string;
+  targetAgeGroup?: string;
+  sourceTemplateId?: string;
+  isTemplate?: boolean;
 }
 
 export interface MockPlanItem {
@@ -370,4 +463,57 @@ export const SEED_INVITES: MockInvite[] = [];
 export const SEED_ANNOUNCEMENTS: MockAnnouncement[] = [];
 export const SEED_CONVERSATIONS: MockConversation[] = [];
 export const SEED_MESSAGES: MockMessage[] = [];
+export const SEED_FACILITIES: MockFacility[] = [
+  {
+    _id: "fac_pitch_1",
+    academyId: "acad_hercules",
+    name: "Main Stadium Pitch 1",
+    type: "pitch",
+    surfaceType: "Natural Hybrid Grass",
+    capacity: 500,
+    status: "available",
+    notes: "Full size FIFA standard pitch with floodlights",
+    createdAt: 1729000000000,
+    updatedAt: 1729000000000,
+  },
+  {
+    _id: "fac_pitch_2",
+    academyId: "acad_hercules",
+    name: "Training Turf 2",
+    type: "pitch",
+    surfaceType: "4G Artificial Turf",
+    capacity: 100,
+    status: "available",
+    notes: "All-weather training field",
+    createdAt: 1729000000000,
+    updatedAt: 1729000000000,
+  },
+  {
+    _id: "fac_gym_1",
+    academyId: "acad_hercules",
+    name: "Performance Conditioning Gym",
+    type: "gym",
+    surfaceType: "High-density Rubber",
+    capacity: 40,
+    status: "available",
+    notes: "Strength & conditioning zone",
+    createdAt: 1729000000000,
+    updatedAt: 1729000000000,
+  },
+  {
+    _id: "fac_pitch_maint",
+    academyId: "acad_hercules",
+    name: "Indoor Training Pitch B",
+    type: "pitch",
+    surfaceType: "Artificial Turf",
+    capacity: 80,
+    status: "maintenance",
+    notes: "Closed for seasonal surface aeration and repairs",
+    createdAt: 1729000000000,
+    updatedAt: 1729000000000,
+  },
+];
 export const SEED_DRILLS: MockDrill[] = [];
+export const SEED_INJURIES: MockInjury[] = [];
+export const SEED_WORKOUT_LOGS: MockWorkoutLog[] = [];
+

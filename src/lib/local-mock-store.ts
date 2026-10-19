@@ -17,6 +17,9 @@ import {
   SEED_CONVERSATIONS,
   SEED_MESSAGES,
   SEED_DRILLS,
+  SEED_INJURIES,
+  SEED_WORKOUT_LOGS,
+  SEED_FACILITIES,
   type MockAcademy,
   type MockUser,
   type MockAthlete,
@@ -35,6 +38,9 @@ import {
   type MockConversation,
   type MockMessage,
   type MockDrill,
+  type MockInjury,
+  type MockWorkoutLog,
+  type MockFacility,
 } from "./local-mock-data.ts";
 import { toast } from "sonner";
 
@@ -99,6 +105,9 @@ export interface MockDatabase {
   messages: MockMessage[];
   drills: MockDrill[];
   tacticalPlans: MockTacticalPlan[];
+  injuries: MockInjury[];
+  workoutLogs: MockWorkoutLog[];
+  facilities: MockFacility[];
 }
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
@@ -108,6 +117,7 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "athletes",
   "teams",
   "teamMembers",
+  "facilities",
   "trainingSessions",
   "attendanceRecords",
   "trainingPlans",
@@ -121,6 +131,8 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "announcements",
   "conversations",
   "messages",
+  "injuries",
+  "workoutLogs",
 ]);
 const PERSONA_KEY = "coachtactics_persona_id_v3";
 
@@ -165,6 +177,9 @@ function getInitialDb(): MockDatabase {
     messages: [...SEED_MESSAGES],
     drills: [...SEED_DRILLS],
     tacticalPlans: [],
+    injuries: [...SEED_INJURIES],
+    workoutLogs: [...SEED_WORKOUT_LOGS],
+    facilities: [...SEED_FACILITIES],
   };
 }
 
@@ -293,6 +308,9 @@ class LocalMockStore {
       messages: [],
       drills: [],
       tacticalPlans: [],
+      facilities: [],
+      injuries: [],
+      workoutLogs: [],
     };
     this.currentUserId = null;
     if (typeof window !== "undefined") {
@@ -1360,7 +1378,58 @@ class LocalMockStore {
           (att) => att.sessionId === sessionId,
         );
 
-        return { session, roster, attendance };
+        const facility = session.facilityId
+          ? this.db.facilities.find((f) => f._id === session.facilityId) ?? null
+          : null;
+
+        return { session, roster, attendance, facility, tacticalPlan: null, resolvedDrills: [] };
+      }
+
+      case "facilities:listFacilities": {
+        const targetAcademyId = (user?.role === "platform_admin" && args.academyId) ? (args.academyId as string) : academyId;
+        if (!targetAcademyId) return [];
+        let list = this.db.facilities.filter((f) => f.academyId === targetAcademyId);
+        if (args.status) {
+          list = list.filter((f) => f.status === args.status);
+        }
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      case "facilities:checkFacilityAvailability": {
+        const facilityId = args.facilityId as string;
+        const facility = this.db.facilities.find((f) => f._id === facilityId);
+        if (!facility) throw new Error("Facility not found");
+        if (facility.status === "maintenance") {
+          return { available: false, reason: "Facility under maintenance", conflictingSessions: [] };
+        }
+        if (facility.status === "closed") {
+          return { available: false, reason: "Facility is closed", conflictingSessions: [] };
+        }
+        const targetStart = new Date(args.startsAt as string).getTime();
+        const targetEnd = targetStart + Number(args.durationMinutes) * 60 * 1000;
+        const excludeSessionId = args.excludeSessionId as string | undefined;
+
+        const conflictingSessions = this.db.trainingSessions.filter((s) => {
+          if (s.facilityId !== facilityId || s.deletedAt) return false;
+          if (excludeSessionId && s._id === excludeSessionId) return false;
+          const sStart = new Date(s.startsAt).getTime();
+          const sEnd = sStart + s.durationMinutes * 60 * 1000;
+          return targetStart < sEnd && targetEnd > sStart;
+        });
+
+        return {
+          available: conflictingSessions.length === 0,
+          reason:
+            conflictingSessions.length > 0
+              ? `Facility '${facility.name}' is booked by ${conflictingSessions.length} other session(s).`
+              : undefined,
+          conflictingSessions: conflictingSessions.map((s) => ({
+            _id: s._id,
+            title: s.title,
+            startsAt: s.startsAt,
+            durationMinutes: s.durationMinutes,
+          })),
+        };
       }
 
       case "trainingSessions:listTodaySessions": {
@@ -1605,6 +1674,174 @@ class LocalMockStore {
           throw new Error("Forbidden: You do not have access to this athlete");
         }
         return athlete;
+      }
+
+      case "injuries:getAthleteInjuries": {
+        const athleteId = args.athleteId as string;
+        const canViewClinical =
+          user?.role === "platform_admin" ||
+          user?.role === "sporting_director" ||
+          user?.role === "medical_staff";
+        const records = this.db.injuries
+          .filter((i) => i.athleteId === athleteId)
+          .sort((a, b) => b.injuryDate - a.injuryDate);
+
+        return records.map((rec) => ({
+          ...rec,
+          clinicalNotes: canViewClinical ? rec.clinicalNotes : undefined,
+        }));
+      }
+
+      case "injuries:getAcademyMedicalRoomSummary": {
+        const targetAcademyId = (args.academyId as string) || academyId;
+        const canViewClinical =
+          user?.role === "platform_admin" ||
+          user?.role === "sporting_director" ||
+          user?.role === "medical_staff";
+
+        const activeInjuries = this.db.injuries.filter(
+          (i) => i.academyId === targetAcademyId && !i.isResolved,
+        );
+
+        return activeInjuries.map((injury) => {
+          const athlete = this.db.athletes.find((a) => a._id === injury.athleteId);
+          const memberTeams = this.db.teamMembers
+            .filter((tm) => tm.athleteId === injury.athleteId)
+            .map((tm) => this.db.teams.find((t) => t._id === tm.teamId)?.name ?? "Unknown Team");
+
+          return {
+            _id: injury._id,
+            academyId: injury.academyId,
+            athleteId: injury.athleteId,
+            athleteFirstName: athlete?.firstName ?? "Unknown",
+            athleteLastName: athlete?.lastName ?? "Athlete",
+            teams: memberTeams,
+            availabilityStatus: injury.availabilityStatus,
+            bodyPart: injury.bodyPart,
+            laterality: injury.laterality,
+            mechanism: injury.mechanism,
+            severity: injury.severity,
+            injuryDate: injury.injuryDate,
+            expectedReturnDate: injury.expectedReturnDate,
+            isResolved: injury.isResolved,
+            coachingRestrictions: injury.coachingRestrictions,
+            clinicalNotes: canViewClinical ? injury.clinicalNotes : undefined,
+            updatedAt: injury.updatedAt,
+          };
+        });
+      }
+
+      case "workload:getAthleteWorkloadAndACWR": {
+        const athleteId = args.athleteId as string;
+        const now = Date.now();
+        const msInDay = 86_400_000;
+        const sevenDaysAgo = now - 7 * msInDay;
+        const twentyEightDaysAgo = now - 28 * msInDay;
+
+        const dailyLoadsMap = new Map<string, number>();
+        for (let i = 27; i >= 0; i--) {
+          const d = new Date(now - i * msInDay);
+          const key = d.toISOString().split("T")[0];
+          dailyLoadsMap.set(key, 0);
+        }
+
+        let acuteLoad7d = 0;
+        let total28dLoad = 0;
+        let totalSessions28d = 0;
+
+        for (const record of this.db.attendanceRecords) {
+          if (record.athleteId !== athleteId) continue;
+          if (record.status !== "present" && record.status !== "late") continue;
+          const load = record.sessionLoad ?? 0;
+          if (load <= 0) continue;
+
+          let time = record.loggedAt;
+          if (!time && record.markedAt) {
+            time = new Date(record.markedAt).getTime();
+          }
+          if (!time || time < twentyEightDaysAgo || time > now + msInDay) continue;
+
+          totalSessions28d++;
+          total28dLoad += load;
+          if (time >= sevenDaysAgo) {
+            acuteLoad7d += load;
+          }
+
+          const dateKey = new Date(time).toISOString().split("T")[0];
+          if (dailyLoadsMap.has(dateKey)) {
+            dailyLoadsMap.set(dateKey, (dailyLoadsMap.get(dateKey) ?? 0) + load);
+          }
+        }
+
+        for (const log of this.db.workoutLogs) {
+          if (log.athleteId !== athleteId) continue;
+          const load = log.calculatedLoad ?? 0;
+          if (load <= 0) continue;
+          const time = log.completedAt;
+          if (time < twentyEightDaysAgo || time > now + msInDay) continue;
+
+          totalSessions28d++;
+          total28dLoad += load;
+          if (time >= sevenDaysAgo) {
+            acuteLoad7d += load;
+          }
+
+          const dateKey = new Date(time).toISOString().split("T")[0];
+          if (dailyLoadsMap.has(dateKey)) {
+            dailyLoadsMap.set(dateKey, (dailyLoadsMap.get(dateKey) ?? 0) + load);
+          }
+        }
+
+        const chronicLoadWeeklyAvg28d = Number((total28dLoad / 4).toFixed(1));
+        let acwr: number | null = null;
+        let riskZone: string = "insufficient_data";
+
+        if (chronicLoadWeeklyAvg28d > 0) {
+          acwr = Number((acuteLoad7d / chronicLoadWeeklyAvg28d).toFixed(2));
+          if (acwr < 0.8) {
+            riskZone = "undertraining";
+          } else if (acwr <= 1.3) {
+            riskZone = "optimal";
+          } else if (acwr <= 1.5) {
+            riskZone = "caution";
+          } else {
+            riskZone = "danger_high_spike";
+          }
+        }
+
+        const activeInjuries = this.db.injuries
+          .filter((i) => i.athleteId === athleteId && !i.isResolved)
+          .sort((a, b) => b.injuryDate - a.injuryDate);
+
+        let availabilityStatus = "fit";
+        let coachingRestrictions: string | undefined = undefined;
+        let activeInjuryId: string | undefined = undefined;
+
+        if (activeInjuries.length > 0) {
+          availabilityStatus = activeInjuries[0].availabilityStatus;
+          coachingRestrictions = activeInjuries[0].coachingRestrictions;
+          activeInjuryId = activeInjuries[0]._id;
+        }
+
+        const dailyLoads = Array.from(dailyLoadsMap.entries()).map(([date, load]) => {
+          const d = new Date(date + "T00:00:00");
+          const dayOfWeek = d.toLocaleDateString("en-US", { weekday: "short" });
+          return { date, dayOfWeek, load };
+        });
+
+        return {
+          athleteId,
+          availabilityStatus,
+          coachingRestrictions,
+          activeInjuryId,
+          acuteLoad7d,
+          chronicLoadWeeklyAvg28d,
+          total28dLoad,
+          totalSessions28d,
+          acwr,
+          riskZone,
+          dailyLoads,
+        };
       }
 
       case "academies:getMyAcademy": {
@@ -2233,6 +2470,29 @@ class LocalMockStore {
       case "trainingSessions:scheduleSession":
       case "trainingSessions:createSession": {
         if (!academyId) throw new Error("No academy");
+        const facilityId = args.facilityId as string | undefined;
+        if (facilityId) {
+          const fac = this.db.facilities.find((f) => f._id === facilityId);
+          if (!fac) throw new Error("Facility not found in academy");
+          if (fac.status === "maintenance") {
+            throw new Error(`Facility conflict: ${fac.name} is currently under maintenance and cannot be booked.`);
+          }
+          if (fac.status === "closed") {
+            throw new Error(`Facility conflict: ${fac.name} is currently closed and cannot be booked.`);
+          }
+          const targetStart = new Date(args.startsAt as string).getTime();
+          const targetEnd = targetStart + Number(args.durationMinutes) * 60 * 1000;
+          const conflict = this.db.trainingSessions.find((s) => {
+            if (s.facilityId !== facilityId || s.deletedAt) return false;
+            const sStart = new Date(s.startsAt).getTime();
+            const sEnd = sStart + s.durationMinutes * 60 * 1000;
+            return targetStart < sEnd && targetEnd > sStart;
+          });
+          if (conflict) {
+            throw new Error(`Facility conflict: ${fac.name} is already booked by another session during this time window.`);
+          }
+        }
+
         const newSession: MockTrainingSession = {
           _id: `sess_${Date.now()}`,
           academyId,
@@ -2242,6 +2502,12 @@ class LocalMockStore {
           durationMinutes: Number(args.durationMinutes),
           location: args.location as string | undefined,
           notes: args.notes as string | undefined,
+          facilityId,
+          sessionType: (args.sessionType as any) ?? "training",
+          microcycleDay: args.microcycleDay as any,
+          matchDetails: args.matchDetails as any,
+          tacticalPlanId: args.tacticalPlanId as string | undefined,
+          drillIds: args.drillIds as string[] | undefined,
           createdBy: user?._id || "system",
           createdAt: nowIso,
         };
@@ -2258,14 +2524,133 @@ class LocalMockStore {
           (s) => s._id === sessionId,
         );
         if (!session) throw new Error("Session not found");
+
+        const targetFacilityId =
+          args.facilityId !== undefined ? (args.facilityId as string) : session.facilityId;
+
+        if (targetFacilityId) {
+          const fac = this.db.facilities.find((f) => f._id === targetFacilityId);
+          if (!fac) throw new Error("Facility not found in academy");
+          if (fac.status === "maintenance") {
+            throw new Error(`Facility conflict: ${fac.name} is currently under maintenance and cannot be booked.`);
+          }
+          if (fac.status === "closed") {
+            throw new Error(`Facility conflict: ${fac.name} is currently closed and cannot be booked.`);
+          }
+          const targetStart = new Date((args.startsAt as string) ?? session.startsAt).getTime();
+          const targetEnd =
+            targetStart + Number(args.durationMinutes ?? session.durationMinutes) * 60 * 1000;
+          const conflict = this.db.trainingSessions.find((s) => {
+            if (s._id === sessionId || s.facilityId !== targetFacilityId || s.deletedAt) return false;
+            const sStart = new Date(s.startsAt).getTime();
+            const sEnd = sStart + s.durationMinutes * 60 * 1000;
+            return targetStart < sEnd && targetEnd > sStart;
+          });
+          if (conflict) {
+            throw new Error(`Facility conflict: ${fac.name} is already booked by another session during this time window.`);
+          }
+        }
+
         session.title = (args.title as string).trim();
         session.startsAt = args.startsAt as string;
         session.durationMinutes = Number(args.durationMinutes);
         session.location = args.location as string | undefined;
         session.notes = args.notes as string | undefined;
+        if (args.facilityId !== undefined) session.facilityId = args.facilityId as string;
+        if (args.sessionType !== undefined) session.sessionType = args.sessionType as any;
+        if (args.microcycleDay !== undefined) session.microcycleDay = args.microcycleDay as any;
+        if (args.matchDetails !== undefined) session.matchDetails = args.matchDetails as any;
+        if (args.tacticalPlanId !== undefined) session.tacticalPlanId = args.tacticalPlanId as string;
+        if (args.drillIds !== undefined) session.drillIds = args.drillIds as string[];
+
         this.saveDb();
         this.notifyAll();
         this.syncWithRollback("updateSession", snapshotDb, mockCloudService.updateSession(session.academyId, sessionId, session));
+        return null;
+      }
+
+      case "trainingSessions:recordMatchResultAndStats": {
+        const sessionId = args.sessionId as string;
+        const session = this.db.trainingSessions.find((s) => s._id === sessionId);
+        if (!session) throw new Error("Session not found");
+        if (args.matchDetails) {
+          session.matchDetails = args.matchDetails as any;
+        }
+        const playerStats = (args.playerStats as any[]) ?? [];
+        for (const stat of playerStats) {
+          const existing = this.db.attendanceRecords.find(
+            (a) => a.sessionId === sessionId && a.athleteId === stat.athleteId,
+          );
+          if (existing) {
+            existing.matchStats = {
+              started: stat.started,
+              minutesPlayed: stat.minutesPlayed,
+              goalsOrPoints: stat.goalsOrPoints,
+              assists: stat.assists,
+              yellowCards: stat.yellowCards,
+              redCards: stat.redCards,
+              coachRating: stat.coachRating,
+            };
+          } else {
+            this.db.attendanceRecords.push({
+              _id: `att_${Date.now()}_${stat.athleteId}`,
+              sessionId,
+              athleteId: stat.athleteId,
+              academyId: session.academyId,
+              status: "present",
+              recordedAt: nowIso,
+              recordedBy: user?._id || "system",
+              matchStats: {
+                started: stat.started,
+                minutesPlayed: stat.minutesPlayed,
+                goalsOrPoints: stat.goalsOrPoints,
+                assists: stat.assists,
+                yellowCards: stat.yellowCards,
+                redCards: stat.redCards,
+                coachRating: stat.coachRating,
+              },
+            });
+          }
+        }
+        this.saveDb();
+        this.notifyAll();
+        return { success: true, updatedStatsCount: playerStats.length };
+      }
+
+      case "facilities:createFacility": {
+        const targetAcademyId = (user?.role === "platform_admin" && args.academyId) ? (args.academyId as string) : academyId;
+        if (!targetAcademyId) throw new Error("No academy");
+        const newFacility: MockFacility = {
+          _id: `fac_${Date.now()}`,
+          academyId: targetAcademyId,
+          name: (args.name as string).trim(),
+          type: args.type as any,
+          surfaceType: args.surfaceType as string | undefined,
+          capacity: args.capacity !== undefined ? Number(args.capacity) : undefined,
+          status: (args.status as any) || "available",
+          notes: args.notes as string | undefined,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        this.db.facilities.push(newFacility);
+        this.saveDb();
+        this.notifyAll();
+        return newFacility._id;
+      }
+
+      case "facilities:updateFacility": {
+        const facilityId = args.facilityId as string;
+        const fac = this.db.facilities.find((f) => f._id === facilityId);
+        if (!fac) throw new Error("Facility not found");
+        if (args.name !== undefined) fac.name = (args.name as string).trim();
+        if (args.type !== undefined) fac.type = args.type as any;
+        if (args.surfaceType !== undefined) fac.surfaceType = args.surfaceType as string;
+        if (args.capacity !== undefined) fac.capacity = Number(args.capacity);
+        if (args.status !== undefined) fac.status = args.status as any;
+        if (args.notes !== undefined) fac.notes = args.notes as string;
+        fac.updatedAt = Date.now();
+        this.saveDb();
+        this.notifyAll();
         return null;
       }
 
@@ -2291,6 +2676,14 @@ class LocalMockStore {
         const sessionId = args.sessionId as string;
         const athleteId = args.athleteId as string;
         const status = args.status as MockAttendanceRecord["status"];
+        const durationMinutes = args.durationMinutes !== undefined ? Number(args.durationMinutes) : undefined;
+        const rpe = args.rpe !== undefined ? Number(args.rpe) : undefined;
+        const calculatedLoad =
+          durationMinutes !== undefined && rpe !== undefined
+            ? Math.round(durationMinutes * rpe)
+            : undefined;
+        const nowMs = Date.now();
+        const hasWorkload = durationMinutes !== undefined || rpe !== undefined;
 
         let rec: MockAttendanceRecord;
         const existing = this.db.attendanceRecords.find(
@@ -2299,6 +2692,12 @@ class LocalMockStore {
         if (existing) {
           existing.status = status;
           existing.markedAt = nowIso;
+          if (durationMinutes !== undefined) existing.durationMinutes = durationMinutes;
+          if (rpe !== undefined) existing.rpe = rpe;
+          if (calculatedLoad !== undefined) existing.sessionLoad = calculatedLoad;
+          if (args.wellnessFatigue !== undefined) existing.wellnessFatigue = Number(args.wellnessFatigue);
+          if (args.wellnessSoreness !== undefined) existing.wellnessSoreness = Number(args.wellnessSoreness);
+          if (hasWorkload) existing.loggedAt = nowMs;
           rec = existing;
         } else {
           rec = {
@@ -2308,6 +2707,12 @@ class LocalMockStore {
             status,
             markedAt: nowIso,
             markedBy: user?._id ?? "usr_admin",
+            durationMinutes,
+            rpe,
+            sessionLoad: calculatedLoad,
+            wellnessFatigue: args.wellnessFatigue !== undefined ? Number(args.wellnessFatigue) : undefined,
+            wellnessSoreness: args.wellnessSoreness !== undefined ? Number(args.wellnessSoreness) : undefined,
+            loggedAt: hasWorkload ? nowMs : undefined,
           };
           this.db.attendanceRecords.push(rec);
         }
@@ -2318,6 +2723,152 @@ class LocalMockStore {
           this.syncWithRollback("setAttendanceRecord", snapshotDb, mockCloudService.setAttendanceRecord(targetSess.academyId, rec));
         }
         return null;
+      }
+
+      case "trainingSessions:submitSessionRpe": {
+        const sessionId = args.sessionId as string;
+        const targetSession = this.db.trainingSessions.find((s) => s._id === sessionId);
+        if (!targetSession) throw new Error("Session not found");
+
+        let athleteId = args.athleteId as string | undefined;
+        if (!athleteId && user?.role === "athlete") {
+          athleteId = this.db.athletes.find((a) => a.userId === user._id)?._id;
+        }
+        if (!athleteId) athleteId = "ath_marcus";
+
+        const rpe = Number(args.rpe);
+        const duration = Number(args.durationMinutes ?? targetSession.durationMinutes ?? 60);
+        const sessionLoad = Math.round(duration * rpe);
+        const nowMs = Date.now();
+
+        let existing = this.db.attendanceRecords.find(
+          (a) => a.sessionId === sessionId && a.athleteId === athleteId,
+        );
+        if (existing) {
+          existing.durationMinutes = duration;
+          existing.rpe = rpe;
+          existing.sessionLoad = sessionLoad;
+          if (args.wellnessFatigue !== undefined) existing.wellnessFatigue = Number(args.wellnessFatigue);
+          if (args.wellnessSoreness !== undefined) existing.wellnessSoreness = Number(args.wellnessSoreness);
+          existing.loggedAt = nowMs;
+          this.saveDb();
+          this.notifyAll();
+          return existing._id;
+        } else {
+          const newRecord: MockAttendanceRecord = {
+            _id: `att_${Date.now()}`,
+            sessionId,
+            athleteId,
+            status: "present",
+            markedAt: nowIso,
+            markedBy: user?._id ?? "usr_athlete",
+            durationMinutes: duration,
+            rpe,
+            sessionLoad,
+            wellnessFatigue: args.wellnessFatigue !== undefined ? Number(args.wellnessFatigue) : undefined,
+            wellnessSoreness: args.wellnessSoreness !== undefined ? Number(args.wellnessSoreness) : undefined,
+            loggedAt: nowMs,
+          };
+          this.db.attendanceRecords.push(newRecord);
+          this.saveDb();
+          this.notifyAll();
+          return newRecord._id;
+        }
+      }
+
+      case "injuries:logInjuryRecord": {
+        const athleteId = args.athleteId as string;
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        if (!athlete) throw new Error("Athlete not found");
+
+        const newInjury: MockInjury = {
+          _id: `inj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          academyId: athlete.academyId,
+          athleteId: athlete._id,
+          availabilityStatus: args.availabilityStatus as MockInjury["availabilityStatus"],
+          bodyPart: String(args.bodyPart),
+          laterality: args.laterality as MockInjury["laterality"],
+          mechanism: args.mechanism as MockInjury["mechanism"],
+          severity: args.severity as MockInjury["severity"],
+          injuryDate: Number(args.injuryDate),
+          expectedReturnDate: args.expectedReturnDate ? Number(args.expectedReturnDate) : undefined,
+          actualReturnDate: undefined,
+          isResolved: args.availabilityStatus === "fit",
+          coachingRestrictions: args.coachingRestrictions as string | undefined,
+          clinicalNotes: args.clinicalNotes as string | undefined,
+          recordedByUserId: user?._id ?? "usr_admin",
+          updatedAt: Date.now(),
+        };
+
+        this.db.injuries.unshift(newInjury);
+        this.saveDb();
+        this.notifyAll();
+        return newInjury._id;
+      }
+
+      case "injuries:updateInjuryStatus": {
+        const injuryId = args.injuryId as string;
+        const injury = this.db.injuries.find((i) => i._id === injuryId);
+        if (!injury) throw new Error("Injury not found");
+
+        if (args.availabilityStatus !== undefined) {
+          injury.availabilityStatus = args.availabilityStatus as MockInjury["availabilityStatus"];
+          if (injury.availabilityStatus === "fit" && args.isResolved === undefined) {
+            injury.isResolved = true;
+          }
+        }
+        if (args.isResolved !== undefined) {
+          injury.isResolved = Boolean(args.isResolved);
+          if (injury.isResolved && !injury.actualReturnDate) {
+            injury.actualReturnDate = Date.now();
+          }
+        }
+        if (args.expectedReturnDate !== undefined) {
+          injury.expectedReturnDate = Number(args.expectedReturnDate);
+        }
+        if (args.actualReturnDate !== undefined) {
+          injury.actualReturnDate = Number(args.actualReturnDate);
+        }
+        if (args.coachingRestrictions !== undefined) {
+          injury.coachingRestrictions = args.coachingRestrictions as string | undefined;
+        }
+        if (args.clinicalNotes !== undefined) {
+          injury.clinicalNotes = args.clinicalNotes as string | undefined;
+        }
+        injury.updatedAt = Date.now();
+
+        this.saveDb();
+        this.notifyAll();
+        return null;
+      }
+
+      case "workload:logWorkoutExecution": {
+        const athleteId = args.athleteId as string;
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        if (!athlete) throw new Error("Athlete not found");
+
+        const durationMinutes = Number(args.durationMinutes);
+        const rpe = Number(args.rpe);
+        const calculatedLoad = Math.round(durationMinutes * rpe);
+
+        const newWorkoutLog: MockWorkoutLog = {
+          _id: `wlog_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          academyId: athlete.academyId,
+          athleteId: athlete._id,
+          trainingPlanId: args.trainingPlanId as string,
+          completedAt: args.completedAt ? Number(args.completedAt) : Date.now(),
+          durationMinutes,
+          rpe,
+          calculatedLoad,
+          completedExercises: (args.completedExercises as MockWorkoutLog["completedExercises"]) ?? [],
+          athleteNotes: args.athleteNotes as string | undefined,
+          loggedByUserId: user?._id ?? "usr_athlete",
+        };
+
+        this.db.workoutLogs.unshift(newWorkoutLog);
+        this.saveDb();
+        this.notifyAll();
+        return newWorkoutLog._id;
       }
 
       case "teams:createTeam": {
@@ -2608,16 +3159,20 @@ class LocalMockStore {
 
       case "trainingPlans:createPlan": {
         if (!academyId) throw new Error("No academy");
-        const athlete = this.db.athletes.find((a) => a._id === (args.athleteId as string));
+        const athlete = args.athleteId ? this.db.athletes.find((a) => a._id === (args.athleteId as string)) : undefined;
         const newPlan: MockTrainingPlan = {
           _id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           academyId,
-          athleteId: args.athleteId as string,
+          athleteId: args.athleteId as string | undefined,
           title: (args.title as string).trim(),
           description: args.description as string | undefined,
           startDate: args.startDate as string | undefined,
           endDate: args.endDate as string | undefined,
           status: "active",
+          phase: args.phase as any,
+          microcycleTag: args.microcycleTag as string | undefined,
+          targetAgeGroup: args.targetAgeGroup as string | undefined,
+          isTemplate: Boolean(args.isTemplate),
           createdBy: user?._id ?? "usr_coach",
           createdAt: nowIso,
         };
@@ -2647,6 +3202,10 @@ class LocalMockStore {
         plan.description = args.description as string | undefined;
         plan.startDate = args.startDate as string | undefined;
         plan.endDate = args.endDate as string | undefined;
+        if (args.phase !== undefined) plan.phase = args.phase as any;
+        if (args.microcycleTag !== undefined) plan.microcycleTag = args.microcycleTag as string;
+        if (args.targetAgeGroup !== undefined) plan.targetAgeGroup = args.targetAgeGroup as string;
+        if (args.isTemplate !== undefined) plan.isTemplate = Boolean(args.isTemplate);
         if (args.status)
           plan.status = args.status as MockTrainingPlan["status"];
         this.saveDb();
@@ -2667,6 +3226,81 @@ class LocalMockStore {
         }
 
         return null;
+      }
+
+      case "trainingPlans:assignPlanToTeam": {
+        const sourcePlanId = args.sourcePlanId as string;
+        const teamId = args.teamId as string;
+        const skipInjuredOut = Boolean(args.skipInjuredOutAthletes);
+
+        const sourcePlan = this.db.trainingPlans.find((p) => p._id === sourcePlanId);
+        if (!sourcePlan) throw new Error("Source training plan not found");
+
+        const members = this.db.teamMembers.filter((m) => m.teamId === teamId);
+        const sourceItems = this.db.planItems
+          .filter((i) => i.planId === sourcePlanId)
+          .sort((a, b) => a.order - b.order);
+
+        let assignedCount = 0;
+        let skippedInjuredCount = 0;
+
+        for (const m of members) {
+          const alreadyHas = this.db.trainingPlans.some(
+            (p) =>
+              p.athleteId === m.athleteId &&
+              p.sourceTemplateId === sourcePlanId &&
+              p.status === "active",
+          );
+          if (alreadyHas) continue;
+
+          if (skipInjuredOut) {
+            const activeInjuries = this.db.injuries.filter(
+              (i) => i.athleteId === m.athleteId && !i.isResolved,
+            );
+            if (activeInjuries.some((i) => i.availabilityStatus === "injured_out")) {
+              skippedInjuredCount++;
+              continue;
+            }
+          }
+
+          const newPlanId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const clonedPlan: MockTrainingPlan = {
+            _id: newPlanId,
+            academyId: sourcePlan.academyId,
+            athleteId: m.athleteId,
+            title: sourcePlan.title,
+            description: sourcePlan.description,
+            status: "active",
+            startDate: sourcePlan.startDate,
+            endDate: sourcePlan.endDate,
+            phase: sourcePlan.phase,
+            microcycleTag: sourcePlan.microcycleTag,
+            targetAgeGroup: sourcePlan.targetAgeGroup,
+            sourceTemplateId: sourcePlanId,
+            isTemplate: false,
+            createdBy: user?._id || "system",
+            createdAt: nowIso,
+          };
+          this.db.trainingPlans.unshift(clonedPlan);
+
+          for (const item of sourceItems) {
+            this.db.planItems.push({
+              _id: `pi_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              planId: newPlanId,
+              order: item.order,
+              exercise: item.exercise,
+              target: item.target,
+              notes: item.notes,
+              completed: false,
+            });
+          }
+
+          assignedCount++;
+        }
+
+        this.saveDb();
+        this.notifyAll();
+        return { assignedCount, skippedInjuredCount };
       }
 
       case "trainingPlans:deletePlan": {

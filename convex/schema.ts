@@ -9,11 +9,16 @@ import {
   trainingSessions,
   attendanceRecords,
   attendanceStatusValidator,
+  sessionTypeValidator,
+  microcycleDayValidator,
+  matchDetailsValidator,
+  matchStatsValidator,
 } from "./schema/trainingSessions.ts";
 import {
   trainingPlans,
   planItems,
   planStatusValidator,
+  periodizationPhaseValidator,
 } from "./schema/trainingPlans.ts";
 import { assessments } from "./schema/assessments.ts";
 import { videoAnalyses } from "./schema/videoAnalyses.ts";
@@ -40,6 +45,23 @@ import {
 } from "./schema/messages.ts";
 import { loginAttempts } from "./schema/loginAttempts.ts";
 import { academySettings } from "./schema/academySettings.ts";
+import {
+  guardianLinks,
+  guardianRelationshipValidator,
+} from "./schema/guardianLinks.ts";
+import {
+  injuries,
+  availabilityStatusValidator,
+  lateralityValidator,
+  injuryMechanismValidator,
+  injurySeverityValidator,
+} from "./schema/injuries.ts";
+import { workoutLogs } from "./schema/workoutLogs.ts";
+import {
+  facilities,
+  facilityTypeValidator,
+  facilityStatusValidator,
+} from "./schema/facilities.ts";
 
 export default defineSchema({
   ...authTables,
@@ -55,6 +77,15 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     role: v.optional(userRoleValidator),
     academyId: v.optional(v.id("academies")),
+    staffCompliance: v.optional(
+      v.object({
+        coachingLicenseLevel: v.optional(v.string()),
+        licenseExpiryDate: v.optional(v.number()),
+        safeguardingVerified: v.boolean(),
+        safeguardingExpiryDate: v.optional(v.number()),
+        medicalCertification: v.optional(v.string()),
+      }),
+    ),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
@@ -63,8 +94,10 @@ export default defineSchema({
   academies,
   invites,
   athletes,
+  guardianLinks,
   teams,
   teamMembers,
+  facilities,
   trainingSessions,
   attendanceRecords,
   trainingPlans,
@@ -84,6 +117,8 @@ export default defineSchema({
   messages,
   loginAttempts,
   academySettings,
+  injuries,
+  workoutLogs,
 });
 
 export {
@@ -95,4 +130,16 @@ export {
   invoiceStatusValidator,
   announcementCategoryValidator,
   announcementPriorityValidator,
+  guardianRelationshipValidator,
+  availabilityStatusValidator,
+  lateralityValidator,
+  injuryMechanismValidator,
+  injurySeverityValidator,
+  facilityTypeValidator,
+  facilityStatusValidator,
+  sessionTypeValidator,
+  microcycleDayValidator,
+  matchDetailsValidator,
+  matchStatsValidator,
+  periodizationPhaseValidator,
 };

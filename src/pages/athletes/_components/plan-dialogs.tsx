@@ -40,6 +40,17 @@ const formSchema = z.object({
   description: z.string(),
   startDate: z.string(),
   endDate: z.string(),
+  phase: z
+    .enum([
+      "pre_season",
+      "in_season_early",
+      "in_season_peak",
+      "transition_off_season",
+      "rehab_return_to_play",
+    ])
+    .optional(),
+  microcycleTag: z.string().optional(),
+  targetAgeGroup: z.string().optional(),
 });
 
 export default function CreatePlanDialog({
@@ -56,7 +67,15 @@ export default function CreatePlanDialog({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { title: "", description: "", startDate: "", endDate: "" },
+    defaultValues: {
+      title: "",
+      description: "",
+      startDate: "",
+      endDate: "",
+      phase: undefined,
+      microcycleTag: "",
+      targetAgeGroup: "",
+    },
   });
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -68,6 +87,9 @@ export default function CreatePlanDialog({
         description: values.description || undefined,
         startDate: values.startDate || undefined,
         endDate: values.endDate || undefined,
+        phase: values.phase,
+        microcycleTag: values.microcycleTag?.trim() || undefined,
+        targetAgeGroup: values.targetAgeGroup?.trim() || undefined,
       });
       toast.success("Training plan created");
       form.reset();
@@ -136,6 +158,51 @@ export default function CreatePlanDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
+                name="phase"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Macrocycle Phase (optional)</FormLabel>
+                    <Select
+                      value={field.value ?? "none"}
+                      onValueChange={(val) =>
+                        field.onChange(val === "none" ? undefined : val)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select phase" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None / Unspecified</SelectItem>
+                        <SelectItem value="pre_season">Pre-Season</SelectItem>
+                        <SelectItem value="in_season_early">In-Season (Early)</SelectItem>
+                        <SelectItem value="in_season_peak">In-Season (Peak)</SelectItem>
+                        <SelectItem value="transition_off_season">Off-Season / Transition</SelectItem>
+                        <SelectItem value="rehab_return_to_play">Rehab & Return to Play</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="microcycleTag"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Microcycle Tag</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. MD-3, Block A" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="startDate"
                 render={({ field }) => (
                   <FormItem>
@@ -184,6 +251,17 @@ const editFormSchema = z.object({
   status: z.enum(["active", "completed", "archived"]),
   startDate: z.string(),
   endDate: z.string(),
+  phase: z
+    .enum([
+      "pre_season",
+      "in_season_early",
+      "in_season_peak",
+      "transition_off_season",
+      "rehab_return_to_play",
+    ])
+    .optional(),
+  microcycleTag: z.string().optional(),
+  targetAgeGroup: z.string().optional(),
 });
 
 export function EditPlanDialog({
@@ -206,6 +284,9 @@ export function EditPlanDialog({
       status: plan.status,
       startDate: plan.startDate ?? "",
       endDate: plan.endDate ?? "",
+      phase: plan.phase,
+      microcycleTag: plan.microcycleTag ?? "",
+      targetAgeGroup: plan.targetAgeGroup ?? "",
     },
   });
 
@@ -217,6 +298,9 @@ export function EditPlanDialog({
       status: plan.status,
       startDate: plan.startDate ?? "",
       endDate: plan.endDate ?? "",
+      phase: plan.phase,
+      microcycleTag: plan.microcycleTag ?? "",
+      targetAgeGroup: plan.targetAgeGroup ?? "",
     });
   });
 
@@ -230,6 +314,9 @@ export function EditPlanDialog({
         status: values.status,
         startDate: values.startDate || undefined,
         endDate: values.endDate || undefined,
+        phase: values.phase,
+        microcycleTag: values.microcycleTag?.trim() || undefined,
+        targetAgeGroup: values.targetAgeGroup?.trim() || undefined,
       });
       toast.success("Plan updated");
       onOpenChange(false);
@@ -306,6 +393,51 @@ export function EditPlanDialog({
                 </FormItem>
               )}
             />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="phase"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Macrocycle Phase (optional)</FormLabel>
+                    <Select
+                      value={field.value ?? "none"}
+                      onValueChange={(val) =>
+                        field.onChange(val === "none" ? undefined : val)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select phase" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None / Unspecified</SelectItem>
+                        <SelectItem value="pre_season">Pre-Season</SelectItem>
+                        <SelectItem value="in_season_early">In-Season (Early)</SelectItem>
+                        <SelectItem value="in_season_peak">In-Season (Peak)</SelectItem>
+                        <SelectItem value="transition_off_season">Off-Season / Transition</SelectItem>
+                        <SelectItem value="rehab_return_to_play">Rehab & Return to Play</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="microcycleTag"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Microcycle Tag</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. MD-3, Block A" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

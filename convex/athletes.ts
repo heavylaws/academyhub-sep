@@ -72,7 +72,7 @@ function sanitizeAthletePayload<
 export const createAthlete = mutation({
   args: athleteFields,
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const targetAcademyId = (user.role === "platform_admin" && args.academyId) ? args.academyId : user.academyId;
     if (!targetAcademyId) {
       throw new ConvexError({
@@ -103,7 +103,7 @@ export const createAthlete = mutation({
 export const updateAthlete = mutation({
   args: { athleteId: v.id("athletes"), ...athleteFields },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const { athleteId, ...updates } = args;
     const athlete = await ctx.db.get("athletes", athleteId);
     if (!athlete) {
@@ -140,7 +140,7 @@ export const setAthleteStatus = mutation({
     status: v.union(v.literal("active"), v.literal("inactive")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({
@@ -226,7 +226,7 @@ export const bulkImportAthletes = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     if (!user.academyId) {
       throw new ConvexError({
         code: "FORBIDDEN",
@@ -311,7 +311,7 @@ export const linkAthleteToUser = mutation({
     email: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({
@@ -370,7 +370,7 @@ export const unlinkAthleteUser = mutation({
     athleteId: v.id("athletes"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({
@@ -416,7 +416,7 @@ async function generateUniquePin(
 export const regenerateCheckInPin = mutation({
   args: { athleteId: v.id("athletes") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Athlete not found" });
@@ -432,7 +432,7 @@ export const regenerateCheckInPin = mutation({
 export const generateMissingCheckInPins = mutation({
   args: {},
   handler: async (ctx) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     if (!user.academyId) {
       throw new ConvexError({
         code: "FORBIDDEN",

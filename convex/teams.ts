@@ -12,7 +12,7 @@ export const createTeam = mutation({
     academyId: v.optional(v.id("academies")),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const targetAcademyId = (user.role === "platform_admin" && args.academyId) ? args.academyId : user.academyId;
     if (!targetAcademyId) {
       throw new ConvexError({
@@ -51,7 +51,7 @@ export const updateTeam = mutation({
     sport: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -75,7 +75,7 @@ export const updateTeam = mutation({
 export const deleteTeam = mutation({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team || team.deletedAt) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -215,7 +215,7 @@ export const updateTeamTacticalSetup = mutation({
     activeTacticalPlanId: v.optional(v.id("tacticalPlans")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -250,7 +250,7 @@ export const assignAthleteTacticalRole = mutation({
     tacticalRole: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -311,7 +311,7 @@ export const removeTeamMember = mutation({
     athleteId: v.id("athletes"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -336,7 +336,7 @@ export const removeTeamMember = mutation({
 export const setTeamRoster = mutation({
   args: { teamId: v.id("teams"), athleteIds: v.array(v.id("athletes")) },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });

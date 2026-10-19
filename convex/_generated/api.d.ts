@@ -20,9 +20,11 @@ import type * as dashboard from "../dashboard.js";
 import type * as devSeed from "../devSeed.js";
 import type * as drills from "../drills.js";
 import type * as emails from "../emails.js";
+import type * as facilities from "../facilities.js";
 import type * as feeAutomation from "../feeAutomation.js";
 import type * as fees from "../fees.js";
 import type * as http from "../http.js";
+import type * as injuries from "../injuries.js";
 import type * as invites from "../invites.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -41,6 +43,7 @@ import type * as schema_announcements from "../schema/announcements.js";
 import type * as schema_assessments from "../schema/assessments.js";
 import type * as schema_athletes from "../schema/athletes.js";
 import type * as schema_drills from "../schema/drills.js";
+import type * as schema_facilities from "../schema/facilities.js";
 import type * as schema_fees from "../schema/fees.js";
 import type * as schema_invites from "../schema/invites.js";
 import type * as schema_invoices from "../schema/invoices.js";
@@ -64,6 +67,7 @@ import type * as trainingSessions from "../trainingSessions.js";
 import type * as users from "../users.js";
 import type * as videoAnalyses from "../videoAnalyses.js";
 import type * as videoAnalysis from "../videoAnalysis.js";
+import type * as workload from "../workload.js";
 
 import type {
   ApiFromModules,
@@ -84,9 +88,11 @@ declare const fullApi: ApiFromModules<{
   devSeed: typeof devSeed;
   drills: typeof drills;
   emails: typeof emails;
+  facilities: typeof facilities;
   feeAutomation: typeof feeAutomation;
   fees: typeof fees;
   http: typeof http;
+  injuries: typeof injuries;
   invites: typeof invites;
   invoices: typeof invoices;
   "lib/auth": typeof lib_auth;
@@ -105,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   "schema/assessments": typeof schema_assessments;
   "schema/athletes": typeof schema_athletes;
   "schema/drills": typeof schema_drills;
+  "schema/facilities": typeof schema_facilities;
   "schema/fees": typeof schema_fees;
   "schema/invites": typeof schema_invites;
   "schema/invoices": typeof schema_invoices;
@@ -128,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   videoAnalyses: typeof videoAnalyses;
   videoAnalysis: typeof videoAnalysis;
+  workload: typeof workload;
 }>;
 
 /**

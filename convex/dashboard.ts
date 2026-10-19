@@ -117,8 +117,13 @@ export const getDashboardData = query({
       };
     }
 
-    // ── Academy Admin / Coach ─────────────────────────────────────────────────
-    if (user.role === "academy_admin" || user.role === "coach") {
+    // ── Academy Admin / Sporting Director / Medical Staff / Coach ─────────────
+    if (
+      user.role === "academy_admin" ||
+      user.role === "coach" ||
+      user.role === "sporting_director" ||
+      user.role === "medical_staff"
+    ) {
       const [athletes, teams, allSessions, allPlans] = await Promise.all([
         ctx.db
           .query("athletes")

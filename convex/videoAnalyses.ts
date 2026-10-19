@@ -8,7 +8,7 @@ import type { Doc } from "./_generated/dataModel.d.ts";
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -24,7 +24,7 @@ export const saveVideoAndAnalyze = mutation({
     frames: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const athlete = await ctx.db.get("athletes", args.athleteId);
     if (!athlete)
       throw new ConvexError({
@@ -62,7 +62,7 @@ export const saveVideoAndAnalyze = mutation({
 export const deleteAnalysis = mutation({
   args: { analysisId: v.id("videoAnalyses") },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
     const record = await ctx.db.get("videoAnalyses", args.analysisId);
     if (!record)
       throw new ConvexError({

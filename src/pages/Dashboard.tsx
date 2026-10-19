@@ -187,6 +187,8 @@ export default function Dashboard() {
     if (
       data.role === "academy_admin" ||
       data.role === "coach" ||
+      data.role === "sporting_director" ||
+      data.role === "medical_staff" ||
       data.role === "accounting"
     )
       return "Here's a snapshot of your academy's activity.";
@@ -252,7 +254,7 @@ export default function Dashboard() {
         <PlatformAdminDashboard data={data as PlatformData} />
       ) : data.role === "accounting" ? (
         <AccountingDashboard data={data as AccountingData} />
-      ) : data.role === "academy_admin" || data.role === "coach" ? (
+      ) : data.role === "academy_admin" || data.role === "coach" || data.role === "sporting_director" || data.role === "medical_staff" ? (
         <AdminCoachDashboard data={data as AdminCoachData} />
       ) : data.role === "guardian" && "athleteId" in data ? (
         <GuardianDashboard data={data as GuardianData} />

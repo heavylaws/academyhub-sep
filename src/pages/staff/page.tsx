@@ -3,9 +3,12 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
+  Award,
+  HeartPulse,
   Mail,
   MoreHorizontal,
   Pencil,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -77,6 +80,8 @@ import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 
 const ROLE_LABEL: Record<string, string> = {
   academy_admin: "Academy Admin",
+  sporting_director: "Sporting Director",
+  medical_staff: "Medical / Physio",
   coach: "Coach",
   accounting: "Accounting",
   athlete: "Athlete",
@@ -125,7 +130,7 @@ export default function Staff() {
     null,
   );
   const [targetRole, setTargetRole] = useState<
-    "academy_admin" | "coach" | "accounting" | "athlete" | "guardian"
+    "academy_admin" | "sporting_director" | "medical_staff" | "coach" | "accounting" | "athlete" | "guardian"
   >("coach");
   const [editRoleOpen, setEditRoleOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -276,15 +281,44 @@ export default function Staff() {
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {member.email ?? "—"}
                         </p>
-                        <div className="mt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           <Badge variant="secondary" className="gap-1 text-[10px] py-0 px-1.5">
                             {member.role === "academy_admin" ? (
                               <ShieldCheck className="size-2.5" />
+                            ) : member.role === "sporting_director" ? (
+                              <Award className="size-2.5" />
+                            ) : member.role === "medical_staff" ? (
+                              <HeartPulse className="size-2.5" />
                             ) : (
                               <UserRound className="size-2.5" />
                             )}
                             {member.role ? ROLE_LABEL[member.role] : "Unassigned"}
                           </Badge>
+                          {member.staffCompliance && (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              {member.staffCompliance.coachingLicenseLevel && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 font-mono">
+                                  Lic: {member.staffCompliance.coachingLicenseLevel}
+                                </Badge>
+                              )}
+                              {member.staffCompliance.medicalCertification && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 text-emerald-600 border-emerald-300">
+                                  Med: {member.staffCompliance.medicalCertification}
+                                </Badge>
+                              )}
+                              {member.staffCompliance.safeguardingVerified ? (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                                  <ShieldCheck className="size-2.5 text-emerald-600" />
+                                  Safeguarded
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600">
+                                  <ShieldAlert className="size-2.5 text-amber-600" />
+                                  Pending
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -336,6 +370,7 @@ export default function Staff() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Compliance & Safeguarding</TableHead>
                       {isAdmin && (
                         <TableHead className="text-right">Actions</TableHead>
                       )}
@@ -359,11 +394,46 @@ export default function Staff() {
                           <Badge variant="secondary" className="gap-1">
                             {member.role === "academy_admin" ? (
                               <ShieldCheck className="size-2.5" />
+                            ) : member.role === "sporting_director" ? (
+                              <Award className="size-2.5" />
+                            ) : member.role === "medical_staff" ? (
+                              <HeartPulse className="size-2.5" />
                             ) : (
                               <UserRound className="size-2.5" />
                             )}
                             {member.role ? ROLE_LABEL[member.role] : "Unassigned"}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {member.staffCompliance ? (
+                            <div className="flex flex-col gap-1 items-start text-xs">
+                              <div className="flex flex-wrap gap-1">
+                                {member.staffCompliance.coachingLicenseLevel && (
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
+                                    Lic: {member.staffCompliance.coachingLicenseLevel}
+                                  </Badge>
+                                )}
+                                {member.staffCompliance.medicalCertification && (
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1 text-emerald-600 border-emerald-300">
+                                    Med: {member.staffCompliance.medicalCertification}
+                                  </Badge>
+                                )}
+                              </div>
+                              {member.staffCompliance.safeguardingVerified ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+                                  <ShieldCheck className="size-3 text-emerald-600" />
+                                  Safeguarded
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+                                  <ShieldAlert className="size-3 text-amber-600" />
+                                  Safeguard pending
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
@@ -556,7 +626,7 @@ export default function Staff() {
               value={targetRole}
               onValueChange={(val) =>
                 setTargetRole(
-                  val as "academy_admin" | "coach" | "accounting" | "athlete",
+                  val as "academy_admin" | "sporting_director" | "medical_staff" | "coach" | "accounting" | "athlete" | "guardian",
                 )
               }
             >
@@ -567,6 +637,8 @@ export default function Staff() {
                 {user?.role === "platform_admin" && (
                   <SelectItem value="academy_admin">Academy Admin</SelectItem>
                 )}
+                <SelectItem value="sporting_director">Sporting Director</SelectItem>
+                <SelectItem value="medical_staff">Medical / Physio</SelectItem>
                 <SelectItem value="coach">Coach</SelectItem>
                 <SelectItem value="accounting">Accounting</SelectItem>
                 <SelectItem value="athlete">Athlete</SelectItem>

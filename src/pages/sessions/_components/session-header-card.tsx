@@ -29,6 +29,7 @@ import {
 
 interface SessionHeaderCardProps {
   session: Doc<"trainingSessions">;
+  facility?: Doc<"facilities"> | null;
   start: Date;
   end: Date;
   canManage: boolean;
@@ -41,6 +42,7 @@ interface SessionHeaderCardProps {
 
 export function SessionHeaderCard({
   session,
+  facility,
   start,
   end,
   canManage,
@@ -50,6 +52,10 @@ export function SessionHeaderCard({
   onEdit,
   onDelete,
 }: SessionHeaderCardProps) {
+  const sessionTypeLabel = session.sessionType
+    ? session.sessionType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Training";
+
   return (
     <>
       <Button
@@ -66,9 +72,19 @@ export function SessionHeaderCard({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <CardTitle className="font-display text-xl">
-                {session.title}
-              </CardTitle>
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                <span className="font-display text-xl font-bold text-foreground">
+                  {session.title}
+                </span>
+                <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border-primary/30">
+                  {sessionTypeLabel}
+                </span>
+                {session.microcycleDay && (
+                  <span className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-mono font-bold bg-secondary text-secondary-foreground">
+                    {session.microcycleDay}
+                  </span>
+                )}
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <CalendarClock className="size-4" />
@@ -79,7 +95,16 @@ export function SessionHeaderCard({
                   {" – "}
                   {end.toLocaleTimeString(undefined, { timeStyle: "short" })}
                 </span>
-                {session.location && (
+                {facility && (
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <MapPin className="size-4 text-primary" />
+                    <span>{facility.name}</span>
+                    {facility.surfaceType && (
+                      <span className="text-xs text-muted-foreground">({facility.surfaceType})</span>
+                    )}
+                  </span>
+                )}
+                {session.location && !facility && (
                   <span className="flex items-center gap-1.5">
                     <MapPin className="size-4" />
                     {session.location}

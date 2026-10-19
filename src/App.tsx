@@ -66,7 +66,7 @@ export default function App() {
             <Route
               path="/staff"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach"]}>
                   <Staff />
                 </ProtectedRoute>
               }
@@ -74,7 +74,7 @@ export default function App() {
             <Route
               path="/athletes"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <Athletes />
                 </ProtectedRoute>
               }
@@ -82,7 +82,7 @@ export default function App() {
             <Route
               path="/athletes/:athleteId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete", "guardian"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete", "guardian"]}>
                   <AthleteDetail />
                 </ProtectedRoute>
               }
@@ -90,7 +90,7 @@ export default function App() {
             <Route
               path="/guardian/athletes"
               element={
-                <ProtectedRoute allow={["platform_admin", "guardian", "academy_admin"]}>
+                <ProtectedRoute allow={["platform_admin", "guardian", "academy_admin", "sporting_director"]}>
                   <GuardianAthletesPage />
                 </ProtectedRoute>
               }
@@ -98,7 +98,7 @@ export default function App() {
             <Route
               path="/teams"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <Teams />
                 </ProtectedRoute>
               }
@@ -106,7 +106,7 @@ export default function App() {
             <Route
               path="/teams/:teamId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <TeamDetail />
                 </ProtectedRoute>
               }
@@ -114,7 +114,7 @@ export default function App() {
             <Route
               path="/sessions/:sessionId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <SessionDetail />
                 </ProtectedRoute>
               }
@@ -122,7 +122,7 @@ export default function App() {
             <Route
               path="/schedule"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete", "guardian"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete", "guardian"]}>
                   <SchedulePage />
                 </ProtectedRoute>
               }
@@ -130,7 +130,7 @@ export default function App() {
             <Route
               path="/drills"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach", "athlete"]}>
                   <DrillsPage />
                 </ProtectedRoute>
               }
@@ -138,7 +138,7 @@ export default function App() {
             <Route
               path="/tactical-board"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach", "athlete"]}>
                   <TacticalBoardPage />
                 </ProtectedRoute>
               }
@@ -146,7 +146,7 @@ export default function App() {
             <Route
               path="/video-hub"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <VideoHubPage />
                 </ProtectedRoute>
               }
@@ -154,7 +154,7 @@ export default function App() {
             <Route
               path="/messages"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <MessagesPage />
                 </ProtectedRoute>
               }
@@ -162,7 +162,7 @@ export default function App() {
             <Route
               path="/messages/:conversationId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete"]}>
                   <MessagesPage />
                 </ProtectedRoute>
               }
@@ -171,7 +171,7 @@ export default function App() {
               path="/announcements"
               element={
                 <ProtectedRoute
-                  allow={["platform_admin", "academy_admin", "coach", "athlete", "accounting", "guardian"]}
+                  allow={["platform_admin", "academy_admin", "sporting_director", "medical_staff", "coach", "athlete", "accounting", "guardian"]}
                 >
                   <AnnouncementsPage />
                 </ProtectedRoute>
@@ -180,7 +180,7 @@ export default function App() {
             <Route
               path="/kiosk"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach"]}>
                   <KioskPage />
                 </ProtectedRoute>
               }
@@ -188,7 +188,7 @@ export default function App() {
             <Route
               path="/kiosk/:sessionId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach"]}>
                   <KioskPage />
                 </ProtectedRoute>
               }
@@ -196,7 +196,7 @@ export default function App() {
             <Route
               path="/plans/:planId"
               element={
-                <ProtectedRoute allow={["platform_admin", "academy_admin", "coach", "athlete"]}>
+                <ProtectedRoute allow={["platform_admin", "academy_admin", "sporting_director", "coach", "athlete"]}>
                   <PlanDetail />
                 </ProtectedRoute>
               }

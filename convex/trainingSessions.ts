@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import {
+  COACHING_ROLES,
+  MEDICAL_ROLES,
   listOwnAthletes,
   requireAcademyMember,
   requireAthleteAccess,
@@ -19,8 +21,15 @@ import {
  * keeps attendance trustworthy: nobody can mark themselves present remotely.
  */
 const KIOSK_ROLES: Array<"academy_admin" | "coach"> = ["academy_admin", "coach"];
-import { attendanceStatusValidator } from "./schema.ts";
-import type { Doc } from "./_generated/dataModel.d.ts";
+import {
+  attendanceStatusValidator,
+  sessionTypeValidator,
+  microcycleDayValidator,
+  matchDetailsValidator,
+  matchStatsValidator,
+} from "./schema.ts";
+import { assertFacilityAvailable } from "./facilities.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
 
 /** Academy admin/coach: schedule a new training session for a team. */
 export const createSession = mutation({
@@ -33,9 +42,13 @@ export const createSession = mutation({
     notes: v.optional(v.string()),
     tacticalPlanId: v.optional(v.id("tacticalPlans")),
     drillIds: v.optional(v.array(v.string())),
+    facilityId: v.optional(v.id("facilities")),
+    sessionType: v.optional(sessionTypeValidator),
+    microcycleDay: v.optional(microcycleDayValidator),
+    matchDetails: v.optional(matchDetailsValidator),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const team = await ctx.db.get("teams", args.teamId);
     if (!team) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
@@ -54,6 +67,17 @@ export const createSession = mutation({
         message: "Duration must be positive",
       });
     }
+
+    // Facility conflict detection & availability validation
+    if (args.facilityId) {
+      await assertFacilityAvailable(ctx, {
+        academyId: team.academyId,
+        facilityId: args.facilityId,
+        startsAt: args.startsAt,
+        durationMinutes: args.durationMinutes,
+      });
+    }
+
     return await ctx.db.insert("trainingSessions", {
       academyId: team.academyId,
       teamId: args.teamId,
@@ -64,6 +88,10 @@ export const createSession = mutation({
       notes: sanitizeOptionalText(args.notes, 3000, "Notes"),
       tacticalPlanId: args.tacticalPlanId,
       drillIds: args.drillIds,
+      facilityId: args.facilityId,
+      sessionType: args.sessionType ?? "training",
+      microcycleDay: args.microcycleDay,
+      matchDetails: args.matchDetails,
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
@@ -81,9 +109,13 @@ export const updateSession = mutation({
     notes: v.optional(v.string()),
     tacticalPlanId: v.optional(v.id("tacticalPlans")),
     drillIds: v.optional(v.array(v.string())),
+    facilityId: v.optional(v.id("facilities")),
+    sessionType: v.optional(sessionTypeValidator),
+    microcycleDay: v.optional(microcycleDayValidator),
+    matchDetails: v.optional(matchDetailsValidator),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const { sessionId, ...updates } = args;
     const session = await ctx.db.get("trainingSessions", sessionId);
     if (!session) {
@@ -100,6 +132,20 @@ export const updateSession = mutation({
         message: "Session title is required",
       });
     }
+
+    // Facility conflict check if facility is set or updated
+    const targetFacilityId =
+      args.facilityId !== undefined ? args.facilityId : session.facilityId;
+    if (targetFacilityId) {
+      await assertFacilityAvailable(ctx, {
+        academyId: session.academyId,
+        facilityId: targetFacilityId,
+        startsAt: updates.startsAt,
+        durationMinutes: updates.durationMinutes,
+        excludeSessionId: sessionId,
+      });
+    }
+
     await ctx.db.patch("trainingSessions", sessionId, {
       ...updates,
       title: cleanTitle,
@@ -117,7 +163,7 @@ export const linkTacticalPlanToSession = mutation({
     tacticalPlanId: v.optional(v.id("tacticalPlans")),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
@@ -148,7 +194,7 @@ export const linkDrillToSession = mutation({
     drillId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
@@ -172,7 +218,7 @@ export const removeDrillFromSession = mutation({
     drillId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({ code: "NOT_FOUND", message: "Session not found" });
@@ -191,7 +237,7 @@ export const removeDrillFromSession = mutation({
 export const deleteSession = mutation({
   args: { sessionId: v.id("trainingSessions") },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session || session.deletedAt !== undefined) {
       throw new ConvexError({
@@ -292,6 +338,7 @@ export const getSessionWithAttendance = query({
     attendance: Doc<"attendanceRecords">[];
     tacticalPlan: Doc<"tacticalPlans"> | null;
     resolvedDrills: Doc<"drills">[];
+    facility: Doc<"facilities"> | null;
   }> => {
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session || session.deletedAt !== undefined) {
@@ -333,7 +380,104 @@ export const getSessionWithAttendance = query({
       }
     }
 
-    return { session, roster, attendance, tacticalPlan, resolvedDrills };
+    let facility: Doc<"facilities"> | null = null;
+    if (session.facilityId) {
+      facility = await ctx.db.get("facilities", session.facilityId);
+    }
+
+    return { session, roster, attendance, tacticalPlan, resolvedDrills, facility };
+  },
+});
+
+/** Coaching roles: record match scoreline, formation, and per-player match stats. */
+export const recordMatchResultAndStats = mutation({
+  args: {
+    sessionId: v.id("trainingSessions"),
+    matchDetails: v.optional(matchDetailsValidator),
+    playerStats: v.optional(
+      v.array(
+        v.object({
+          athleteId: v.id("athletes"),
+          started: v.boolean(),
+          minutesPlayed: v.number(),
+          goalsOrPoints: v.optional(v.number()),
+          assists: v.optional(v.number()),
+          yellowCards: v.optional(v.number()),
+          redCards: v.optional(v.number()),
+          coachRating: v.optional(v.number()),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireRole(ctx, [
+      "platform_admin",
+      "academy_admin",
+      "sporting_director",
+      "coach",
+    ]);
+    const session = await ctx.db.get("trainingSessions", args.sessionId);
+    if (!session || session.deletedAt !== undefined) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Session not found",
+      });
+    }
+    await requireAcademyMember(ctx, session.academyId);
+
+    if (args.matchDetails) {
+      await ctx.db.patch("trainingSessions", args.sessionId, {
+        matchDetails: args.matchDetails,
+      });
+    }
+
+    if (args.playerStats && args.playerStats.length > 0) {
+      for (const stat of args.playerStats) {
+        const existingRecord = await ctx.db
+          .query("attendanceRecords")
+          .withIndex("by_session_and_athlete", (q) =>
+            q.eq("sessionId", args.sessionId).eq("athleteId", stat.athleteId),
+          )
+          .unique();
+
+        if (existingRecord) {
+          await ctx.db.patch("attendanceRecords", existingRecord._id, {
+            matchStats: {
+              started: stat.started,
+              minutesPlayed: stat.minutesPlayed,
+              goalsOrPoints: stat.goalsOrPoints,
+              assists: stat.assists,
+              yellowCards: stat.yellowCards,
+              redCards: stat.redCards,
+              coachRating: stat.coachRating,
+            },
+          });
+        } else {
+          await ctx.db.insert("attendanceRecords", {
+            sessionId: args.sessionId,
+            athleteId: stat.athleteId,
+            academyId: session.academyId,
+            status: "present",
+            recordedBy: user._id,
+            recordedAt: new Date().toISOString(),
+            matchStats: {
+              started: stat.started,
+              minutesPlayed: stat.minutesPlayed,
+              goalsOrPoints: stat.goalsOrPoints,
+              assists: stat.assists,
+              yellowCards: stat.yellowCards,
+              redCards: stat.redCards,
+              coachRating: stat.coachRating,
+            },
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      updatedStatsCount: args.playerStats?.length ?? 0,
+    };
   },
 });
 
@@ -489,7 +633,7 @@ export const getAcademyAttendanceLeaderboard = query({
       total: number;
     }>;
   }> => {
-    const user = await requireRole(ctx, ["academy_admin", "coach"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach"]);
     if (!user.academyId) return { top: [], bottom: [] };
 
     const now = new Date().toISOString();
@@ -566,15 +710,19 @@ export const getAcademyAttendanceLeaderboard = query({
   },
 });
 
-/** Academy admin/coach/platform_admin: record or update an athlete's attendance status for a session. */
+/** Academy admin/coach/platform_admin: record or update an athlete's attendance status for a session with optional workload telemetry. */
 export const setAttendance = mutation({
   args: {
     sessionId: v.id("trainingSessions"),
     athleteId: v.id("athletes"),
     status: attendanceStatusValidator,
+    durationMinutes: v.optional(v.number()),
+    rpe: v.optional(v.number()),
+    wellnessFatigue: v.optional(v.number()),
+    wellnessSoreness: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const user = await requireRole(ctx, ["academy_admin", "coach", "platform_admin"]);
+    const user = await requireRole(ctx, ["academy_admin", "sporting_director", "coach", "platform_admin"]);
     const session = await ctx.db.get("trainingSessions", args.sessionId);
     if (!session) {
       throw new ConvexError({
@@ -584,6 +732,36 @@ export const setAttendance = mutation({
     }
     await requireAcademyMember(ctx, session.academyId);
 
+    if (args.durationMinutes !== undefined && (args.durationMinutes < 0 || args.durationMinutes > 300)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Duration must be between 0 and 300 minutes",
+      });
+    }
+    if (args.rpe !== undefined && (args.rpe < 1 || args.rpe > 10)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "RPE must be between 1 and 10",
+      });
+    }
+    if (args.wellnessFatigue !== undefined && (args.wellnessFatigue < 1 || args.wellnessFatigue > 5)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Wellness fatigue must be between 1 and 5",
+      });
+    }
+    if (args.wellnessSoreness !== undefined && (args.wellnessSoreness < 1 || args.wellnessSoreness > 5)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Wellness soreness must be between 1 and 5",
+      });
+    }
+
+    const calculatedLoad =
+      args.durationMinutes !== undefined && args.rpe !== undefined
+        ? Math.round(args.durationMinutes * args.rpe)
+        : undefined;
+
     const existing = await ctx.db
       .query("attendanceRecords")
       .withIndex("by_session_and_athlete", (q) =>
@@ -591,11 +769,20 @@ export const setAttendance = mutation({
       )
       .unique();
 
+    const now = Date.now();
+    const hasWorkload = args.durationMinutes !== undefined || args.rpe !== undefined;
+
     if (existing) {
       await ctx.db.patch("attendanceRecords", existing._id, {
         status: args.status,
         recordedBy: user._id,
-        recordedAt: new Date().toISOString(),
+        recordedAt: new Date(now).toISOString(),
+        ...(args.durationMinutes !== undefined && { durationMinutes: args.durationMinutes }),
+        ...(args.rpe !== undefined && { rpe: args.rpe }),
+        ...(calculatedLoad !== undefined && { sessionLoad: calculatedLoad }),
+        ...(args.wellnessFatigue !== undefined && { wellnessFatigue: args.wellnessFatigue }),
+        ...(args.wellnessSoreness !== undefined && { wellnessSoreness: args.wellnessSoreness }),
+        ...(hasWorkload && { loggedAt: now }),
       });
     } else {
       await ctx.db.insert("attendanceRecords", {
@@ -604,10 +791,139 @@ export const setAttendance = mutation({
         academyId: session.academyId,
         status: args.status,
         recordedBy: user._id,
-        recordedAt: new Date().toISOString(),
+        recordedAt: new Date(now).toISOString(),
+        durationMinutes: args.durationMinutes,
+        rpe: args.rpe,
+        sessionLoad: calculatedLoad,
+        wellnessFatigue: args.wellnessFatigue,
+        wellnessSoreness: args.wellnessSoreness,
+        loggedAt: hasWorkload ? now : undefined,
       });
     }
     return null;
+  },
+});
+
+/**
+ * Submit post-session sRPE & wellness metrics.
+ * Callable by athlete (for their own record) or coaching / medical staff.
+ */
+export const submitSessionRpe = mutation({
+  args: {
+    sessionId: v.id("trainingSessions"),
+    athleteId: v.optional(v.id("athletes")),
+    attendanceRecordId: v.optional(v.id("attendanceRecords")),
+    rpe: v.number(),
+    durationMinutes: v.optional(v.number()),
+    wellnessFatigue: v.optional(v.number()),
+    wellnessSoreness: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    if (args.rpe < 1 || args.rpe > 10) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "RPE must be between 1 and 10",
+      });
+    }
+    if (args.durationMinutes !== undefined && (args.durationMinutes <= 0 || args.durationMinutes > 300)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Duration must be between 1 and 300 minutes",
+      });
+    }
+    if (args.wellnessFatigue !== undefined && (args.wellnessFatigue < 1 || args.wellnessFatigue > 5)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Wellness fatigue must be between 1 and 5",
+      });
+    }
+    if (args.wellnessSoreness !== undefined && (args.wellnessSoreness < 1 || args.wellnessSoreness > 5)) {
+      throw new ConvexError({
+        code: "BAD_REQUEST",
+        message: "Wellness soreness must be between 1 and 5",
+      });
+    }
+
+    const session = await ctx.db.get("trainingSessions", args.sessionId);
+    if (!session) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Training session not found" });
+    }
+
+    let targetAthleteId: Id<"athletes">;
+
+    if (user.role === "athlete") {
+      const athlete = await ctx.db
+        .query("athletes")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .first();
+      if (!athlete) {
+        throw new ConvexError({ code: "FORBIDDEN", message: "No linked athlete profile" });
+      }
+      if (args.athleteId && args.athleteId !== athlete._id) {
+        throw new ConvexError({ code: "FORBIDDEN", message: "Athletes can only submit RPE for themselves" });
+      }
+      targetAthleteId = athlete._id;
+    } else if (
+      user.role === "platform_admin" ||
+      (user.role && [...COACHING_ROLES, ...MEDICAL_ROLES].includes(user.role))
+    ) {
+      await requireAcademyMember(ctx, session.academyId);
+      if (!args.athleteId && !args.attendanceRecordId) {
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Athlete ID is required" });
+      }
+      if (args.attendanceRecordId) {
+        const existingRecord = await ctx.db.get("attendanceRecords", args.attendanceRecordId);
+        if (!existingRecord) {
+          throw new ConvexError({ code: "NOT_FOUND", message: "Attendance record not found" });
+        }
+        targetAthleteId = existingRecord.athleteId;
+      } else {
+        targetAthleteId = args.athleteId!;
+      }
+    } else {
+      throw new ConvexError({ code: "FORBIDDEN", message: "You do not have permission to submit RPE" });
+    }
+
+    const duration = args.durationMinutes ?? session.durationMinutes;
+    const sessionLoad = Math.round(duration * args.rpe);
+    const now = Date.now();
+
+    const existing = args.attendanceRecordId
+      ? await ctx.db.get("attendanceRecords", args.attendanceRecordId)
+      : await ctx.db
+          .query("attendanceRecords")
+          .withIndex("by_session_and_athlete", (q) =>
+            q.eq("sessionId", session._id).eq("athleteId", targetAthleteId),
+          )
+          .unique();
+
+    if (existing) {
+      await ctx.db.patch("attendanceRecords", existing._id, {
+        durationMinutes: duration,
+        rpe: args.rpe,
+        sessionLoad,
+        wellnessFatigue: args.wellnessFatigue,
+        wellnessSoreness: args.wellnessSoreness,
+        loggedAt: now,
+      });
+      return existing._id;
+    } else {
+      return await ctx.db.insert("attendanceRecords", {
+        sessionId: session._id,
+        athleteId: targetAthleteId,
+        academyId: session.academyId,
+        status: "present",
+        recordedBy: user._id,
+        recordedAt: new Date(now).toISOString(),
+        durationMinutes: duration,
+        rpe: args.rpe,
+        sessionLoad,
+        wellnessFatigue: args.wellnessFatigue,
+        wellnessSoreness: args.wellnessSoreness,
+        loggedAt: now,
+      });
+    }
   },
 });
 

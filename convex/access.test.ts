@@ -5,7 +5,7 @@ import { modules } from "./test.setup.ts";
 import { api } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.d.ts";
 import { onboardUser } from "./lib/onboarding.ts";
-import { requirePermission } from "./lib/permissions.ts";
+import { requirePermission, hasPermission, requireGranularPermission } from "./lib/permissions.ts";
 
 type T = ReturnType<typeof convexTest>;
 
@@ -983,6 +983,142 @@ describe("Financial RBAC & Idempotency Audit Suite", () => {
     expect(
       schedules.filter((s) => s.label === "Elite Training Monthly"),
     ).toHaveLength(1);
+  });
+});
+
+describe("Sporting Director, Medical Staff & Staff Compliance Suite", () => {
+  it("enforces granular permission matrix for sporting_director and medical_staff", () => {
+    // Platform admin
+    expect(hasPermission("platform_admin", "verify_staff_compliance")).toBe(true);
+    expect(hasPermission("platform_admin", "view_clinical_medical_notes")).toBe(true);
+    expect(hasPermission("platform_admin", "edit_medical_records")).toBe(true);
+
+    // Academy admin
+    expect(hasPermission("academy_admin", "verify_staff_compliance")).toBe(true);
+    expect(hasPermission("academy_admin", "view_clinical_medical_notes")).toBe(false);
+    expect(hasPermission("academy_admin", "edit_medical_records")).toBe(false);
+
+    // Sporting director
+    expect(hasPermission("sporting_director", "verify_staff_compliance")).toBe(true);
+    expect(hasPermission("sporting_director", "view_clinical_medical_notes")).toBe(true);
+    expect(hasPermission("sporting_director", "manage_roster")).toBe(true);
+    expect(hasPermission("sporting_director", "manage_finance")).toBe(false);
+
+    // Medical staff
+    expect(hasPermission("medical_staff", "view_clinical_medical_notes")).toBe(true);
+    expect(hasPermission("medical_staff", "edit_medical_records")).toBe(true);
+    expect(hasPermission("medical_staff", "verify_staff_compliance")).toBe(false);
+    expect(hasPermission("medical_staff", "manage_finance")).toBe(false);
+
+    // Coach
+    expect(hasPermission("coach", "manage_roster")).toBe(true);
+    expect(hasPermission("coach", "verify_staff_compliance")).toBe(false);
+    expect(hasPermission("coach", "view_clinical_medical_notes")).toBe(false);
+  });
+
+  it("sporting_director and medical_staff respect tenant isolation on athlete data", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId, otherAcademyId, childId } = await seed(t);
+
+    const directorId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "director@academy.test",
+        emailVerificationTime: 1,
+        role: "sporting_director",
+        academyId,
+      }),
+    );
+
+    const rivalDoctorId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "doctor@other.test",
+        emailVerificationTime: 1,
+        role: "medical_staff",
+        academyId: otherAcademyId,
+      }),
+    );
+
+    // Same-academy sporting director can view athlete
+    const athleteData = await as(t, directorId).query(api.athletes.getAthlete, {
+      athleteId: childId,
+    });
+    expect(athleteData?.firstName).toBe("Child");
+
+    // Other-academy medical staff cannot view athlete
+    await expect(
+      as(t, rivalDoctorId).query(api.athletes.getAthlete, {
+        athleteId: childId,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("updateStaffCompliance validates caller authorization and tenant boundaries", async () => {
+    const t = convexTest(schema, modules);
+    const { academyId, otherAcademyId, staffId } = await seed(t);
+
+    const coachId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "coach@academy.test",
+        emailVerificationTime: 1,
+        role: "coach",
+        academyId,
+      }),
+    );
+
+    const directorId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "director@academy.test",
+        emailVerificationTime: 1,
+        role: "sporting_director",
+        academyId,
+      }),
+    );
+
+    const rivalDirectorId = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        email: "rival.director@other.test",
+        emailVerificationTime: 1,
+        role: "sporting_director",
+        academyId: otherAcademyId,
+      }),
+    );
+
+    // 1. Regular coach cannot verify staff compliance
+    await expect(
+      as(t, coachId).mutation(api.users.updateStaffCompliance, {
+        targetUserId: coachId,
+        compliance: {
+          coachingLicenseLevel: "UEFA B",
+          safeguardingVerified: true,
+        },
+      }),
+    ).rejects.toThrow();
+
+    // 2. Rival academy director cannot verify staff compliance for other academy
+    await expect(
+      as(t, rivalDirectorId).mutation(api.users.updateStaffCompliance, {
+        targetUserId: coachId,
+        compliance: {
+          coachingLicenseLevel: "UEFA A",
+          safeguardingVerified: true,
+        },
+      }),
+    ).rejects.toThrow();
+
+    // 3. Same academy sporting director can verify compliance
+    await as(t, directorId).mutation(api.users.updateStaffCompliance, {
+      targetUserId: coachId,
+      compliance: {
+        coachingLicenseLevel: "UEFA A",
+        licenseExpiryDate: 1798761600000,
+        safeguardingVerified: true,
+        safeguardingExpiryDate: 1798761600000,
+      },
+    });
+
+    const updatedCoach = await t.run((ctx) => ctx.db.get("users", coachId));
+    expect(updatedCoach?.staffCompliance?.coachingLicenseLevel).toBe("UEFA A");
+    expect(updatedCoach?.staffCompliance?.safeguardingVerified).toBe(true);
   });
 });
 

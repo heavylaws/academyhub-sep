@@ -43,6 +43,8 @@ import type { UserRole } from "@/hooks/use-current-user.ts";
 const ROLE_LABEL: Record<UserRole, string> = {
   platform_admin: "Super admin",
   academy_admin: "Academy manager",
+  sporting_director: "Sporting Director",
+  medical_staff: "Medical / Physio",
   coach: "Coach",
   accounting: "Accounting",
   athlete: "Athlete",
