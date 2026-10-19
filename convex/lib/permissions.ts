@@ -279,6 +279,7 @@ export async function requireAthleteAccess(
     const link = await ctx.db
       .query("guardianLinks")
       .withIndex("by_guardian_user", (q) => q.eq("guardianUserId", user._id))
+      // eslint-disable-next-line @convex-dev/no-filter-in-query
       .filter((q) => q.eq(q.field("athleteId"), athleteId))
       .first();
     if (link) {

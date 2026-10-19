@@ -37,9 +37,9 @@ import {
 import { Label } from "@/components/ui/label.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
-import { cn } from "@/lib/utils.ts";
-import { AVAILABILITY_CONFIG } from "./athlete-readiness-card.tsx";
+import { AVAILABILITY_CONFIG } from "./readiness-config.ts";
 import LogInjuryDialog from "./log-injury-dialog.tsx";
+import { cn } from "@/lib/utils.ts";
 
 interface AthleteInjuriesCardProps {
   athleteId: Id<"athletes">;

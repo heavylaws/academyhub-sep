@@ -922,7 +922,7 @@ describe("Financial RBAC & Idempotency Audit Suite", () => {
 
     // 2. Payment double-click does not record duplicate amount
     await as(t, staffId).mutation(api.fees.recordPayment, {
-      feeId: fee1,
+      feeId: fee1 as Id<"athleteFees">,
       amountPaid: 40,
       paidOn: "2026-10-18",
       method: "Cash",
@@ -930,7 +930,7 @@ describe("Financial RBAC & Idempotency Audit Suite", () => {
 
     // Rapid second click with same parameters
     await as(t, staffId).mutation(api.fees.recordPayment, {
-      feeId: fee1,
+      feeId: fee1 as Id<"athleteFees">,
       amountPaid: 40,
       paidOn: "2026-10-18",
       method: "Cash",

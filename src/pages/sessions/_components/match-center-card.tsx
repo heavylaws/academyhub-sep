@@ -45,10 +45,6 @@ export function MatchCenterCard({
     session.sessionType === "match_friendly" ||
     Boolean(matchDetails);
 
-  if (!isMatch) return null;
-
-  const attendanceMap = new Map(attendance.map((a) => [a.athleteId, a]));
-
   // Local state for the match scoreline & stats recording dialog
   const [goalsFor, setGoalsFor] = useState<string>(
     matchDetails?.goalsFor !== undefined ? String(matchDetails.goalsFor) : "0",
@@ -73,6 +69,10 @@ export function MatchCenterCard({
       }
     >
   >({});
+
+  if (!isMatch) return null;
+
+  const attendanceMap = new Map(attendance.map((a) => [a.athleteId, a]));
 
   const handleOpenDialog = () => {
     setGoalsFor(matchDetails?.goalsFor !== undefined ? String(matchDetails.goalsFor) : "0");

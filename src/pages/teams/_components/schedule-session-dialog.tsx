@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "convex/react";
@@ -95,7 +95,7 @@ export default function ScheduleSessionDialog({
     },
   });
 
-  const sessionType = form.watch("sessionType");
+  const sessionType = useWatch({ control: form.control, name: "sessionType" });
   const isMatch = sessionType === "match_competitive" || sessionType === "match_friendly";
 
   const handleSubmit = async (values: FormValues) => {

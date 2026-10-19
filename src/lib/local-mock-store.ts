@@ -2503,9 +2503,9 @@ class LocalMockStore {
           location: args.location as string | undefined,
           notes: args.notes as string | undefined,
           facilityId,
-          sessionType: (args.sessionType as any) ?? "training",
-          microcycleDay: args.microcycleDay as any,
-          matchDetails: args.matchDetails as any,
+          sessionType: (args.sessionType as MockTrainingSession["sessionType"]) ?? "training",
+          microcycleDay: args.microcycleDay as MockTrainingSession["microcycleDay"],
+          matchDetails: args.matchDetails as MockTrainingSession["matchDetails"],
           tacticalPlanId: args.tacticalPlanId as string | undefined,
           drillIds: args.drillIds as string[] | undefined,
           createdBy: user?._id || "system",
@@ -2557,9 +2557,9 @@ class LocalMockStore {
         session.location = args.location as string | undefined;
         session.notes = args.notes as string | undefined;
         if (args.facilityId !== undefined) session.facilityId = args.facilityId as string;
-        if (args.sessionType !== undefined) session.sessionType = args.sessionType as any;
-        if (args.microcycleDay !== undefined) session.microcycleDay = args.microcycleDay as any;
-        if (args.matchDetails !== undefined) session.matchDetails = args.matchDetails as any;
+        if (args.sessionType !== undefined) session.sessionType = args.sessionType as MockTrainingSession["sessionType"];
+        if (args.microcycleDay !== undefined) session.microcycleDay = args.microcycleDay as MockTrainingSession["microcycleDay"];
+        if (args.matchDetails !== undefined) session.matchDetails = args.matchDetails as MockTrainingSession["matchDetails"];
         if (args.tacticalPlanId !== undefined) session.tacticalPlanId = args.tacticalPlanId as string;
         if (args.drillIds !== undefined) session.drillIds = args.drillIds as string[];
 
@@ -2574,17 +2574,26 @@ class LocalMockStore {
         const session = this.db.trainingSessions.find((s) => s._id === sessionId);
         if (!session) throw new Error("Session not found");
         if (args.matchDetails) {
-          session.matchDetails = args.matchDetails as any;
+          session.matchDetails = args.matchDetails as MockTrainingSession["matchDetails"];
         }
-        const playerStats = (args.playerStats as any[]) ?? [];
+        const playerStats = (args.playerStats as Array<{
+          athleteId: string;
+          started?: boolean;
+          minutesPlayed?: number;
+          goalsOrPoints?: number;
+          assists?: number;
+          yellowCards?: number;
+          redCards?: number;
+          coachRating?: number;
+        }>) ?? [];
         for (const stat of playerStats) {
           const existing = this.db.attendanceRecords.find(
             (a) => a.sessionId === sessionId && a.athleteId === stat.athleteId,
           );
           if (existing) {
             existing.matchStats = {
-              started: stat.started,
-              minutesPlayed: stat.minutesPlayed,
+              started: Boolean(stat.started),
+              minutesPlayed: Number(stat.minutesPlayed ?? 0),
               goalsOrPoints: stat.goalsOrPoints,
               assists: stat.assists,
               yellowCards: stat.yellowCards,
@@ -2601,8 +2610,8 @@ class LocalMockStore {
               recordedAt: nowIso,
               recordedBy: user?._id || "system",
               matchStats: {
-                started: stat.started,
-                minutesPlayed: stat.minutesPlayed,
+                started: Boolean(stat.started),
+                minutesPlayed: Number(stat.minutesPlayed ?? 0),
                 goalsOrPoints: stat.goalsOrPoints,
                 assists: stat.assists,
                 yellowCards: stat.yellowCards,
@@ -2624,10 +2633,10 @@ class LocalMockStore {
           _id: `fac_${Date.now()}`,
           academyId: targetAcademyId,
           name: (args.name as string).trim(),
-          type: args.type as any,
+          type: args.type as MockFacility["type"],
           surfaceType: args.surfaceType as string | undefined,
           capacity: args.capacity !== undefined ? Number(args.capacity) : undefined,
-          status: (args.status as any) || "available",
+          status: (args.status as MockFacility["status"]) || "available",
           notes: args.notes as string | undefined,
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -2643,10 +2652,10 @@ class LocalMockStore {
         const fac = this.db.facilities.find((f) => f._id === facilityId);
         if (!fac) throw new Error("Facility not found");
         if (args.name !== undefined) fac.name = (args.name as string).trim();
-        if (args.type !== undefined) fac.type = args.type as any;
+        if (args.type !== undefined) fac.type = args.type as MockFacility["type"];
         if (args.surfaceType !== undefined) fac.surfaceType = args.surfaceType as string;
         if (args.capacity !== undefined) fac.capacity = Number(args.capacity);
-        if (args.status !== undefined) fac.status = args.status as any;
+        if (args.status !== undefined) fac.status = args.status as MockFacility["status"];
         if (args.notes !== undefined) fac.notes = args.notes as string;
         fac.updatedAt = Date.now();
         this.saveDb();
@@ -3169,7 +3178,7 @@ class LocalMockStore {
           startDate: args.startDate as string | undefined,
           endDate: args.endDate as string | undefined,
           status: "active",
-          phase: args.phase as any,
+          phase: args.phase as MockTrainingPlan["phase"],
           microcycleTag: args.microcycleTag as string | undefined,
           targetAgeGroup: args.targetAgeGroup as string | undefined,
           isTemplate: Boolean(args.isTemplate),
@@ -3202,7 +3211,7 @@ class LocalMockStore {
         plan.description = args.description as string | undefined;
         plan.startDate = args.startDate as string | undefined;
         plan.endDate = args.endDate as string | undefined;
-        if (args.phase !== undefined) plan.phase = args.phase as any;
+        if (args.phase !== undefined) plan.phase = args.phase as MockTrainingPlan["phase"];
         if (args.microcycleTag !== undefined) plan.microcycleTag = args.microcycleTag as string;
         if (args.targetAgeGroup !== undefined) plan.targetAgeGroup = args.targetAgeGroup as string;
         if (args.isTemplate !== undefined) plan.isTemplate = Boolean(args.isTemplate);
