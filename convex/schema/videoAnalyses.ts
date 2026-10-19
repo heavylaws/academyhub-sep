@@ -5,8 +5,42 @@ export const videoAnalysisStatusValidator = v.union(
   v.literal("pending"),
   v.literal("analyzing"),
   v.literal("complete"),
+  v.literal("completed"),
   v.literal("failed"),
+  v.literal("uploading"),
+  v.literal("queued"),
+  v.literal("processing"),
 );
+
+export const keyframeObservationValidator = v.object({
+  timestampSec: v.number(),
+  phase: v.string(),
+  observation: v.string(),
+  riskLevel: v.union(v.literal("low"), v.literal("moderate"), v.literal("high")),
+});
+
+export const jointAngleValidator = v.object({
+  jointName: v.string(),
+  measuredAngleDeg: v.number(),
+  idealRangeDeg: v.string(),
+  deviationStatus: v.union(v.literal("optimal"), v.literal("suboptimal"), v.literal("critical")),
+});
+
+export const recommendedCorrectiveDrillValidator = v.object({
+  name: v.string(),
+  sets: v.number(),
+  reps: v.string(),
+  focusArea: v.string(),
+  coachingCue: v.string(),
+});
+
+export const structuredTelemetryValidator = v.object({
+  overallBiomechanicsScore: v.number(),
+  keyframeObservations: v.array(keyframeObservationValidator),
+  jointAngles: v.array(jointAngleValidator),
+  detectedFlaws: v.array(v.string()),
+  recommendedCorrectiveDrills: v.array(recommendedCorrectiveDrillValidator),
+});
 
 export const videoAnalyses = defineTable({
   academyId: v.id("academies"),
@@ -39,8 +73,15 @@ export const videoAnalyses = defineTable({
     }),
   ),
   errorMessage: v.optional(v.string()),
+  /** Phase 5: Resilient retry tracking and structured biomechanical telemetry */
+  retryCount: v.optional(v.number()),
+  lastError: v.optional(v.string()),
+  structuredTelemetry: v.optional(structuredTelemetryValidator),
+  appliedToPlanId: v.optional(v.id("trainingPlans")),
+  appliedAt: v.optional(v.number()),
   createdBy: v.id("users"),
 })
   .index("by_athlete", ["athleteId"])
   .index("by_athlete_and_status", ["athleteId", "status"])
   .index("by_academy", ["academyId"]);
+

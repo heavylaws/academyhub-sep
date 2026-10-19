@@ -9,15 +9,18 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Dumbbell,
   Loader2,
+  Maximize2,
   Plus,
+  RotateCcw,
   Sparkles,
   Trash2,
   TrendingUp,
   Video,
-  Maximize2,
 } from "lucide-react";
 import VideoAssessmentStudio from "./video-assessment-studio.tsx";
+import BiomechanicsTelemetryView from "./biomechanics-telemetry-view.tsx";
 import { api } from "@/convex/_generated/api.js";
 import type { Doc, Id } from "@/convex/_generated/dataModel.d.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -25,7 +28,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -55,25 +57,43 @@ type VideoAnalysis = Doc<"videoAnalyses"> & { videoUrl: string | null };
 
 type Feedback = NonNullable<Doc<"videoAnalyses">["feedback"]>;
 
-function StatusBadge({ status }: { status: VideoAnalysis["status"] }) {
-  if (status === "analyzing" || status === "pending") {
+function StatusBadge({
+  status,
+  retryCount,
+}: {
+  status: VideoAnalysis["status"];
+  retryCount?: number;
+}) {
+  if (
+    status === "analyzing" ||
+    status === "pending" ||
+    status === "uploading" ||
+    status === "queued" ||
+    status === "processing"
+  ) {
     return (
-      <Badge className="gap-1 bg-muted text-muted-foreground">
+      <Badge className="gap-1 bg-muted text-muted-foreground border">
         <Loader2 className="size-3 animate-spin" />
-        Analysing…
+        {status === "queued"
+          ? "Queued"
+          : status === "uploading"
+            ? "Uploading"
+            : "Analysing…"}
+        {retryCount && retryCount > 0 ? ` (Try #${retryCount + 1})` : ""}
       </Badge>
     );
   }
   if (status === "failed") {
     return (
-      <Badge className="gap-1 bg-destructive/15 text-destructive">
+      <Badge className="gap-1 bg-destructive/15 text-destructive border-destructive/30">
         <AlertTriangle className="size-3" />
         Failed
+        {retryCount && retryCount > 0 ? ` (#${retryCount})` : ""}
       </Badge>
     );
   }
   return (
-    <Badge className="gap-1 bg-accent/20 text-accent-foreground">
+    <Badge className="gap-1 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
       <CheckCircle2 className="size-3" />
       Complete
     </Badge>
@@ -188,7 +208,9 @@ function AnalysisCard({
   onOpenStudio: (analysis: VideoAnalysis) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const deleteAnalysis = useMutation(api.videoAnalyses.deleteAnalysis);
+  const retryAnalysis = useMutation(api.videoAnalyses.retryVideoAnalysis);
 
   const handleDelete = async () => {
     try {
@@ -203,6 +225,28 @@ function AnalysisCard({
     }
   };
 
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    try {
+      await retryAnalysis({ analysisId: analysis._id });
+      toast.success("Video analysis retry queued");
+    } catch (error) {
+      toast.error(
+        error instanceof ConvexError
+          ? String((error.data as { message?: string })?.message || "Retry failed")
+          : error instanceof Error
+            ? error.message
+            : "Failed to retry analysis",
+      );
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const isCompleted =
+    analysis.status === "complete" || analysis.status === "completed";
+  const isFailed = analysis.status === "failed";
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -213,7 +257,16 @@ function AnalysisCard({
               <span className="font-medium truncate max-w-[220px]">
                 {analysis.filename}
               </span>
-              <StatusBadge status={analysis.status} />
+              <StatusBadge
+                status={analysis.status}
+                retryCount={analysis.retryCount}
+              />
+              {analysis.appliedToPlanId && (
+                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 text-[10px]">
+                  <CheckCircle2 className="size-3" />
+                  Drills Linked
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -230,7 +283,20 @@ function AnalysisCard({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            {isFailed && canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={handleRetry}
+                disabled={isRetrying}
+              >
+                <RotateCcw className={`size-3 ${isRetrying ? "animate-spin" : ""}`} />
+                {isRetrying ? "Retrying..." : "Retry Analysis"}
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -240,7 +306,8 @@ function AnalysisCard({
               <Maximize2 className="size-3" />
               Motion Studio
             </Button>
-            {analysis.status === "complete" && analysis.feedback && (
+
+            {isCompleted && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -258,6 +325,7 @@ function AnalysisCard({
                 )}
               </Button>
             )}
+
             {canManage && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -304,25 +372,53 @@ function AnalysisCard({
         </CardContent>
       )}
 
-      {/* AI feedback */}
-      {analysis.status === "complete" && analysis.feedback && expanded && (
+      {/* Biomechanics Telemetry or AI feedback */}
+      {isCompleted && expanded && (
         <CardContent className="pt-0">
           <Separator className="mb-4" />
           <div className="flex items-center gap-1.5 mb-3 text-sm font-medium">
-            <Sparkles className="size-4 text-accent-foreground" />
-            AI performance analysis
+            <Sparkles className="size-4 text-primary" />
+            AI Biomechanics Telemetry & Corrective Protocol
           </div>
-          <FeedbackSection feedback={analysis.feedback} />
+
+          {analysis.structuredTelemetry ? (
+            <BiomechanicsTelemetryView
+              analysisId={analysis._id}
+              athleteId={analysis.athleteId}
+              telemetry={analysis.structuredTelemetry}
+              appliedToPlanId={analysis.appliedToPlanId}
+              canManage={canManage}
+            />
+          ) : analysis.feedback ? (
+            <FeedbackSection feedback={analysis.feedback} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Analysis completed without feedback data.
+            </p>
+          )}
         </CardContent>
       )}
 
-      {analysis.status === "failed" && (
-        <CardContent className="pt-0">
+      {isFailed && (
+        <CardContent className="pt-0 space-y-2">
           <p className="text-sm text-destructive">
             Analysis failed:{" "}
-            {analysis.errorMessage ??
-              "An unexpected error occurred. Please try again."}
+            {analysis.lastError ||
+              analysis.errorMessage ||
+              "An unexpected error occurred during AI inference."}
           </p>
+          {canManage && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="gap-1.5 text-xs h-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              <RotateCcw className={`size-3.5 ${isRetrying ? "animate-spin" : ""}`} />
+              {isRetrying ? "Retrying..." : "Retry Analysis Job"}
+            </Button>
+          )}
         </CardContent>
       )}
     </Card>
@@ -349,10 +445,10 @@ export default function VideoAnalysisSection({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-display text-base font-semibold">
-            AI video analysis
+            AI Video Biomechanics & Corrective Drill Pipeline
           </h2>
           <p className="text-sm text-muted-foreground">
-            Upload training clips for AI-powered biomechanics feedback.
+            Kinematic angle telemetry, keyframe phase breakdown, and 1-click training plan integration.
           </p>
         </div>
         {canManage && (
@@ -380,7 +476,7 @@ export default function VideoAnalysisSection({
                 <EmptyTitle>No video analyses yet</EmptyTitle>
                 <EmptyDescription>
                   {canManage
-                    ? "Upload a short training clip to get AI-powered technique feedback and biomechanics insights."
+                    ? "Upload a training clip to generate automated kinematic angle telemetry, phase breakdown, and corrective drill assignments."
                     : "No video analyses have been uploaded yet."}
                 </EmptyDescription>
               </EmptyHeader>

@@ -21,6 +21,7 @@ import {
   SEED_WORKOUT_LOGS,
   SEED_FACILITIES,
   SEED_ATHLETE_GOALS,
+  SEED_VIDEO_ANALYSES,
   type MockAcademy,
   type MockUser,
   type MockAthlete,
@@ -32,6 +33,7 @@ import {
   type MockPlanItem,
   type MockAssessment,
   type MockAthleteGoal,
+  type MockVideoAnalysis,
   type MockAthleteFee,
   type MockFeePayment,
   type MockInvoice,
@@ -44,6 +46,7 @@ import {
   type MockWorkoutLog,
   type MockFacility,
 } from "./local-mock-data.ts";
+import { generateDeterministicTelemetry } from "./biomechanics-telemetry.ts";
 import { toast } from "sonner";
 
 // Local mock service stub for state mutations
@@ -111,6 +114,7 @@ export interface MockDatabase {
   workoutLogs: MockWorkoutLog[];
   facilities: MockFacility[];
   athleteGoals: MockAthleteGoal[];
+  videoAnalyses: MockVideoAnalysis[];
 }
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
@@ -127,6 +131,7 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "planItems",
   "assessments",
   "athleteGoals",
+  "videoAnalyses",
   "athleteFees",
   "feePayments",
   "invoices",
@@ -185,6 +190,7 @@ function getInitialDb(): MockDatabase {
     workoutLogs: [...SEED_WORKOUT_LOGS],
     facilities: [...SEED_FACILITIES],
     athleteGoals: [...SEED_ATHLETE_GOALS],
+    videoAnalyses: [...SEED_VIDEO_ANALYSES],
   };
 }
 
@@ -317,6 +323,7 @@ class LocalMockStore {
       injuries: [],
       workoutLogs: [],
       athleteGoals: [],
+      videoAnalyses: [],
     };
     this.currentUserId = null;
     if (typeof window !== "undefined") {
@@ -2497,7 +2504,25 @@ class LocalMockStore {
       }
 
       case "videoAnalyses:listAnalysesForAthlete": {
-        return [];
+        const athleteId = args.athleteId as string;
+        if (!athleteId) return [];
+        return (this.db.videoAnalyses || [])
+          .filter((va) => va.athleteId === athleteId)
+          .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+          .map((va) => ({
+            ...va,
+            videoUrl: null,
+          }));
+      }
+
+      case "videoAnalyses:getAnalysis": {
+        const analysisId = args.analysisId as string;
+        const va = (this.db.videoAnalyses || []).find((v) => v._id === analysisId);
+        if (!va) return null;
+        return {
+          ...va,
+          videoUrl: null,
+        };
       }
 
       case "announcements:listAnnouncements": {
@@ -4763,6 +4788,193 @@ class LocalMockStore {
           this.notifyAll();
         }
         return null;
+      }
+
+      case "videoAnalyses:generateUploadUrl": {
+        return "https://mock.storage.local/upload";
+      }
+
+      case "videoAnalyses:saveVideoAndAnalyze": {
+        if (!user) throw new Error("Unauthorized");
+        const athleteId = args.athleteId as string;
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        if (!athlete) throw new Error("Athlete not found");
+
+        const randSuffix = Math.random().toString(36).substring(2, 7);
+        const analysisId = `va_${Date.now()}_${randSuffix}`;
+        const nowIso = new Date().toISOString();
+
+        const deterministic = generateDeterministicTelemetry(
+          `${athlete.firstName} ${athlete.lastName}`,
+          args.context as string | undefined,
+        );
+
+        const newVa: MockVideoAnalysis = {
+          _id: analysisId,
+          academyId: athlete.academyId,
+          athleteId,
+          storageId: args.storageId as string,
+          filename: args.filename as string,
+          context: args.context as string | undefined,
+          status: "complete",
+          requestedAt: nowIso,
+          completedAt: nowIso,
+          feedback: deterministic.feedback,
+          structuredTelemetry: deterministic.structuredTelemetry,
+          retryCount: 0,
+          createdBy: user._id,
+        };
+
+        if (!this.db.videoAnalyses) this.db.videoAnalyses = [];
+        this.db.videoAnalyses.unshift(newVa);
+        this.saveDb();
+        this.notifyAll();
+        return analysisId;
+      }
+
+      case "videoAnalyses:deleteAnalysis": {
+        const analysisId = args.analysisId as string;
+        this.db.videoAnalyses = (this.db.videoAnalyses || []).filter(
+          (va) => va._id !== analysisId,
+        );
+        this.saveDb();
+        this.notifyAll();
+        return null;
+      }
+
+      case "videoAnalyses:retryVideoAnalysis": {
+        const analysisId = args.analysisId as string;
+        const va = (this.db.videoAnalyses || []).find((v) => v._id === analysisId);
+        if (!va) throw new Error("Analysis not found");
+
+        va.retryCount = (va.retryCount ?? 0) + 1;
+        va.errorMessage = undefined;
+        va.lastError = undefined;
+
+        if (args.simulateFailure) {
+          va.status = "failed";
+          va.errorMessage = "Simulated failure for testing retry state machine resilience";
+          va.lastError = va.errorMessage;
+        } else {
+          va.status = "complete";
+          const athlete = this.db.athletes.find((a) => a._id === va.athleteId);
+          const athleteName = athlete
+            ? `${athlete.firstName} ${athlete.lastName}`
+            : "Athlete";
+          const deterministic = generateDeterministicTelemetry(athleteName, va.context);
+          va.feedback = deterministic.feedback;
+          va.structuredTelemetry = deterministic.structuredTelemetry;
+          va.completedAt = new Date().toISOString();
+        }
+
+        this.saveDb();
+        this.notifyAll();
+        return { success: true, retryCount: va.retryCount };
+      }
+
+      case "videoAnalyses:applyCorrectiveDrillsToPlan": {
+        if (!user) throw new Error("Unauthorized");
+        const analysisId = args.analysisId as string;
+        const targetPlanId = args.targetPlanId as string | undefined;
+
+        const va = (this.db.videoAnalyses || []).find((v) => v._id === analysisId);
+        if (!va) throw new Error("Analysis not found");
+
+        const telemetryDrills = va.structuredTelemetry?.recommendedCorrectiveDrills ?? [];
+        const drillsToApply =
+          telemetryDrills.length > 0
+            ? telemetryDrills
+            : (va.feedback?.recommendations ?? []).map((rec, i) => ({
+                name: `Corrective Movement Drill #${i + 1}`,
+                sets: 3,
+                reps: "10 reps",
+                focusArea: "Technique & Biomechanical Alignment",
+                coachingCue: rec,
+              }));
+
+        if (drillsToApply.length === 0) {
+          throw new Error("No recommended corrective drills available on this analysis");
+        }
+
+        let finalPlanId = targetPlanId;
+        let addedDrillsCount = 0;
+
+        if (finalPlanId) {
+          const targetPlan = this.db.trainingPlans.find((p) => p._id === finalPlanId);
+          if (!targetPlan) throw new Error("Target training plan not found");
+
+          const existingItems = this.db.planItems.filter((i) => i.planId === finalPlanId);
+          const existingNames = new Set(existingItems.map((i) => i.exercise.trim().toLowerCase()));
+          let nextOrder =
+            existingItems.length > 0
+              ? Math.max(...existingItems.map((i) => i.order)) + 1
+              : 0;
+
+          for (const drill of drillsToApply) {
+            const normalized = drill.name.trim().toLowerCase();
+            if (existingNames.has(normalized)) continue;
+
+            const randSuffix = Math.random().toString(36).substring(2, 7);
+            const newItem: MockPlanItem = {
+              _id: `item_${Date.now()}_${randSuffix}`,
+              planId: finalPlanId,
+              order: nextOrder++,
+              exercise: drill.name,
+              target: `${drill.sets} sets × ${drill.reps}`,
+              notes: [drill.focusArea, drill.coachingCue].filter(Boolean).join(" — "),
+              completed: false,
+            };
+            this.db.planItems.push(newItem);
+            existingNames.add(normalized);
+            addedDrillsCount++;
+          }
+        } else {
+          const randSuffix = Math.random().toString(36).substring(2, 7);
+          finalPlanId = `plan_${Date.now()}_${randSuffix}`;
+          const movementLabel =
+            va.context?.trim() || va.filename.replace(/\.[^/.]+$/, "") || "Technique";
+
+          const newPlan: MockTrainingPlan = {
+            _id: finalPlanId,
+            academyId: va.academyId,
+            athleteId: va.athleteId,
+            title: `AI Biomechanics Corrective Plan — ${movementLabel}`,
+            description:
+              "AI-generated corrective exercise progression targeting biomechanical deviations detected in video analysis.",
+            status: "active",
+            phase: "rehab_return_to_play",
+            createdBy: user._id,
+            createdAt: new Date().toISOString(),
+          };
+          this.db.trainingPlans.unshift(newPlan);
+
+          for (let i = 0; i < drillsToApply.length; i++) {
+            const drill = drillsToApply[i];
+            const itemSuffix = Math.random().toString(36).substring(2, 7);
+            const newItem: MockPlanItem = {
+              _id: `item_${Date.now()}_${itemSuffix}`,
+              planId: finalPlanId,
+              order: i,
+              exercise: drill.name,
+              target: `${drill.sets} sets × ${drill.reps}`,
+              notes: [drill.focusArea, drill.coachingCue].filter(Boolean).join(" — "),
+              completed: false,
+            };
+            this.db.planItems.push(newItem);
+            addedDrillsCount++;
+          }
+        }
+
+        va.appliedToPlanId = finalPlanId;
+        va.appliedAt = Date.now();
+
+        this.saveDb();
+        this.notifyAll();
+
+        return {
+          planId: finalPlanId,
+          addedDrillsCount,
+        };
       }
 
       default:

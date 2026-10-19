@@ -197,5 +197,98 @@ describe("LocalMockStore State Mutations & Queries Suite", () => {
       expect(goalsAfter[0].status).toBe("achieved");
     });
   });
+
+  describe("Phase 5: Resilient Video Biomechanics & Corrective Drill Linking", () => {
+    it("handles saveVideoAndAnalyze, retryVideoAnalysis, and applyCorrectiveDrillsToPlan in mock store", async () => {
+      localMockStore.setPersona("usr_coach");
+      const db = localMockStore.getDb();
+      if (!db.athletes.some((a) => a._id === "ath_bio_test")) {
+        db.athletes.push({
+          _id: "ath_bio_test",
+          academyId: "acad_hercules",
+          firstName: "Kylian",
+          lastName: "Speed",
+          status: "active",
+          createdAt: "2026-10-15T10:00:00.000Z",
+        });
+      }
+
+      // 1. Save and analyze
+      const analysisId = (await localMockStore.executeMutation(
+        "videoAnalyses:saveVideoAndAnalyze",
+        {
+          athleteId: "ath_bio_test",
+          storageId: "storage_123",
+          filename: "sprint_drive.mp4",
+          context: "Acceleration 10m sprint drive phase",
+          frames: ["base64frame1"],
+        },
+      )) as string;
+
+      expect(analysisId).toBeDefined();
+
+      const analyses = localMockStore.executeQuery(
+        "videoAnalyses:listAnalysesForAthlete",
+        { athleteId: "ath_bio_test" },
+      ) as Array<{
+        _id: string;
+        status: string;
+        structuredTelemetry?: { overallBiomechanicsScore: number };
+      }>;
+
+      expect(analyses).toHaveLength(1);
+      expect(analyses[0].status).toBe("complete");
+      expect(analyses[0].structuredTelemetry?.overallBiomechanicsScore).toBeGreaterThan(0);
+
+      // 2. Retry analysis with simulated failure
+      const retryFailResult = (await localMockStore.executeMutation(
+        "videoAnalyses:retryVideoAnalysis",
+        {
+          analysisId,
+          simulateFailure: true,
+        },
+      )) as { success: boolean; retryCount: number };
+
+      expect(retryFailResult.success).toBe(true);
+      expect(retryFailResult.retryCount).toBe(1);
+
+      const failedVa = localMockStore.executeQuery(
+        "videoAnalyses:getAnalysis",
+        { analysisId },
+      ) as { status: string; retryCount: number };
+      expect(failedVa.status).toBe("failed");
+      expect(failedVa.retryCount).toBe(1);
+
+      // 3. Retry again to recover
+      const retrySuccessResult = (await localMockStore.executeMutation(
+        "videoAnalyses:retryVideoAnalysis",
+        { analysisId },
+      )) as { success: boolean; retryCount: number };
+
+      expect(retrySuccessResult.retryCount).toBe(2);
+      const recoveredVa = localMockStore.executeQuery(
+        "videoAnalyses:getAnalysis",
+        { analysisId },
+      ) as { status: string; retryCount: number };
+      expect(recoveredVa.status).toBe("complete");
+
+      // 4. Apply corrective drills to new training plan
+      const linkResult = (await localMockStore.executeMutation(
+        "videoAnalyses:applyCorrectiveDrillsToPlan",
+        { analysisId },
+      )) as { planId: string; addedDrillsCount: number };
+
+      expect(linkResult.planId).toBeDefined();
+      expect(linkResult.addedDrillsCount).toBeGreaterThan(0);
+
+      const linkedPlan = db.trainingPlans.find((p) => p._id === linkResult.planId);
+      expect(linkedPlan).toBeDefined();
+      expect(linkedPlan?.phase).toBe("rehab_return_to_play");
+
+      const drills = db.planItems.filter((i) => i.planId === linkResult.planId);
+      expect(drills.length).toBe(linkResult.addedDrillsCount);
+    });
+  });
 });
+
 

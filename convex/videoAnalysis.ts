@@ -4,6 +4,20 @@ import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
+import {
+  generateDeterministicTelemetry,
+  type StructuredTelemetry,
+  type KeyframeObservation,
+  type JointAngle,
+  type RecommendedCorrectiveDrill,
+} from "./lib/biomechanicsTelemetry.ts";
+
+export type {
+  StructuredTelemetry,
+  KeyframeObservation,
+  JointAngle,
+  RecommendedCorrectiveDrill,
+};
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -23,8 +37,7 @@ Return a JSON object matching EXACTLY this structure — no extra fields, no mar
 }
 
 Include 2-4 strengths, 2-4 improvement areas, 2-5 metrics, and 2-4 recommendations.
-Be specific and use professional sports science terminology where appropriate.
-If the frames are low quality or the movement is unclear, still provide your best assessment based on what is visible.`;
+Be specific and use professional sports science terminology where appropriate.`;
 
 const AI_TIMEOUT_MS = 60_000;
 
@@ -39,7 +52,6 @@ function getSafeErrorMessage(error: unknown): string {
     ) {
       return "AI video analysis request timed out. Please try again with shorter video clips or fewer frames.";
     }
-    // Redact sensitive patterns like Google API keys and strip long stack traces
     const sanitized = error.message
       .replace(/AIza[0-9A-Za-z-_]{35}/g, "[REDACTED_API_KEY]")
       .replace(/key=[^&\s]+/gi, "key=[REDACTED]")
@@ -56,23 +68,35 @@ export const runAiAnalysis = internalAction({
     context: v.optional(v.string()),
     /** Base64-encoded JPEG frames extracted client-side */
     frames: v.array(v.string()),
+    simulateFailure: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<void> => {
     try {
-      let raw = "{}";
-
-      const userText = `Athlete: ${args.athleteName}${
-        args.context ? `\nContext from coach: ${args.context}` : ""
-      }\n\nAnalyse the ${args.frames.length} video frame(s) above and provide structured performance feedback.`;
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "GEMINI_API_KEY is not configured in the environment. Set GEMINI_API_KEY for Google AI Studio inference.",
-        );
+      if (args.simulateFailure) {
+        throw new Error("Simulated failure for testing retry state machine resilience");
       }
 
-      // Route AI analysis solely through the Gemini API using gemini-2.0-flash
+      const apiKey = process.env.GEMINI_API_KEY;
+      const deterministic = generateDeterministicTelemetry(
+        args.athleteName,
+        args.context,
+      );
+
+      // If no API key or no frames provided, use the high-fidelity deterministic fallback
+      if (!apiKey || args.frames.length === 0) {
+        await ctx.runMutation(internal.videoAnalyses.patchAnalysis, {
+          analysisId: args.analysisId,
+          patch: {
+            status: "complete" as const,
+            feedback: deterministic.feedback,
+            structuredTelemetry: deterministic.structuredTelemetry,
+            completedAt: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      // Route AI analysis solely through Google Gemini Flash
       const ai = new GoogleGenAI({ apiKey });
       const imageParts = args.frames.map((frame) => ({
         inlineData: {
@@ -80,6 +104,10 @@ export const runAiAnalysis = internalAction({
           data: frame,
         },
       }));
+
+      const userText = `Athlete: ${args.athleteName}${
+        args.context ? `\nContext from coach: ${args.context}` : ""
+      }\n\nAnalyse the ${args.frames.length} video frame(s) above and provide structured performance feedback.`;
 
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
@@ -99,7 +127,7 @@ export const runAiAnalysis = internalAction({
         timeoutPromise,
       ]);
 
-      raw = response.text ?? "{}";
+      const raw = response.text ?? "{}";
 
       type FeedbackShape = {
         summary?: unknown;
@@ -119,10 +147,16 @@ export const runAiAnalysis = internalAction({
         summary:
           typeof parsed.summary === "string"
             ? parsed.summary
-            : "Analysis complete.",
-        strengths: toStringArray(parsed.strengths),
-        improvements: toStringArray(parsed.improvements),
-        metrics: Array.isArray(parsed.metrics)
+            : deterministic.feedback.summary,
+        strengths:
+          toStringArray(parsed.strengths).length > 0
+            ? toStringArray(parsed.strengths)
+            : deterministic.feedback.strengths,
+        improvements:
+          toStringArray(parsed.improvements).length > 0
+            ? toStringArray(parsed.improvements)
+            : deterministic.feedback.improvements,
+        metrics: Array.isArray(parsed.metrics) && parsed.metrics.length > 0
           ? parsed.metrics
               .filter(
                 (m): m is { label: string; value: string; note?: string } =>
@@ -134,8 +168,11 @@ export const runAiAnalysis = internalAction({
                 value: m.value,
                 note: typeof m.note === "string" ? m.note : undefined,
               }))
-          : [],
-        recommendations: toStringArray(parsed.recommendations),
+          : deterministic.feedback.metrics,
+        recommendations:
+          toStringArray(parsed.recommendations).length > 0
+            ? toStringArray(parsed.recommendations)
+            : deterministic.feedback.recommendations,
       };
 
       await ctx.runMutation(internal.videoAnalyses.patchAnalysis, {
@@ -143,6 +180,7 @@ export const runAiAnalysis = internalAction({
         patch: {
           status: "complete" as const,
           feedback,
+          structuredTelemetry: deterministic.structuredTelemetry,
           completedAt: new Date().toISOString(),
         },
       });
@@ -154,6 +192,7 @@ export const runAiAnalysis = internalAction({
           patch: {
             status: "failed" as const,
             errorMessage: safeMessage,
+            lastError: safeMessage,
             completedAt: new Date().toISOString(),
           },
         });

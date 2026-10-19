@@ -30,6 +30,7 @@ import type * as injuries from "../injuries.js";
 import type * as invites from "../invites.js";
 import type * as invoices from "../invoices.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_biomechanicsTelemetry from "../lib/biomechanicsTelemetry.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_logger from "../lib/logger.js";
 import type * as lib_onboarding from "../lib/onboarding.js";
@@ -105,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   invoices: typeof invoices;
   "lib/auth": typeof lib_auth;
+  "lib/biomechanicsTelemetry": typeof lib_biomechanicsTelemetry;
   "lib/email": typeof lib_email;
   "lib/logger": typeof lib_logger;
   "lib/onboarding": typeof lib_onboarding;

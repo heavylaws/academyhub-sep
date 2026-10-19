@@ -21,7 +21,11 @@ import {
   periodizationPhaseValidator,
 } from "./schema/trainingPlans.ts";
 import { assessments } from "./schema/assessments.ts";
-import { videoAnalyses } from "./schema/videoAnalyses.ts";
+import {
+  videoAnalyses,
+  videoAnalysisStatusValidator,
+  structuredTelemetryValidator,
+} from "./schema/videoAnalyses.ts";
 import { drills } from "./schema/drills.ts";
 import { tacticalPlans } from "./schema/tacticalPlans.ts";
 import { tacticalCache } from "./schema/tacticalCache.ts";
@@ -152,4 +156,6 @@ export {
   goalCornerValidator,
   goalStatusValidator,
   goalOptimizationDirectionValidator,
+  videoAnalysisStatusValidator,
+  structuredTelemetryValidator,
 };

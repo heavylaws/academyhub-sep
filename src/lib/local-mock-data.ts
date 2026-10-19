@@ -248,6 +248,62 @@ export interface MockAthleteGoal {
   updatedAt: number;
 }
 
+export interface MockVideoAnalysis {
+  _id: string;
+  academyId: string;
+  athleteId: string;
+  storageId: string;
+  filename: string;
+  context?: string;
+  status:
+    | "pending"
+    | "analyzing"
+    | "complete"
+    | "completed"
+    | "failed"
+    | "uploading"
+    | "queued"
+    | "processing";
+  requestedAt: string;
+  completedAt?: string;
+  feedback?: {
+    summary: string;
+    strengths: string[];
+    improvements: string[];
+    metrics: { label: string; value: string; note?: string }[];
+    recommendations: string[];
+  };
+  errorMessage?: string;
+  retryCount?: number;
+  lastError?: string;
+  structuredTelemetry?: {
+    overallBiomechanicsScore: number;
+    keyframeObservations: {
+      timestampSec: number;
+      phase: string;
+      observation: string;
+      riskLevel: "low" | "moderate" | "high";
+    }[];
+    jointAngles: {
+      jointName: string;
+      measuredAngleDeg: number;
+      idealRangeDeg: string;
+      deviationStatus: "optimal" | "suboptimal" | "critical";
+    }[];
+    detectedFlaws: string[];
+    recommendedCorrectiveDrills: {
+      name: string;
+      sets: number;
+      reps: string;
+      focusArea: string;
+      coachingCue: string;
+    }[];
+  };
+  appliedToPlanId?: string;
+  appliedAt?: number;
+  createdBy: string;
+}
+
 export interface MockAthleteFee {
   _id: string;
   academyId: string;
@@ -540,4 +596,5 @@ export const SEED_DRILLS: MockDrill[] = [];
 export const SEED_INJURIES: MockInjury[] = [];
 export const SEED_WORKOUT_LOGS: MockWorkoutLog[] = [];
 export const SEED_ATHLETE_GOALS: MockAthleteGoal[] = [];
+export const SEED_VIDEO_ANALYSES: MockVideoAnalysis[] = [];
 
