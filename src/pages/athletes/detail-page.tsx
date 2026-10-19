@@ -82,6 +82,8 @@ import AthleteFormDialog from "./_components/athlete-form-dialog.tsx";
 import CreatePlanDialog from "./_components/plan-dialogs.tsx";
 import AthleteAssessments from "./_components/athlete-assessments.tsx";
 import AthletePerformanceAnalytics from "./_components/athlete-performance-analytics.tsx";
+import AthleteBenchmarkCard from "./_components/athlete-benchmark-card.tsx";
+import AthleteIdpCard from "./_components/athlete-idp-card.tsx";
 import VideoAnalysisSection from "./_components/video-analysis-section.tsx";
 import AthleteAttendanceCard from "./_components/athlete-attendance-card.tsx";
 import AthleteReadinessCard from "./_components/athlete-readiness-card.tsx";
@@ -809,8 +811,20 @@ export default function AthleteDetail() {
           />
         </TabsContent>
 
-        {/* Tab 2: Performance & Radar */}
+        {/* Tab 2: Performance, 4-Corner Intelligence & IDPs */}
         <TabsContent value="performance" className="space-y-6 pt-4">
+          <AthleteBenchmarkCard
+            athleteId={athlete._id}
+            athleteName={`${athlete.firstName} ${athlete.lastName}`}
+            teams={athleteTeams?.map((t) => ({ _id: t._id, name: t.name }))}
+          />
+
+          <AthleteIdpCard
+            athleteId={athlete._id}
+            athleteName={`${athlete.firstName} ${athlete.lastName}`}
+            canManage={canManage}
+          />
+
           <AthletePerformanceAnalytics
             athleteName={`${athlete.firstName} ${athlete.lastName}`}
             athleteId={athlete._id}

@@ -7,7 +7,33 @@ import {
   sanitizeOptionalText,
   sanitizeString,
 } from "./lib/sanitize.ts";
-import type { Doc } from "./_generated/dataModel.d.ts";
+import type { Doc, Id } from "./_generated/dataModel.d.ts";
+
+function inferAssessmentOptimizationDirection(
+  explicitDirection?: "higher_is_better" | "lower_is_better",
+  unit?: string,
+): "higher_is_better" | "lower_is_better" {
+  if (explicitDirection) return explicitDirection;
+  if (!unit) return "higher_is_better";
+  const clean = unit.trim().toLowerCase();
+  if (clean === "s" || clean === "sec" || clean === "seconds" || clean === "ms") {
+    return "lower_is_better";
+  }
+  return "higher_is_better";
+}
+
+function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp((-z * z) / 2);
+  const prob =
+    d *
+    t *
+    (0.31938153 +
+      t *
+        (-0.356563782 +
+          t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z > 0 ? 1 - prob : prob;
+}
 
 /** Trainer records a new assessment data point for an athlete. */
 export const recordAssessment = mutation({
@@ -19,6 +45,18 @@ export const recordAssessment = mutation({
     assessedOn: v.string(),
     sessionId: v.optional(v.id("trainingSessions")),
     notes: v.optional(v.string()),
+    corner: v.optional(
+      v.union(
+        v.literal("physical"),
+        v.literal("technical"),
+        v.literal("tactical"),
+        v.literal("psychological"),
+      ),
+    ),
+    optimizationDirection: v.optional(
+      v.union(v.literal("higher_is_better"), v.literal("lower_is_better")),
+    ),
+    ageGroupSnapshot: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await requireRole(ctx, ["academy_admin", "sporting_director", "medical_staff", "coach"]);
@@ -37,15 +75,25 @@ export const recordAssessment = mutation({
         message: "Metric name is required",
       });
     }
+    const cleanUnit = sanitizeOptionalString(args.unit, 30, "Unit");
+    const direction = inferAssessmentOptimizationDirection(
+      args.optimizationDirection,
+      cleanUnit,
+    );
+    const corner = args.corner ?? "physical";
+
     const id = await ctx.db.insert("assessments", {
       academyId: athlete.academyId,
       athleteId: args.athleteId,
       sessionId: args.sessionId,
       metric: cleanMetric,
       value: args.value,
-      unit: sanitizeOptionalString(args.unit, 30, "Unit"),
+      unit: cleanUnit,
       assessedOn: args.assessedOn,
       notes: sanitizeOptionalText(args.notes, 2000, "Notes"),
+      corner,
+      optimizationDirection: direction,
+      ageGroupSnapshot: sanitizeOptionalString(args.ageGroupSnapshot, 30, "Age group"),
       createdBy: user._id,
       createdAt: new Date().toISOString(),
     });
@@ -162,6 +210,18 @@ export const recordBatchSessionAssessments = mutation({
     metric: v.string(),
     unit: v.optional(v.string()),
     assessedOn: v.string(),
+    corner: v.optional(
+      v.union(
+        v.literal("physical"),
+        v.literal("technical"),
+        v.literal("tactical"),
+        v.literal("psychological"),
+      ),
+    ),
+    optimizationDirection: v.optional(
+      v.union(v.literal("higher_is_better"), v.literal("lower_is_better")),
+    ),
+    ageGroupSnapshot: v.optional(v.string()),
     entries: v.array(
       v.object({
         athleteId: v.id("athletes"),
@@ -187,6 +247,14 @@ export const recordBatchSessionAssessments = mutation({
       });
     }
 
+    const cleanUnit = args.unit?.trim() || undefined;
+    const direction = inferAssessmentOptimizationDirection(
+      args.optimizationDirection,
+      cleanUnit,
+    );
+    const corner = args.corner ?? "physical";
+    const cleanAgeGroup = args.ageGroupSnapshot?.trim() || undefined;
+
     const insertedIds: string[] = [];
     const now = new Date().toISOString();
 
@@ -202,9 +270,12 @@ export const recordBatchSessionAssessments = mutation({
           sessionId: session._id,
           metric: args.metric.trim(),
           value: entry.value,
-          unit: args.unit?.trim() || undefined,
+          unit: cleanUnit,
           assessedOn: args.assessedOn,
           notes: entry.notes?.trim() || undefined,
+          corner,
+          optimizationDirection: direction,
+          ageGroupSnapshot: cleanAgeGroup,
           createdBy: user._id,
           createdAt: now,
         });
@@ -409,4 +480,247 @@ export const getAcademyAverages = query({
     };
   },
 });
+
+/**
+ * 4-Corner Assessments & Cohort Z-Score Benchmarking Engine.
+ * Evaluates an athlete against their squad or academy cohort with directional normalization.
+ */
+export const getAthleteBenchmarkReport = query({
+  args: {
+    athleteId: v.id("athletes"),
+    teamId: v.optional(v.id("teams")),
+  },
+  handler: async (ctx, args) => {
+    const { athlete } = await requireAthleteAccess(ctx, args.athleteId);
+
+    let targetTeamId = args.teamId;
+    let targetTeamName: string | undefined;
+
+    if (targetTeamId) {
+      const team = await ctx.db.get("teams", targetTeamId);
+      if (!team || team.academyId !== athlete.academyId || team.deletedAt) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Team not found in this academy",
+        });
+      }
+      targetTeamName = team.name;
+    }
+
+    // Determine comparison cohort
+    let cohortAthleteIds: Set<Id<"athletes">>;
+
+    if (targetTeamId) {
+      const members = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", targetTeamId!))
+        .collect();
+      cohortAthleteIds = new Set(members.map((m) => m.athleteId));
+    } else {
+      // Find athlete's teams
+      const memberships = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_athlete", (q) => q.eq("athleteId", athlete._id))
+        .collect();
+
+      if (memberships.length > 0) {
+        targetTeamId = memberships[0].teamId;
+        const team = await ctx.db.get("teams", targetTeamId);
+        targetTeamName = team?.name;
+        const members = await ctx.db
+          .query("teamMembers")
+          .withIndex("by_team", (q) => q.eq("teamId", targetTeamId!))
+          .collect();
+        cohortAthleteIds = new Set(members.map((m) => m.athleteId));
+      } else {
+        // Unassigned athlete: compare against active athletes in academy
+        const academyAthletes = await ctx.db
+          .query("athletes")
+          .withIndex("by_academy_and_status", (q) =>
+            q.eq("academyId", athlete.academyId).eq("status", "active"),
+          )
+          .collect();
+        cohortAthleteIds = new Set(academyAthletes.map((a) => a._id));
+      }
+    }
+
+    cohortAthleteIds.add(athlete._id);
+    const cohortSize = cohortAthleteIds.size;
+
+    // Fetch target athlete's assessments
+    const athleteAssessments = await ctx.db
+      .query("assessments")
+      .withIndex("by_athlete", (q) => q.eq("athleteId", athlete._id))
+      .collect();
+
+    const activeAthleteAssessments = athleteAssessments.filter(
+      (a) => !a.deletedAt,
+    );
+
+    // Group to find latest assessment per metric for target athlete
+    const latestByMetric = new Map<string, Doc<"assessments">>();
+    for (const ass of activeAthleteAssessments) {
+      const existing = latestByMetric.get(ass.metric);
+      if (!existing) {
+        latestByMetric.set(ass.metric, ass);
+      } else {
+        if (
+          ass.assessedOn > existing.assessedOn ||
+          (ass.assessedOn === existing.assessedOn &&
+            ass.createdAt > existing.createdAt)
+        ) {
+          latestByMetric.set(ass.metric, ass);
+        }
+      }
+    }
+
+    const defaultComposites = {
+      physical: 50,
+      technical: 50,
+      tactical: 50,
+      psychological: 50,
+    };
+
+    if (latestByMetric.size === 0) {
+      return {
+        athleteId: athlete._id,
+        athleteName: `${athlete.firstName} ${athlete.lastName}`,
+        cohortSize,
+        teamId: targetTeamId,
+        teamName: targetTeamName,
+        metrics: [],
+        cornerComposites: defaultComposites,
+      };
+    }
+
+    const metricResults: Array<{
+      metric: string;
+      corner: "physical" | "technical" | "tactical" | "psychological";
+      optimizationDirection: "higher_is_better" | "lower_is_better";
+      athleteValue: number;
+      unit: string | undefined;
+      assessedOn: string;
+      cohortMean: number;
+      cohortStdDev: number;
+      zScore: number;
+      percentile: number;
+      cohortSampleCount: number;
+    }> = [];
+
+    const cornerPercentiles: Record<
+      "physical" | "technical" | "tactical" | "psychological",
+      number[]
+    > = {
+      physical: [],
+      technical: [],
+      tactical: [],
+      psychological: [],
+    };
+
+    // For each metric recorded for this athlete, compute cohort stats
+    for (const [metricName, targetAss] of latestByMetric.entries()) {
+      const cohortValues: number[] = [];
+
+      for (const cohortAthleteId of cohortAthleteIds) {
+        const memberAssessments = await ctx.db
+          .query("assessments")
+          .withIndex("by_athlete_and_metric", (q) =>
+            q.eq("athleteId", cohortAthleteId).eq("metric", metricName),
+          )
+          .collect();
+
+        const valid = memberAssessments.filter((a) => !a.deletedAt);
+        if (valid.length > 0) {
+          valid.sort((a, b) => {
+            const dateCmp = b.assessedOn.localeCompare(a.assessedOn);
+            if (dateCmp !== 0) return dateCmp;
+            return b.createdAt.localeCompare(a.createdAt);
+          });
+          cohortValues.push(valid[0].value);
+        }
+      }
+
+      if (cohortValues.length === 0) {
+        cohortValues.push(targetAss.value);
+      }
+
+      const sampleCount = cohortValues.length;
+      const sum = cohortValues.reduce((acc, v) => acc + v, 0);
+      const mean = sum / sampleCount;
+
+      const varianceSum = cohortValues.reduce(
+        (acc, v) => acc + Math.pow(v - mean, 2),
+        0,
+      );
+      const stdDev = Math.sqrt(varianceSum / sampleCount);
+
+      // Raw Z-Score
+      let zRaw = 0;
+      if (stdDev > 0.000001) {
+        zRaw = (targetAss.value - mean) / stdDev;
+      }
+
+      const optDirection =
+        targetAss.optimizationDirection ??
+        inferAssessmentOptimizationDirection(undefined, targetAss.unit);
+
+      // Directional normalization: if lower_is_better, invert sign
+      const zNormalized = optDirection === "lower_is_better" ? -zRaw : zRaw;
+      const roundedZ = Math.round(zNormalized * 100) / 100;
+
+      // Percentile (1–99)
+      const percentile = Math.min(
+        99,
+        Math.max(1, Math.round(normalCdf(roundedZ) * 100)),
+      );
+
+      const corner = targetAss.corner ?? "physical";
+      cornerPercentiles[corner].push(percentile);
+
+      metricResults.push({
+        metric: metricName,
+        corner,
+        optimizationDirection: optDirection,
+        athleteValue: targetAss.value,
+        unit: targetAss.unit,
+        assessedOn: targetAss.assessedOn,
+        cohortMean: Math.round(mean * 100) / 100,
+        cohortStdDev: Math.round(stdDev * 100) / 100,
+        zScore: roundedZ,
+        percentile,
+        cohortSampleCount: sampleCount,
+      });
+    }
+
+    // Sort metrics by corner then by metric name
+    metricResults.sort((a, b) => {
+      if (a.corner !== b.corner) return a.corner.localeCompare(b.corner);
+      return a.metric.localeCompare(b.metric);
+    });
+
+    const computeCornerComposite = (
+      corner: "physical" | "technical" | "tactical" | "psychological",
+    ) => {
+      const pcts = cornerPercentiles[corner];
+      if (pcts.length === 0) return 50;
+      return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+    };
+
+    return {
+      athleteId: athlete._id,
+      athleteName: `${athlete.firstName} ${athlete.lastName}`,
+      cohortSize,
+      teamId: targetTeamId,
+      teamName: targetTeamName,
+      metrics: metricResults,
+      cornerComposites: {
+        physical: computeCornerComposite("physical"),
+        technical: computeCornerComposite("technical"),
+        tactical: computeCornerComposite("tactical"),
+        psychological: computeCornerComposite("psychological"),
+      },
+    };
+  },
+});
+
 

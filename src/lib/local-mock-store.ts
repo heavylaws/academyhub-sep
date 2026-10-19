@@ -20,6 +20,7 @@ import {
   SEED_INJURIES,
   SEED_WORKOUT_LOGS,
   SEED_FACILITIES,
+  SEED_ATHLETE_GOALS,
   type MockAcademy,
   type MockUser,
   type MockAthlete,
@@ -30,6 +31,7 @@ import {
   type MockTrainingPlan,
   type MockPlanItem,
   type MockAssessment,
+  type MockAthleteGoal,
   type MockAthleteFee,
   type MockFeePayment,
   type MockInvoice,
@@ -108,6 +110,7 @@ export interface MockDatabase {
   injuries: MockInjury[];
   workoutLogs: MockWorkoutLog[];
   facilities: MockFacility[];
+  athleteGoals: MockAthleteGoal[];
 }
 
 const STORAGE_KEY = "coachtactics_clean_db_v3";
@@ -123,6 +126,7 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "trainingPlans",
   "planItems",
   "assessments",
+  "athleteGoals",
   "athleteFees",
   "feePayments",
   "invoices",
@@ -180,6 +184,7 @@ function getInitialDb(): MockDatabase {
     injuries: [...SEED_INJURIES],
     workoutLogs: [...SEED_WORKOUT_LOGS],
     facilities: [...SEED_FACILITIES],
+    athleteGoals: [...SEED_ATHLETE_GOALS],
   };
 }
 
@@ -311,6 +316,7 @@ class LocalMockStore {
       facilities: [],
       injuries: [],
       workoutLogs: [],
+      athleteGoals: [],
     };
     this.currentUserId = null;
     if (typeof window !== "undefined") {
@@ -1992,6 +1998,230 @@ class LocalMockStore {
         }));
       }
 
+      case "assessments:getAthleteBenchmarkReport": {
+        const athleteId = args.athleteId as string;
+        const targetTeamId = args.teamId as string | undefined;
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        if (!athlete) return null;
+
+        let activeTeamId = targetTeamId;
+        let activeTeamName: string | undefined;
+
+        if (activeTeamId) {
+          const t = this.db.teams.find((tm) => tm._id === activeTeamId);
+          activeTeamName = t?.name;
+        }
+
+        let cohortAthleteIds: Set<string>;
+        if (activeTeamId) {
+          const members = this.db.teamMembers.filter((tm) => tm.teamId === activeTeamId);
+          cohortAthleteIds = new Set(members.map((m) => m.athleteId));
+        } else {
+          const myMemberships = this.db.teamMembers.filter((tm) => tm.athleteId === athleteId);
+          if (myMemberships.length > 0) {
+            activeTeamId = myMemberships[0].teamId;
+            const t = this.db.teams.find((tm) => tm._id === activeTeamId);
+            activeTeamName = t?.name;
+            const members = this.db.teamMembers.filter((tm) => tm.teamId === activeTeamId);
+            cohortAthleteIds = new Set(members.map((m) => m.athleteId));
+          } else {
+            const activeAthletes = this.db.athletes.filter(
+              (a) => a.academyId === athlete.academyId && a.status === "active",
+            );
+            cohortAthleteIds = new Set(activeAthletes.map((a) => a._id));
+          }
+        }
+        cohortAthleteIds.add(athleteId);
+        const cohortSize = cohortAthleteIds.size;
+
+        const athleteAssessments = this.db.assessments.filter((a) => a.athleteId === athleteId);
+        const latestByMetric = new Map<string, MockAssessment>();
+        for (const ass of athleteAssessments) {
+          const existing = latestByMetric.get(ass.metric);
+          if (!existing) {
+            latestByMetric.set(ass.metric, ass);
+          } else {
+            if (
+              ass.assessedOn > existing.assessedOn ||
+              (ass.assessedOn === existing.assessedOn && ass.createdAt > existing.createdAt)
+            ) {
+              latestByMetric.set(ass.metric, ass);
+            }
+          }
+        }
+
+        const defaultComposites = {
+          physical: 50,
+          technical: 50,
+          tactical: 50,
+          psychological: 50,
+        };
+
+        if (latestByMetric.size === 0) {
+          return {
+            athleteId,
+            athleteName: `${athlete.firstName} ${athlete.lastName}`,
+            cohortSize,
+            teamId: activeTeamId,
+            teamName: activeTeamName,
+            metrics: [],
+            cornerComposites: defaultComposites,
+          };
+        }
+
+        const normalCdf = (z: number): number => {
+          const t = 1 / (1 + 0.2316419 * Math.abs(z));
+          const d = 0.3989422804014327 * Math.exp((-z * z) / 2);
+          const prob =
+            d *
+            t *
+            (0.31938153 +
+              t *
+                (-0.356563782 +
+                  t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+          return z > 0 ? 1 - prob : prob;
+        };
+
+        const inferDirection = (explicit?: string, unit?: string): "higher_is_better" | "lower_is_better" => {
+          if (explicit === "lower_is_better" || explicit === "higher_is_better") return explicit;
+          if (!unit) return "higher_is_better";
+          const u = unit.trim().toLowerCase();
+          if (u === "s" || u === "sec" || u === "seconds" || u === "ms") return "lower_is_better";
+          return "higher_is_better";
+        };
+
+        const metricResults: Array<{
+          metric: string;
+          corner: "physical" | "technical" | "tactical" | "psychological";
+          optimizationDirection: "higher_is_better" | "lower_is_better";
+          athleteValue: number;
+          unit: string | undefined;
+          assessedOn: string;
+          cohortMean: number;
+          cohortStdDev: number;
+          zScore: number;
+          percentile: number;
+          cohortSampleCount: number;
+        }> = [];
+
+        const cornerPercentiles: Record<"physical" | "technical" | "tactical" | "psychological", number[]> = {
+          physical: [],
+          technical: [],
+          tactical: [],
+          psychological: [],
+        };
+
+        for (const [metricName, targetAss] of latestByMetric.entries()) {
+          const cohortValues: number[] = [];
+          for (const cAthleteId of cohortAthleteIds) {
+            const memberAss = this.db.assessments.filter(
+              (a) => a.athleteId === cAthleteId && a.metric === metricName,
+            );
+            if (memberAss.length > 0) {
+              memberAss.sort(
+                (a, b) =>
+                  b.assessedOn.localeCompare(a.assessedOn) ||
+                  b.createdAt.localeCompare(a.createdAt),
+              );
+              cohortValues.push(memberAss[0].value);
+            }
+          }
+          if (cohortValues.length === 0) {
+            cohortValues.push(targetAss.value);
+          }
+
+          const count = cohortValues.length;
+          const mean = cohortValues.reduce((a, b) => a + b, 0) / count;
+          const variance =
+            cohortValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / count;
+          const stdDev = Math.sqrt(variance);
+
+          let zRaw = 0;
+          if (stdDev > 0.000001) {
+            zRaw = (targetAss.value - mean) / stdDev;
+          }
+
+          const optDirection = inferDirection(targetAss.optimizationDirection, targetAss.unit);
+          const zNormalized = optDirection === "lower_is_better" ? -zRaw : zRaw;
+          const roundedZ = Math.round(zNormalized * 100) / 100;
+          const percentile = Math.min(99, Math.max(1, Math.round(normalCdf(roundedZ) * 100)));
+          const corner = targetAss.corner ?? "physical";
+          cornerPercentiles[corner].push(percentile);
+
+          metricResults.push({
+            metric: metricName,
+            corner,
+            optimizationDirection: optDirection,
+            athleteValue: targetAss.value,
+            unit: targetAss.unit,
+            assessedOn: targetAss.assessedOn,
+            cohortMean: Math.round(mean * 100) / 100,
+            cohortStdDev: Math.round(stdDev * 100) / 100,
+            zScore: roundedZ,
+            percentile,
+            cohortSampleCount: count,
+          });
+        }
+
+        metricResults.sort((a, b) => {
+          if (a.corner !== b.corner) return a.corner.localeCompare(b.corner);
+          return a.metric.localeCompare(b.metric);
+        });
+
+        const computeCorner = (c: "physical" | "technical" | "tactical" | "psychological") => {
+          const arr = cornerPercentiles[c];
+          if (arr.length === 0) return 50;
+          return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+        };
+
+        return {
+          athleteId,
+          athleteName: `${athlete.firstName} ${athlete.lastName}`,
+          cohortSize,
+          teamId: activeTeamId,
+          teamName: activeTeamName,
+          metrics: metricResults,
+          cornerComposites: {
+            physical: computeCorner("physical"),
+            technical: computeCorner("technical"),
+            tactical: computeCorner("tactical"),
+            psychological: computeCorner("psychological"),
+          },
+        };
+      }
+
+      case "athleteGoals:listAthleteGoals": {
+        const athleteId = args.athleteId as string;
+        const status = args.status as string | undefined;
+        let goals = (this.db.athleteGoals || []).filter((g) => g.athleteId === athleteId);
+        if (status) {
+          goals = goals.filter((g) => g.status === status);
+        }
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        const enriched = goals.map((goal) => {
+          const creator = this.db.users.find((u) => u._id === goal.createdByUserId);
+          return {
+            ...goal,
+            creatorName: creator?.name ?? "Coach",
+            athleteName: athlete ? `${athlete.firstName} ${athlete.lastName}` : "Athlete",
+          };
+        });
+
+        const statusWeight: Record<string, number> = {
+          at_risk: 1,
+          in_progress: 2,
+          achieved: 3,
+          archived: 4,
+        };
+        enriched.sort((a, b) => {
+          const wa = statusWeight[a.status] ?? 99;
+          const wb = statusWeight[b.status] ?? 99;
+          if (wa !== wb) return wa - wb;
+          return a.targetDate.localeCompare(b.targetDate);
+        });
+        return enriched;
+      }
+
       case "drills:listDrills": {
         const drills = this.db.drills || [];
         const ageGroup = args.ageGroup as string | undefined;
@@ -3567,6 +3797,10 @@ class LocalMockStore {
       case "assessments:addAssessment": {
         if (!academyId) throw new Error("No academy");
         const athlete = this.db.athletes.find((a) => a._id === (args.athleteId as string));
+        const unit = (args.unit as string)?.trim() || "";
+        const corner = (args.corner as "physical" | "technical" | "tactical" | "psychological" | undefined) ?? "physical";
+        const direction = (args.optimizationDirection as "higher_is_better" | "lower_is_better" | undefined) ??
+          (["s", "sec", "seconds", "ms"].includes(unit.toLowerCase()) ? "lower_is_better" : "higher_is_better");
         const newAssessment: MockAssessment = {
           _id: `ass_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           academyId,
@@ -3574,7 +3808,10 @@ class LocalMockStore {
           sessionId: args.sessionId as string | undefined,
           metric: (args.metric as string).trim(),
           value: Number(args.value),
-          unit: (args.unit as string)?.trim() || "",
+          unit,
+          corner,
+          optimizationDirection: direction,
+          ageGroupSnapshot: args.ageGroupSnapshot as string | undefined,
           assessedOn: args.assessedOn as string,
           notes: args.notes as string | undefined,
           conductedBy: user?.name ?? "Staff",
@@ -3604,6 +3841,10 @@ class LocalMockStore {
         const metric = (args.metric as string).trim();
         const unit = (args.unit as string)?.trim() || "";
         const assessedOn = args.assessedOn as string;
+        const corner = (args.corner as "physical" | "technical" | "tactical" | "psychological" | undefined) ?? "physical";
+        const direction = (args.optimizationDirection as "higher_is_better" | "lower_is_better" | undefined) ??
+          (["s", "sec", "seconds", "ms"].includes(unit.toLowerCase()) ? "lower_is_better" : "higher_is_better");
+        const ageGroupSnapshot = args.ageGroupSnapshot as string | undefined;
         const entries = (args.entries as Array<{ athleteId: string; value: number; notes?: string }>) || [];
 
         const insertedIds: string[] = [];
@@ -3618,6 +3859,9 @@ class LocalMockStore {
               metric,
               value: Number(entry.value),
               unit,
+              corner,
+              optimizationDirection: direction,
+              ageGroupSnapshot,
               assessedOn,
               notes: entry.notes?.trim(),
               conductedBy: user?.name ?? "Staff",
@@ -3641,6 +3885,100 @@ class LocalMockStore {
         this.saveDb();
         this.notifyAll();
         return { count: insertedIds.length, ids: insertedIds };
+      }
+
+      case "athleteGoals:createAthleteGoal": {
+        if (!academyId) throw new Error("No academy");
+        const athleteId = args.athleteId as string;
+        const athlete = this.db.athletes.find((a) => a._id === athleteId);
+        if (!athlete) throw new Error("Athlete not found");
+
+        const baselineValue = args.baselineValue !== undefined ? Number(args.baselineValue) : undefined;
+        const targetValue = args.targetValue !== undefined ? Number(args.targetValue) : undefined;
+        const currentValue = args.currentValue !== undefined ? Number(args.currentValue) : baselineValue;
+
+        const unit = (args.unit as string | undefined)?.trim();
+        const direction = (args.optimizationDirection as "higher_is_better" | "lower_is_better" | undefined) ??
+          (unit && ["s", "sec", "seconds", "ms"].includes(unit.toLowerCase()) ? "lower_is_better" : "higher_is_better");
+
+        let status: "in_progress" | "achieved" | "at_risk" | "archived" = "in_progress";
+        if (currentValue !== undefined && targetValue !== undefined) {
+          const isAchieved = direction === "lower_is_better" ? currentValue <= targetValue : currentValue >= targetValue;
+          if (isAchieved) status = "achieved";
+        }
+
+        const now = Date.now();
+        const newGoal: MockAthleteGoal = {
+          _id: `goal_${now}_${Math.random().toString(36).substring(2, 6)}`,
+          academyId,
+          athleteId,
+          createdByUserId: user?._id ?? "usr_coach",
+          title: (args.title as string).trim(),
+          corner: args.corner as "physical" | "technical" | "tactical" | "psychological",
+          linkedMetricName: (args.linkedMetricName as string | undefined)?.trim(),
+          baselineValue,
+          targetValue,
+          currentValue,
+          unit,
+          optimizationDirection: direction,
+          targetDate: args.targetDate as string,
+          status,
+          actionPlanNotes: (args.actionPlanNotes as string | undefined)?.trim(),
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        if (!this.db.athleteGoals) {
+          this.db.athleteGoals = [];
+        }
+        this.db.athleteGoals.unshift(newGoal);
+        this.saveDb();
+        this.notifyAll();
+        return newGoal._id;
+      }
+
+      case "athleteGoals:updateAthleteGoal": {
+        const goalId = args.goalId as string;
+        const goal = (this.db.athleteGoals || []).find((g) => g._id === goalId);
+        if (!goal) throw new Error("Goal not found");
+
+        const targetValue = args.targetValue !== undefined ? Number(args.targetValue) : goal.targetValue;
+        const currentValue = args.currentValue !== undefined ? Number(args.currentValue) : goal.currentValue;
+        const direction = (args.optimizationDirection as "higher_is_better" | "lower_is_better" | undefined) ?? goal.optimizationDirection ?? "higher_is_better";
+
+        let newStatus = (args.status as "in_progress" | "achieved" | "at_risk" | "archived" | undefined) ?? goal.status;
+        if (currentValue !== undefined && targetValue !== undefined) {
+          const isAchieved = direction === "lower_is_better" ? currentValue <= targetValue : currentValue >= targetValue;
+          if (isAchieved) {
+            newStatus = "achieved";
+          } else if (goal.status === "achieved" && !isAchieved && !args.status) {
+            newStatus = "in_progress";
+          }
+        }
+
+        if (args.title !== undefined) goal.title = (args.title as string).trim();
+        if (args.baselineValue !== undefined) goal.baselineValue = Number(args.baselineValue);
+        if (args.targetValue !== undefined) goal.targetValue = Number(args.targetValue);
+        if (args.currentValue !== undefined) goal.currentValue = Number(args.currentValue);
+        if (args.unit !== undefined) goal.unit = (args.unit as string)?.trim();
+        if (args.optimizationDirection !== undefined) goal.optimizationDirection = args.optimizationDirection as "higher_is_better" | "lower_is_better";
+        if (args.targetDate !== undefined) goal.targetDate = args.targetDate as string;
+        if (args.actionPlanNotes !== undefined) goal.actionPlanNotes = (args.actionPlanNotes as string)?.trim();
+        goal.status = newStatus;
+        goal.updatedAt = Date.now();
+
+        this.saveDb();
+        this.notifyAll();
+        return goal._id;
+      }
+
+      case "athleteGoals:deleteAthleteGoal": {
+        const goalId = args.goalId as string;
+        if (!this.db.athleteGoals) this.db.athleteGoals = [];
+        this.db.athleteGoals = this.db.athleteGoals.filter((g) => g._id !== goalId);
+        this.saveDb();
+        this.notifyAll();
+        return null;
       }
 
       case "assessments:deleteAssessment": {

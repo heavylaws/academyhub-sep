@@ -219,10 +219,33 @@ export interface MockAssessment {
   value: number;
   unit: string;
   notes?: string;
+  corner?: "physical" | "technical" | "tactical" | "psychological";
+  optimizationDirection?: "higher_is_better" | "lower_is_better";
+  ageGroupSnapshot?: string;
   assessedOn: string;
   assessedBy?: string;
   conductedBy?: string;
   createdAt: string;
+}
+
+export interface MockAthleteGoal {
+  _id: string;
+  academyId: string;
+  athleteId: string;
+  createdByUserId: string;
+  title: string;
+  corner: "physical" | "technical" | "tactical" | "psychological";
+  linkedMetricName?: string;
+  baselineValue?: number;
+  targetValue?: number;
+  currentValue?: number;
+  unit?: string;
+  optimizationDirection?: "higher_is_better" | "lower_is_better";
+  targetDate: string;
+  status: "in_progress" | "achieved" | "at_risk" | "archived";
+  actionPlanNotes?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface MockAthleteFee {
@@ -516,4 +539,5 @@ export const SEED_FACILITIES: MockFacility[] = [
 export const SEED_DRILLS: MockDrill[] = [];
 export const SEED_INJURIES: MockInjury[] = [];
 export const SEED_WORKOUT_LOGS: MockWorkoutLog[] = [];
+export const SEED_ATHLETE_GOALS: MockAthleteGoal[] = [];
 

@@ -18,6 +18,18 @@ export const assessments = defineTable({
   assessedOn: v.string(),
   sessionId: v.optional(v.id("trainingSessions")),
   notes: v.optional(v.string()),
+  corner: v.optional(
+    v.union(
+      v.literal("physical"),
+      v.literal("technical"),
+      v.literal("tactical"),
+      v.literal("psychological"),
+    ),
+  ),
+  optimizationDirection: v.optional(
+    v.union(v.literal("higher_is_better"), v.literal("lower_is_better")),
+  ),
+  ageGroupSnapshot: v.optional(v.string()),
   createdBy: v.id("users"),
   createdAt: v.string(),
   deletedAt: v.optional(v.string()),

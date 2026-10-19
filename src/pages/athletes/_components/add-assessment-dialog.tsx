@@ -43,19 +43,26 @@ import {
 
 /** Common metric presets shown as quick-select chips. */
 const METRIC_PRESETS = [
-  { label: "Sprint 40m", unit: "s" },
-  { label: "Vertical Jump", unit: "cm" },
-  { label: "Broad Jump", unit: "cm" },
-  { label: "Max Squat", unit: "kg" },
-  { label: "Bench Press", unit: "kg" },
-  { label: "Flexibility (sit & reach)", unit: "cm" },
-  { label: "VO2 Max", unit: "ml/kg/min" },
-  { label: "Resting HR", unit: "bpm" },
+  { label: "Sprint 40m", unit: "s", corner: "physical" as const, direction: "lower_is_better" as const },
+  { label: "Vertical Jump", unit: "cm", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "Broad Jump", unit: "cm", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "Max Squat", unit: "kg", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "Bench Press", unit: "kg", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "Flexibility (sit & reach)", unit: "cm", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "VO2 Max", unit: "ml/kg/min", corner: "physical" as const, direction: "higher_is_better" as const },
+  { label: "Passing Accuracy", unit: "%", corner: "technical" as const, direction: "higher_is_better" as const },
+  { label: "First Touch Quality", unit: "1-10", corner: "technical" as const, direction: "higher_is_better" as const },
+  { label: "Tactical Positioning", unit: "1-10", corner: "tactical" as const, direction: "higher_is_better" as const },
+  { label: "Pressing Awareness", unit: "1-10", corner: "tactical" as const, direction: "higher_is_better" as const },
+  { label: "Resilience / Composure", unit: "1-10", corner: "psychological" as const, direction: "higher_is_better" as const },
 ];
 
 const formSchema = z.object({
   metric: z.string().trim().min(1, "Metric name is required"),
   unit: z.string(),
+  corner: z.enum(["physical", "technical", "tactical", "psychological"]),
+  optimizationDirection: z.enum(["higher_is_better", "lower_is_better"]),
+  ageGroupSnapshot: z.string().optional(),
   value: z.string().min(1, "Value is required"),
   assessedOn: z.string().min(1, "Date is required"),
   notes: z.string(),
@@ -85,6 +92,8 @@ export default function AddAssessmentDialog({
     existingData?.map((d) => ({
       label: d.metric,
       unit: d.unit ?? "",
+      corner: "physical" as const,
+      direction: "higher_is_better" as const,
     })) ?? [];
 
   // Merge presets with existing custom metrics (deduplicate by label)
@@ -100,15 +109,25 @@ export default function AddAssessmentDialog({
     defaultValues: {
       metric: "",
       unit: "",
+      corner: "physical",
+      optimizationDirection: "higher_is_better",
+      ageGroupSnapshot: "",
       value: "",
       assessedOn: todayLocal(),
       notes: "",
     },
   });
 
-  const handlePreset = (label: string, unit: string) => {
+  const handlePreset = (
+    label: string,
+    unit: string,
+    corner: "physical" | "technical" | "tactical" | "psychological" = "physical",
+    direction: "higher_is_better" | "lower_is_better" = "higher_is_better",
+  ) => {
     form.setValue("metric", label);
     form.setValue("unit", unit);
+    form.setValue("corner", corner);
+    form.setValue("optimizationDirection", direction);
   };
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -119,6 +138,9 @@ export default function AddAssessmentDialog({
         metric: values.metric,
         value: Number(values.value),
         unit: values.unit || undefined,
+        corner: values.corner,
+        optimizationDirection: values.optimizationDirection,
+        ageGroupSnapshot: values.ageGroupSnapshot?.trim() || undefined,
         assessedOn: values.assessedOn,
         notes: values.notes || undefined,
       });
@@ -126,6 +148,9 @@ export default function AddAssessmentDialog({
       form.reset({
         metric: "",
         unit: "",
+        corner: "physical",
+        optimizationDirection: "higher_is_better",
+        ageGroupSnapshot: "",
         value: "",
         assessedOn: todayLocal(),
         notes: "",
@@ -150,6 +175,9 @@ export default function AddAssessmentDialog({
           form.reset({
             metric: "",
             unit: "",
+            corner: "physical",
+            optimizationDirection: "higher_is_better",
+            ageGroupSnapshot: "",
             value: "",
             assessedOn: todayLocal(),
             notes: "",
@@ -179,13 +207,67 @@ export default function AddAssessmentDialog({
                   <button
                     key={p.label}
                     type="button"
-                    onClick={() => handlePreset(p.label, p.unit)}
+                    onClick={() => handlePreset(p.label, p.unit, p.corner, p.direction)}
                     className="rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent/30 hover:border-accent/50 active:scale-95 bg-muted/20"
                   >
                     {p.label}
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="corner"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>4-Corner Area</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-11 sm:h-10 text-sm">
+                          <SelectValue placeholder="Select corner" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="physical">Physical</SelectItem>
+                        <SelectItem value="technical">Technical</SelectItem>
+                        <SelectItem value="tactical">Tactical</SelectItem>
+                        <SelectItem value="psychological">Psychological</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="optimizationDirection"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Optimization Target</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-11 sm:h-10 text-sm">
+                          <SelectValue placeholder="Target direction" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="higher_is_better">Higher is better (Jump/Rating)</SelectItem>
+                        <SelectItem value="lower_is_better">Lower is better (Sprint/Time)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -225,7 +307,7 @@ export default function AddAssessmentDialog({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <FormField
                 control={form.control}
                 name="value"
@@ -254,6 +336,23 @@ export default function AddAssessmentDialog({
                     <FormControl>
                       <Input
                         type="date"
+                        className="h-11 sm:h-10 text-sm"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="ageGroupSnapshot"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Age Group (opt)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="U16"
                         className="h-11 sm:h-10 text-sm"
                         {...field}
                       />

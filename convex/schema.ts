@@ -62,6 +62,12 @@ import {
   facilityTypeValidator,
   facilityStatusValidator,
 } from "./schema/facilities.ts";
+import {
+  athleteGoals,
+  goalCornerValidator,
+  goalStatusValidator,
+  goalOptimizationDirectionValidator,
+} from "./schema/athleteGoals.ts";
 
 export default defineSchema({
   ...authTables,
@@ -119,6 +125,7 @@ export default defineSchema({
   academySettings,
   injuries,
   workoutLogs,
+  athleteGoals,
 });
 
 export {
@@ -142,4 +149,7 @@ export {
   matchDetailsValidator,
   matchStatsValidator,
   periodizationPhaseValidator,
+  goalCornerValidator,
+  goalStatusValidator,
+  goalOptimizationDirectionValidator,
 };
