@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  DollarSign,
   HeartPulse,
   ShieldAlert,
   XCircle,
@@ -57,12 +58,21 @@ export interface MedicalAvailabilityInfo {
   bodyPart: string;
 }
 
+export interface DelinquencyInfo {
+  athleteId: string;
+  hasOverdueHold: boolean;
+  overdueCount: number;
+  totalOverdueBalance?: number;
+  currency?: string;
+}
+
 interface SessionAttendanceCardProps {
   roster: Doc<"athletes">[];
   attendance: Doc<"attendanceRecords">[];
   attendanceByAthlete: Map<Id<"athletes">, Doc<"attendanceRecords">>;
   canManage: boolean;
   medicalAvailabilityByAthlete?: Map<string, MedicalAvailabilityInfo>;
+  delinquencyByAthlete?: Map<string, DelinquencyInfo>;
   sessionDurationMinutes?: number;
   onSetStatus: (
     athleteId: Id<"athletes">,
@@ -78,6 +88,7 @@ export function SessionAttendanceCard({
   attendanceByAthlete,
   canManage,
   medicalAvailabilityByAthlete,
+  delinquencyByAthlete,
   sessionDurationMinutes = 60,
   onSetStatus,
 }: SessionAttendanceCardProps) {
@@ -158,6 +169,7 @@ export function SessionAttendanceCard({
                 const record = attendanceByAthlete.get(athlete._id);
                 const status = record?.status;
                 const med = medicalAvailabilityByAthlete?.get(athlete._id);
+                const delinquency = delinquencyByAthlete?.get(athlete._id);
                 const effDuration = getEffectiveDuration(athlete._id, record);
                 const effRpe = getEffectiveRpe(athlete._id, record);
                 const currentLoad =
@@ -166,7 +178,7 @@ export function SessionAttendanceCard({
                 return (
                   <div key={athlete._id} className="p-3 flex flex-col gap-2.5">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Avatar className="size-8">
                           <AvatarFallback className="bg-secondary text-xs">
                             {athlete.firstName[0]}
@@ -176,6 +188,17 @@ export function SessionAttendanceCard({
                         <span className="font-semibold text-sm text-foreground">
                           {athlete.firstName} {athlete.lastName}
                         </span>
+
+                        {/* Financial Hold / Overdue Badge */}
+                        {delinquency?.hasOverdueHold && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30"
+                            title={`Financial Hold: ${delinquency.overdueCount} overdue fee(s)${delinquency.totalOverdueBalance ? ` (${delinquency.currency || "USD"} ${delinquency.totalOverdueBalance.toFixed(2)})` : ""}`}
+                          >
+                            <DollarSign className="size-3" />
+                            Financial Hold
+                          </span>
+                        )}
 
                         {/* Medical Availability Badge */}
                         {med && med.availabilityStatus !== "fit" && (
@@ -333,6 +356,7 @@ export function SessionAttendanceCard({
                     const record = attendanceByAthlete.get(athlete._id);
                     const status = record?.status;
                     const med = medicalAvailabilityByAthlete?.get(athlete._id);
+                    const delinquency = delinquencyByAthlete?.get(athlete._id);
                     const effDuration = getEffectiveDuration(athlete._id, record);
                     const effRpe = getEffectiveRpe(athlete._id, record);
                     const currentLoad =
@@ -348,9 +372,22 @@ export function SessionAttendanceCard({
                                 {athlete.lastName[0]}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="font-medium">
-                              {athlete.firstName} {athlete.lastName}
-                            </span>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">
+                                  {athlete.firstName} {athlete.lastName}
+                                </span>
+                                {delinquency?.hasOverdueHold && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30"
+                                    title={`Financial Hold: ${delinquency.overdueCount} overdue fee(s)${delinquency.totalOverdueBalance ? ` (${delinquency.currency || "USD"} ${delinquency.totalOverdueBalance.toFixed(2)})` : ""}`}
+                                  >
+                                    <DollarSign className="size-3" />
+                                    Financial Hold
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </TableCell>
 

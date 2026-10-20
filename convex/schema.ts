@@ -35,6 +35,10 @@ import {
   feeSchedules,
   feeStatusValidator,
 } from "./schema/fees.ts";
+import {
+  paymentTransactions,
+  paymentMethodValidator,
+} from "./schema/paymentTransactions.ts";
 import { invoices, invoiceStatusValidator } from "./schema/invoices.ts";
 import {
   announcements,
@@ -120,6 +124,7 @@ export default defineSchema({
   athleteFees,
   feePayments,
   feeSchedules,
+  paymentTransactions,
   invoices,
   announcements,
   announcementReads,
@@ -138,6 +143,7 @@ export {
   attendanceStatusValidator,
   planStatusValidator,
   feeStatusValidator,
+  paymentMethodValidator,
   invoiceStatusValidator,
   announcementCategoryValidator,
   announcementPriorityValidator,

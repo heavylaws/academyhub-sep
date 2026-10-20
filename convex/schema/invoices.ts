@@ -4,6 +4,8 @@ import { v } from "convex/values";
 export const invoiceStatusValidator = v.union(
   v.literal("draft"),
   v.literal("sent"),
+  v.literal("partial"),
+  v.literal("partially_paid"),
   v.literal("paid"),
   v.literal("overdue"),
 );
@@ -15,6 +17,9 @@ export const invoices = defineTable({
   invoiceNumber: v.string(), // e.g. "INV-0001"
   description: v.string(),
   amount: v.number(),
+  amountPaid: v.optional(v.number()),
+  scholarshipDiscountPercent: v.optional(v.number()),
+  scholarshipReason: v.optional(v.string()),
   currency: v.string(), // e.g. "USD"
   dueDate: v.string(), // YYYY-MM-DD
   status: invoiceStatusValidator,
@@ -22,6 +27,7 @@ export const invoices = defineTable({
   note: v.optional(v.string()),
   idempotencyKey: v.optional(v.string()),
   issuedAt: v.string(), // ISO 8601
+  paidAt: v.optional(v.number()),
   createdBy: v.id("users"),
 })
   .index("by_academy", ["academyId"])

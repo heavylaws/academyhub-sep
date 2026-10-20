@@ -11,6 +11,7 @@ import {
   SEED_ASSESSMENTS,
   SEED_FEES,
   SEED_FEE_PAYMENTS,
+  SEED_PAYMENT_TRANSACTIONS,
   SEED_INVOICES,
   SEED_INVITES,
   SEED_ANNOUNCEMENTS,
@@ -36,6 +37,7 @@ import {
   type MockVideoAnalysis,
   type MockAthleteFee,
   type MockFeePayment,
+  type MockPaymentTransaction,
   type MockInvoice,
   type MockInvite,
   type MockAnnouncement,
@@ -101,6 +103,7 @@ export interface MockDatabase {
   assessments: MockAssessment[];
   athleteFees: MockAthleteFee[];
   feePayments: MockFeePayment[];
+  paymentTransactions: MockPaymentTransaction[];
   feeSchedules: MockFeeSchedule[];
   invoices: MockInvoice[];
   invites: MockInvite[];
@@ -134,6 +137,7 @@ const REMOTE_MERGE_COLLECTIONS = new Set<string>([
   "videoAnalyses",
   "athleteFees",
   "feePayments",
+  "paymentTransactions",
   "invoices",
   "drills",
   "tacticalPlans",
@@ -177,6 +181,7 @@ function getInitialDb(): MockDatabase {
     assessments: [...SEED_ASSESSMENTS],
     athleteFees: [...SEED_FEES],
     feePayments: [...SEED_FEE_PAYMENTS],
+    paymentTransactions: [...SEED_PAYMENT_TRANSACTIONS],
     feeSchedules: [],
     invoices: [...SEED_INVOICES],
     invites: [...SEED_INVITES],
@@ -311,6 +316,7 @@ class LocalMockStore {
       athleteFees: [],
       feePayments: [],
       feeSchedules: [],
+      paymentTransactions: [],
       invoices: [],
       invites: [],
       announcements: [],
@@ -2327,7 +2333,10 @@ class LocalMockStore {
           const payments = this.db.feePayments.filter(
             (p) => p.feeId === fee._id,
           );
-          const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0);
+          const totalPaidFromPayments = payments.reduce((s, p) => s + p.amountPaid, 0);
+          const totalPaid = fee.amountPaid ?? totalPaidFromPayments;
+          const discount = fee.scholarshipDiscountPercent ?? 0;
+          const effectiveAmountDue = Math.round((fee.amountDue * (1 - discount / 100)) * 100) / 100;
           return {
             ...fee,
             currency: fee.currency || "USD",
@@ -2336,7 +2345,8 @@ class LocalMockStore {
               : "Unknown",
             athleteSport: athlete?.sport,
             totalPaid,
-            remainingBalance: Math.max(0, fee.amountDue - totalPaid),
+            effectiveAmountDue,
+            remainingBalance: Math.max(0, Math.round((effectiveAmountDue - totalPaid) * 100) / 100),
           };
         });
       }
@@ -2357,15 +2367,103 @@ class LocalMockStore {
           const payments = this.db.feePayments
             .filter((p) => p.feeId === fee._id)
             .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
-          const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0);
+          const totalPaidFromPayments = payments.reduce((s, p) => s + p.amountPaid, 0);
+          const totalPaid = fee.amountPaid ?? totalPaidFromPayments;
+          const discount = fee.scholarshipDiscountPercent ?? 0;
+          const effectiveAmountDue = Math.round((fee.amountDue * (1 - discount / 100)) * 100) / 100;
           return {
             ...fee,
             currency: fee.currency || "USD",
             payments,
             totalPaid,
-            remainingBalance: Math.max(0, fee.amountDue - totalPaid),
+            effectiveAmountDue,
+            remainingBalance: Math.max(0, Math.round((effectiveAmountDue - totalPaid) * 100) / 100),
           };
         });
+      }
+
+      case "fees:listPaymentTransactions": {
+        const feeId = args.feeId as string | undefined;
+        const athleteId = args.athleteId as string | undefined;
+        const invoiceId = args.invoiceId as string | undefined;
+        const targetAcademyId = (args.academyId as string) || academyId || user?.academyId;
+
+        let txs = [...this.db.paymentTransactions];
+        if (feeId) {
+          txs = txs.filter((t) => t.feeId === feeId);
+        } else if (athleteId) {
+          txs = txs.filter((t) => t.athleteId === athleteId);
+        } else if (invoiceId) {
+          txs = txs.filter((t) => t.invoiceId === invoiceId);
+        } else if (targetAcademyId && user?.role !== "platform_admin") {
+          txs = txs.filter((t) => t.academyId === targetAcademyId);
+        }
+
+        txs.sort((a, b) => (b.paidAt || b.createdAt) - (a.paidAt || a.createdAt));
+
+        const athleteMap = new Map(this.db.athletes.map((a) => [a._id, a]));
+        const userMap = new Map(this.db.users.map((u) => [u._id, u]));
+
+        return txs.map((t) => {
+          const athlete = athleteMap.get(t.athleteId);
+          const recorder = userMap.get(t.recordedByUserId);
+          return {
+            ...t,
+            athleteName: athlete
+              ? `${athlete.firstName} ${athlete.lastName}`
+              : "Unknown Athlete",
+            recordedByName: recorder?.name ?? recorder?.email ?? "Staff Member",
+          };
+        });
+      }
+
+      case "fees:getAcademyDelinquencyFlags": {
+        const targetAcademyId = (args.academyId as string) || academyId || user?.academyId;
+        const overdueFees = this.db.athleteFees.filter(
+          (f) => f.academyId === targetAcademyId && f.status === "overdue",
+        );
+        const isCoach = user?.role === "coach";
+        const map = new Map<
+          string,
+          {
+            athleteId: string;
+            hasOverdueHold: boolean;
+            overdueCount: number;
+            totalOverdueBalance?: number;
+            currency?: string;
+          }
+        >();
+
+        for (const fee of overdueFees) {
+          const existing = map.get(fee.athleteId);
+          const discount = fee.scholarshipDiscountPercent ?? 0;
+          const effTotal =
+            Math.round((fee.amountDue * (1 - discount / 100)) * 100) / 100;
+          const paid = fee.amountPaid ?? 0;
+          const unpaid = Math.max(0, effTotal - paid);
+
+          if (existing) {
+            existing.overdueCount += 1;
+            if (!isCoach && existing.totalOverdueBalance !== undefined) {
+              existing.totalOverdueBalance =
+                Math.round((existing.totalOverdueBalance + unpaid) * 100) / 100;
+            }
+          } else {
+            map.set(fee.athleteId, {
+              athleteId: fee.athleteId,
+              hasOverdueHold: true,
+              overdueCount: 1,
+              ...(!isCoach
+                ? {
+                    totalOverdueBalance: unpaid,
+                    currency: fee.currency || "USD",
+                  }
+                : {}),
+            });
+          }
+        }
+
+        return Array.from(map.values());
       }
 
       case "invoices:listInvoicesForAcademy": {
@@ -4157,6 +4255,223 @@ class LocalMockStore {
         this.notifyAll();
         this.syncWithRollback("recordFeePayment", snapshotDb, mockCloudService.recordFeePayment(fee.academyId, newPayment, fee));
         return null;
+      }
+
+      case "fees:recordPaymentTransaction": {
+        const feeId = args.feeId as string | undefined;
+        const invoiceId = args.invoiceId as string | undefined;
+        const amount = Number(args.amount);
+
+        if (amount <= 0) {
+          throw new Error("Payment amount must be greater than zero");
+        }
+        if (!feeId && !invoiceId) {
+          throw new Error("Either feeId or invoiceId must be provided");
+        }
+
+        // Idempotency check
+        const idempotencyKey = args.idempotencyKey as string | undefined;
+        if (idempotencyKey) {
+          const existing = this.db.paymentTransactions.find(
+            (t) => t.idempotencyKey === idempotencyKey,
+          );
+          if (existing) {
+            let existingPaid = 0;
+            let effTotal = existing.amount;
+            if (feeId) {
+              const fee = this.db.athleteFees.find((f) => f._id === feeId);
+              if (fee) {
+                const discount = fee.scholarshipDiscountPercent ?? 0;
+                effTotal = Math.round((fee.amountDue * (1 - discount / 100)) * 100) / 100;
+                existingPaid = fee.amountPaid ?? 0;
+              }
+            }
+            return {
+              transactionId: existing._id,
+              newAmountPaid: existingPaid,
+              remainingBalance: Math.max(0, effTotal - existingPaid),
+              isFullyPaid: existingPaid >= effTotal - 0.001,
+            };
+          }
+        }
+
+        if (feeId) {
+          const fee = this.db.athleteFees.find((f) => f._id === feeId);
+          if (!fee) throw new Error("Fee not found");
+
+          const discount = fee.scholarshipDiscountPercent ?? 0;
+          const effectiveTotal =
+            Math.round((fee.amountDue * (1 - discount / 100)) * 100) / 100;
+          const existingPaid = fee.amountPaid ?? 0;
+          const remaining = Math.max(
+            0,
+            Math.round((effectiveTotal - existingPaid) * 100) / 100,
+          );
+
+          if (amount > remaining + 0.001) {
+            throw new Error(`Payment amount (${amount}) exceeds remaining balance (${remaining})`);
+          }
+
+          const paidAt = Number(args.paidAt) || Date.now();
+          const txId = `ptx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const newTx: MockPaymentTransaction = {
+            _id: txId,
+            academyId: fee.academyId,
+            athleteId: fee.athleteId,
+            feeId: fee._id,
+            invoiceId,
+            amount,
+            currency: fee.currency || "USD",
+            paymentMethod: (args.paymentMethod as MockPaymentTransaction["paymentMethod"]) || "other",
+            referenceNumber: args.referenceNumber as string | undefined,
+            recordedByUserId: user?._id ?? "usr_accounting",
+            notes: args.notes as string | undefined,
+            idempotencyKey,
+            paidAt,
+            createdAt: Date.now(),
+          };
+          this.db.paymentTransactions.push(newTx);
+
+          const newPayment: MockFeePayment = {
+            _id: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            feeId: fee._id,
+            amountPaid: amount,
+            paidAt: new Date(paidAt).toISOString(),
+            recordedBy: user?._id ?? "usr_accounting",
+            notes: args.notes as string | undefined,
+          };
+          this.db.feePayments.push(newPayment);
+
+          const newAmountPaid =
+            Math.round((existingPaid + amount) * 100) / 100;
+          const isFullyPaid = newAmountPaid >= effectiveTotal - 0.001;
+          fee.amountPaid = newAmountPaid;
+          fee.status = isFullyPaid ? "paid" : "partially_paid";
+          if (isFullyPaid) {
+            fee.paidAt = paidAt;
+          }
+
+          if (invoiceId) {
+            const inv = this.db.invoices.find((i) => i._id === invoiceId);
+            if (inv) {
+              const invDiscount = inv.scholarshipDiscountPercent ?? 0;
+              const invEff = Math.round((inv.amount * (1 - invDiscount / 100)) * 100) / 100;
+              const newInvPaid = Math.round(((inv.amountPaid ?? 0) + amount) * 100) / 100;
+              inv.amountPaid = newInvPaid;
+              inv.status = newInvPaid >= invEff - 0.001 ? "paid" : "partially_paid";
+            }
+          }
+
+          this.saveDb();
+          this.notifyAll();
+
+          return {
+            transactionId: txId,
+            newAmountPaid,
+            remainingBalance: Math.max(0, Math.round((effectiveTotal - newAmountPaid) * 100) / 100),
+            isFullyPaid,
+          };
+        }
+
+        // Invoice-only
+        const inv = this.db.invoices.find((i) => i._id === invoiceId);
+        if (!inv) throw new Error("Invoice not found");
+        if (!inv.athleteId) throw new Error("Invoice must be linked to an athlete");
+
+        const discount = inv.scholarshipDiscountPercent ?? 0;
+        const effectiveTotal =
+          Math.round((inv.amount * (1 - discount / 100)) * 100) / 100;
+        const existingPaid = inv.amountPaid ?? 0;
+        const remaining = Math.max(0, Math.round((effectiveTotal - existingPaid) * 100) / 100);
+
+        if (amount > remaining + 0.001) {
+          throw new Error(`Payment amount (${amount}) exceeds remaining balance (${remaining})`);
+        }
+
+        const paidAt = Number(args.paidAt) || Date.now();
+        const txId = `ptx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const newTx: MockPaymentTransaction = {
+          _id: txId,
+          academyId: inv.academyId,
+          athleteId: inv.athleteId,
+          invoiceId: inv._id,
+          amount,
+          currency: inv.currency || "USD",
+          paymentMethod: (args.paymentMethod as MockPaymentTransaction["paymentMethod"]) || "other",
+          referenceNumber: args.referenceNumber as string | undefined,
+          recordedByUserId: user?._id ?? "usr_accounting",
+          notes: args.notes as string | undefined,
+          idempotencyKey,
+          paidAt,
+          createdAt: Date.now(),
+        };
+        this.db.paymentTransactions.push(newTx);
+
+        const newAmountPaid = Math.round((existingPaid + amount) * 100) / 100;
+        const isFullyPaid = newAmountPaid >= effectiveTotal - 0.001;
+        inv.amountPaid = newAmountPaid;
+        inv.status = isFullyPaid ? "paid" : "partially_paid";
+
+        this.saveDb();
+        this.notifyAll();
+
+        return {
+          transactionId: txId,
+          newAmountPaid,
+          remainingBalance: Math.max(0, Math.round((effectiveTotal - newAmountPaid) * 100) / 100),
+          isFullyPaid,
+        };
+      }
+
+      case "fees:applyScholarshipDiscount": {
+        if (
+          !user ||
+          (user.role !== "academy_admin" &&
+            user.role !== "accounting" &&
+            user.role !== "platform_admin")
+        ) {
+          throw new Error("Unauthorized: Only academy_admin and accounting can apply scholarships");
+        }
+        const feeId = args.feeId as string;
+        const discountPercent = Number(args.discountPercent);
+        const reason = (args.reason as string)?.trim();
+
+        if (discountPercent < 0 || discountPercent > 100) {
+          throw new Error("Discount percent must be between 0 and 100");
+        }
+        if (!reason) {
+          throw new Error("Scholarship reason is required");
+        }
+
+        const fee = this.db.athleteFees.find((f) => f._id === feeId);
+        if (!fee) throw new Error("Fee not found");
+
+        const effectiveTotal =
+          Math.round((fee.amountDue * (1 - discountPercent / 100)) * 100) / 100;
+        const currentPaid = fee.amountPaid ?? 0;
+        const isFullyPaid = currentPaid >= effectiveTotal - 0.001;
+
+        fee.scholarshipDiscountPercent = discountPercent;
+        fee.scholarshipReason = reason;
+        if (isFullyPaid) {
+          fee.status = "paid";
+          fee.paidAt = fee.paidAt ?? Date.now();
+        } else if (currentPaid > 0) {
+          fee.status = "partially_paid";
+        } else if (fee.status === "paid") {
+          fee.status = "unpaid";
+        }
+
+        this.saveDb();
+        this.notifyAll();
+
+        return {
+          feeId: fee._id,
+          effectiveAmount: effectiveTotal,
+          discountPercent,
+          scholarshipReason: reason,
+          isFullyPaid,
+        };
       }
 
       case "fees:updateFeeStatus": {

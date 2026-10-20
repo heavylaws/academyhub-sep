@@ -53,6 +53,10 @@ export default function SessionDetail() {
     api.injuries.getAcademyMedicalRoomSummary,
     data?.session?.academyId ? { academyId: data.session.academyId } : "skip",
   );
+  const delinquencyFlags = useQuery(
+    api.fees.getAcademyDelinquencyFlags,
+    data?.session?.academyId ? { academyId: data.session.academyId } : "skip",
+  );
   const setAttendance = useMutation(api.trainingSessions.setAttendance);
   const deleteSession = useMutation(api.trainingSessions.deleteSession);
   const linkTacticalPlan = useMutation(api.trainingSessions.linkTacticalPlanToSession);
@@ -78,6 +82,25 @@ export default function SessionDetail() {
     }
     return map;
   }, [medicalSummary]);
+
+  const delinquencyMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        athleteId: string;
+        hasOverdueHold: boolean;
+        overdueCount: number;
+        totalOverdueBalance?: number;
+        currency?: string;
+      }
+    >();
+    if (delinquencyFlags) {
+      for (const item of delinquencyFlags) {
+        map.set(item.athleteId, item);
+      }
+    }
+    return map;
+  }, [delinquencyFlags]);
 
   const [editOpen, setEditOpen] = useState(false);
   const [addDrillOpen, setAddDrillOpen] = useState(false);
@@ -281,6 +304,7 @@ export default function SessionDetail() {
         attendanceByAthlete={attendanceByAthlete}
         canManage={canManage}
         medicalAvailabilityByAthlete={medicalAvailabilityMap}
+        delinquencyByAthlete={delinquencyMap}
         sessionDurationMinutes={session?.durationMinutes}
         onSetStatus={handleSetStatus}
       />

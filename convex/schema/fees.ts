@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export const feeStatusValidator = v.union(
   v.literal("unpaid"),
   v.literal("partially_paid"),
+  v.literal("partial"),
   v.literal("paid"),
   v.literal("overdue"),
   v.literal("waived"),
@@ -15,12 +16,16 @@ export const athleteFees = defineTable({
   athleteId: v.id("athletes"),
   label: v.string(), // e.g. "Monthly Fee – October 2026"
   amountDue: v.number(), // in currency units (e.g. USD)
+  amountPaid: v.optional(v.number()), // cumulative payments recorded against the fee
+  scholarshipDiscountPercent: v.optional(v.number()), // 0–100
+  scholarshipReason: v.optional(v.string()), // e.g. "Elite Youth Merit Scholarship"
   currency: v.string(), // e.g. "USD"
   dueDate: v.string(), // YYYY-MM-DD
   status: feeStatusValidator,
   notes: v.optional(v.string()),
   createdBy: v.id("users"),
   createdAt: v.string(),
+  paidAt: v.optional(v.number()),
   // Set when generated from a recurring fee schedule: which schedule and
   // which billing month ("YYYY-MM"), so a month is never billed twice.
   scheduleId: v.optional(v.id("feeSchedules")),

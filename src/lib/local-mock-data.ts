@@ -311,13 +311,34 @@ export interface MockAthleteFee {
   label?: string;
   title?: string;
   amountDue: number;
+  amountPaid?: number;
+  scholarshipDiscountPercent?: number;
+  scholarshipReason?: string;
+  paidAt?: number;
   currency: string;
   dueDate: string;
   period?: string;
   notes?: string;
-  status: "unpaid" | "partially_paid" | "paid" | "overdue" | "pending" | "partial";
+  status: "unpaid" | "partially_paid" | "paid" | "overdue" | "pending" | "partial" | "waived";
   createdBy?: string;
   createdAt: string;
+}
+
+export interface MockPaymentTransaction {
+  _id: string;
+  academyId: string;
+  athleteId: string;
+  feeId?: string;
+  invoiceId?: string;
+  amount: number;
+  currency?: string;
+  paymentMethod: "cash" | "card" | "bank_transfer" | "scholarship_credit" | "other";
+  referenceNumber?: string;
+  recordedByUserId: string;
+  notes?: string;
+  idempotencyKey?: string;
+  paidAt: number;
+  createdAt: number;
 }
 
 export interface MockFeePayment {
@@ -340,7 +361,10 @@ export interface MockInvoice {
   amount: number;
   currency: string;
   dueDate: string;
-  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  status: "draft" | "sent" | "paid" | "overdue" | "cancelled" | "partial" | "partially_paid";
+  amountPaid?: number;
+  scholarshipDiscountPercent?: number;
+  scholarshipReason?: string;
   note?: string;
   issuedAt: string;
   paidAt?: string;
@@ -537,6 +561,7 @@ export const SEED_PLAN_ITEMS: MockPlanItem[] = [];
 export const SEED_ASSESSMENTS: MockAssessment[] = [];
 export const SEED_FEES: MockAthleteFee[] = [];
 export const SEED_FEE_PAYMENTS: MockFeePayment[] = [];
+export const SEED_PAYMENT_TRANSACTIONS: MockPaymentTransaction[] = [];
 export const SEED_INVOICES: MockInvoice[] = [];
 export const SEED_INVITES: MockInvite[] = [];
 export const SEED_ANNOUNCEMENTS: MockAnnouncement[] = [];

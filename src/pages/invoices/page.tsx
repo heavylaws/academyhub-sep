@@ -92,7 +92,13 @@ import { cn } from "@/lib/utils.ts";
 import { useCurrentUser } from "@/hooks/use-current-user.ts";
 import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
 
-type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
+type InvoiceStatus =
+  | "draft"
+  | "sent"
+  | "paid"
+  | "overdue"
+  | "partial"
+  | "partially_paid";
 
 const STATUS_CONFIG: Record<
   InvoiceStatus,
@@ -121,6 +127,16 @@ const STATUS_CONFIG: Record<
     label: "Overdue",
     icon: AlertTriangle,
     className: "bg-destructive/10 text-destructive border-destructive/30",
+  },
+  partial: {
+    label: "Partially Paid",
+    icon: CheckCircle2,
+    className: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  },
+  partially_paid: {
+    label: "Partially Paid",
+    icon: CheckCircle2,
+    className: "bg-amber-500/15 text-amber-500 border-amber-500/30",
   },
 };
 

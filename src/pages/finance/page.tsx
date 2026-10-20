@@ -8,12 +8,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import {
   AlertTriangle,
+  Award,
   CheckCircle2,
   DollarSign,
   MinusCircle,
   MoreHorizontal,
   Plus,
   Clock,
+  Receipt,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api.js";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
@@ -88,6 +90,8 @@ import {
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { cn } from "@/lib/utils.ts";
 import RecordPaymentDialog from "./_components/record-payment-dialog.tsx";
+import { ApplyScholarshipDialog } from "./_components/apply-scholarship-dialog.tsx";
+import { PaymentLedgerTable } from "./_components/payment-ledger-table.tsx";
 import RecurringFees from "./_components/recurring-fees.tsx";
 
 type FeeStatus = "unpaid" | "partially_paid" | "paid" | "overdue" | "waived";
@@ -152,7 +156,10 @@ type FeeWithAthlete = {
   athleteName: string;
   athleteSport?: string;
   totalPaid?: number;
+  effectiveAmountDue?: number;
   remainingBalance?: number;
+  scholarshipDiscountPercent?: number;
+  scholarshipReason?: string;
 };
 
 import { isEntityInAcademy } from "@/lib/tenant-isolation.ts";
@@ -171,9 +178,13 @@ export default function FinancePage() {
       : undefined) ||
     "acad_hercules";
 
+  const [activeTab, setActiveTab] = useState<"fees" | "ledger">("fees");
   const [statusFilter, setStatusFilter] = useState<FeeStatus | "all">("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<FeeWithAthlete | null>(
+    null,
+  );
+  const [scholarshipTarget, setScholarshipTarget] = useState<FeeWithAthlete | null>(
     null,
   );
   const [deleteTarget, setDeleteTarget] = useState<FeeWithAthlete | null>(null);
@@ -253,285 +264,242 @@ export default function FinancePage() {
             Finance
           </h1>
           <p className="text-muted-foreground">
-            Track athlete membership fees and payment status.
+            Track athlete membership fees, scholarships, and tamper-proof payment ledger.
           </p>
         </div>
-        {canManage && (
+        {canManage && activeTab === "fees" && (
           <Button onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
             <Plus className="size-4" /> New fee
           </Button>
         )}
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-5">
-        {(
-          ["unpaid", "partially_paid", "overdue", "paid", "waived"] as const
-        ).map((s) => {
-          const cfg = STATUS_CONFIG[s];
-          const Icon = cfg.icon;
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
-              className={cn(
-                "flex flex-col gap-1.5 rounded-xl border p-3 sm:p-4 text-left transition-all cursor-pointer",
-                statusFilter === s
-                  ? "ring-2 ring-primary/50"
-                  : "hover:border-primary/30",
-              )}
-            >
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Icon className="size-3.5" />
-                {cfg.label}
-              </div>
-              <span className="font-display text-xl sm:text-2xl font-bold">
-                {allFees === undefined ? "—" : counts[s]}
-              </span>
-            </button>
-          );
-        })}
+      {/* Primary Tab Navigation: Fees vs Immutable Payment Ledger */}
+      <div className="flex items-center gap-1 border-b border-border/80 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("fees")}
+          className={cn(
+            "px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer",
+            activeTab === "fees"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <DollarSign className="size-4" />
+          Membership Fees & Billing
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ledger")}
+          className={cn(
+            "px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer",
+            activeTab === "ledger"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <Receipt className="size-4" />
+          Immutable Payment Ledger
+        </button>
       </div>
 
-      {canManage && <RecurringFees />}
-
-      {/* Fees list: Mobile cards + Desktop table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <CardTitle className="text-base">
-              {statusFilter === "all"
-                ? "All fees"
-                : `${STATUS_CONFIG[statusFilter].label} fees`}
-            </CardTitle>
-            {statusFilter !== "all" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatusFilter("all")}
-                className="h-8 text-xs"
-              >
-                Clear filter
-              </Button>
-            )}
+      {activeTab === "ledger" ? (
+        <PaymentLedgerTable />
+      ) : (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 sm:grid-cols-5">
+            {(
+              ["unpaid", "partially_paid", "overdue", "paid", "waived"] as const
+            ).map((s) => {
+              const cfg = STATUS_CONFIG[s];
+              const Icon = cfg.icon;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
+                  className={cn(
+                    "flex flex-col gap-1.5 rounded-xl border p-3 sm:p-4 text-left transition-all cursor-pointer",
+                    statusFilter === s
+                      ? "ring-2 ring-primary/50"
+                      : "hover:border-primary/30",
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Icon className="size-3.5" />
+                    {cfg.label}
+                  </div>
+                  <span className="font-display text-xl sm:text-2xl font-bold">
+                    {allFees === undefined ? "—" : counts[s]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </CardHeader>
-        <CardContent>
-          {fees === undefined ? (
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))}
-            </div>
-          ) : fees.length === 0 ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <DollarSign />
-                </EmptyMedia>
-                <EmptyTitle>No fees found</EmptyTitle>
-                <EmptyDescription>
-                  {canManage
-                    ? "Create a fee record to start tracking payments."
-                    : "No fees have been assigned yet."}
-                </EmptyDescription>
-              </EmptyHeader>
-              {canManage && (
-                <EmptyContent>
-                  <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
-                    <Plus className="size-4" /> New fee
+
+          {canManage && <RecurringFees />}
+
+          {/* Fees list: Mobile cards + Desktop table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <CardTitle className="text-base">
+                  {statusFilter === "all"
+                    ? "All fees"
+                    : `${STATUS_CONFIG[statusFilter].label} fees`}
+                </CardTitle>
+                {statusFilter !== "all" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                    className="h-8 text-xs"
+                  >
+                    Clear filter
                   </Button>
-                </EmptyContent>
-              )}
-            </Empty>
-          ) : (
-            <>
-              {/* Mobile View: High-ergonomics touch cards */}
-              <div className="flex flex-col gap-3 sm:hidden">
-                {(fees as FeeWithAthlete[]).map((fee) => {
-                  const cfg = STATUS_CONFIG[fee.status];
-                  const Icon = cfg.icon;
-                  return (
-                    <div
-                      key={fee._id}
-                      className="rounded-xl border border-border/80 bg-background/60 p-3.5 space-y-2.5 shadow-xs"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-sm text-foreground">
-                            {fee.athleteName}
-                          </p>
-                          {fee.athleteSport && (
-                            <p className="text-xs text-muted-foreground">
-                              {fee.athleteSport}
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-                            {fee.label}
-                          </p>
-                        </div>
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0",
-                            cfg.className,
-                          )}
-                        >
-                          <Icon className="size-3" />
-                          {cfg.label}
-                        </span>
-                      </div>
-
-                      <div className="flex items-baseline justify-between border-t border-border/40 pt-2 text-xs">
-                        <div className="text-muted-foreground">
-                          Due: <span className="font-medium text-foreground">{fee.dueDate}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-base text-foreground">
-                            {fee.currency} {fee.amountDue.toFixed(2)}
-                          </span>
-                          {fee.status === "partially_paid" &&
-                            fee.remainingBalance !== undefined && (
-                              <div className="text-[11px] text-muted-foreground">
-                                {fee.currency} {fee.remainingBalance.toFixed(2)} rem.
-                              </div>
-                            )}
-                        </div>
-                      </div>
-
-                      {canManage && (
-                        <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-9 px-3 text-xs font-semibold gap-1.5 flex-1"
-                            onClick={() => setPaymentTarget(fee)}
-                          >
-                            <CheckCircle2 className="size-3.5 text-primary" />
-                            Record payment
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="size-9 shrink-0"
-                                aria-label="Fee actions"
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {(["unpaid", "overdue", "waived"] as const)
-                                .filter((s) => s !== fee.status)
-                                .map((s) => (
-                                  <DropdownMenuItem
-                                    key={s}
-                                    onClick={() =>
-                                      handleStatusChange(fee._id, s)
-                                    }
-                                  >
-                                    {(() => {
-                                      const StatusIcon = STATUS_CONFIG[s].icon;
-                                      return <StatusIcon className="size-4" />;
-                                    })()}
-                                    Mark as {STATUS_CONFIG[s].label}
-                                  </DropdownMenuItem>
-                                ))}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => setDeleteTarget(fee)}
-                              >
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                )}
               </div>
-
-              {/* Tablet & Desktop View: Standard Table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Athlete</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Due date</TableHead>
-                      <TableHead>Status</TableHead>
-                      {canManage && (
-                        <TableHead className="text-right">Actions</TableHead>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+            </CardHeader>
+            <CardContent>
+              {fees === undefined ? (
+                <div className="flex flex-col gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              ) : fees.length === 0 ? (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <DollarSign />
+                    </EmptyMedia>
+                    <EmptyTitle>No fees found</EmptyTitle>
+                    <EmptyDescription>
+                      {canManage
+                        ? "Create a fee record to start tracking payments."
+                        : "No fees have been assigned yet."}
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  {canManage && (
+                    <EmptyContent>
+                      <Button size="sm" onClick={() => setCreateOpen(true)} className="h-10 sm:h-9">
+                        <Plus className="size-4" /> New fee
+                      </Button>
+                    </EmptyContent>
+                  )}
+                </Empty>
+              ) : (
+                <>
+                  {/* Mobile View: High-ergonomics touch cards */}
+                  <div className="flex flex-col gap-3 sm:hidden">
                     {(fees as FeeWithAthlete[]).map((fee) => {
                       const cfg = STATUS_CONFIG[fee.status];
                       const Icon = cfg.icon;
+                      const hasDiscount = Boolean(fee.scholarshipDiscountPercent);
+                      const effectiveTotal =
+                        fee.effectiveAmountDue ??
+                        (hasDiscount
+                          ? Math.round(
+                              fee.amountDue *
+                                (1 - (fee.scholarshipDiscountPercent ?? 0) / 100) *
+                                100,
+                            ) / 100
+                          : fee.amountDue);
+
                       return (
-                        <TableRow key={fee._id}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                {fee.athleteName}
-                              </span>
-                              {fee.athleteSport && (
-                                <span className="text-xs text-muted-foreground">
-                                  {fee.athleteSport}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{fee.label}</TableCell>
-                          <TableCell className="font-mono font-semibold">
+                        <div
+                          key={fee._id}
+                          className="rounded-xl border border-border/80 bg-background/60 p-3.5 space-y-2.5 shadow-xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
                             <div>
-                              {fee.currency} {fee.amountDue.toFixed(2)}
-                            </div>
-                            {fee.status === "partially_paid" &&
-                              fee.remainingBalance !== undefined && (
-                                <div className="text-xs font-normal text-muted-foreground">
-                                  {fee.currency} {fee.remainingBalance.toFixed(2)}{" "}
-                                  rem.
+                              <p className="font-semibold text-sm text-foreground">
+                                {fee.athleteName}
+                              </p>
+                              {fee.athleteSport && (
+                                <p className="text-xs text-muted-foreground">
+                                  {fee.athleteSport}
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                                {fee.label}
+                              </p>
+                              {hasDiscount && (
+                                <div className="mt-1">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 max-w-[220px] truncate"
+                                    title={fee.scholarshipReason}
+                                  >
+                                    <Award className="size-3 mr-1" />
+                                    {fee.scholarshipDiscountPercent}% Scholarship
+                                    {fee.scholarshipReason ? ` · ${fee.scholarshipReason}` : ""}
+                                  </Badge>
                                 </div>
                               )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {fee.dueDate}
-                          </TableCell>
-                          <TableCell>
+                            </div>
                             <span
                               className={cn(
-                                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0",
                                 cfg.className,
                               )}
                             >
                               <Icon className="size-3" />
                               {cfg.label}
                             </span>
-                          </TableCell>
+                          </div>
+
+                          <div className="flex items-baseline justify-between border-t border-border/40 pt-2 text-xs">
+                            <div className="text-muted-foreground">
+                              Due: <span className="font-medium text-foreground">{fee.dueDate}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-mono font-bold text-base text-foreground">
+                                {fee.currency} {effectiveTotal.toFixed(2)}
+                              </span>
+                              {hasDiscount && (
+                                <div className="text-[10px] text-muted-foreground line-through">
+                                  {fee.currency} {fee.amountDue.toFixed(2)}
+                                </div>
+                              )}
+                              {fee.remainingBalance !== undefined &&
+                                fee.remainingBalance < effectiveTotal && (
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {fee.currency} {fee.remainingBalance.toFixed(2)} rem.
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+
                           {canManage && (
-                            <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="h-9 px-3 text-xs font-semibold gap-1.5 flex-1"
+                                onClick={() => setPaymentTarget(fee)}
+                              >
+                                <CheckCircle2 className="size-3.5 text-primary" />
+                                Record payment
+                              </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="icon"
-                                    className="size-8"
+                                    className="size-9 shrink-0"
+                                    aria-label="Fee actions"
                                   >
                                     <MoreHorizontal className="size-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
-                                    onClick={() => setPaymentTarget(fee)}
+                                    onClick={() => setScholarshipTarget(fee)}
                                   >
-                                    <CheckCircle2 className="size-4" /> Record
-                                    payment
+                                    <Award className="size-4" /> Apply scholarship / discount
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   {(["unpaid", "overdue", "waived"] as const)
@@ -559,18 +527,168 @@ export default function FinancePage() {
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            </TableCell>
+                            </div>
                           )}
-                        </TableRow>
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                  </div>
+
+                  {/* Tablet & Desktop View: Standard Table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Athlete</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Due date</TableHead>
+                          <TableHead>Status</TableHead>
+                          {canManage && (
+                            <TableHead className="text-right">Actions</TableHead>
+                          )}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(fees as FeeWithAthlete[]).map((fee) => {
+                          const cfg = STATUS_CONFIG[fee.status];
+                          const Icon = cfg.icon;
+                          const hasDiscount = Boolean(fee.scholarshipDiscountPercent);
+                          const effectiveTotal =
+                            fee.effectiveAmountDue ??
+                            (hasDiscount
+                              ? Math.round(
+                                  fee.amountDue *
+                                    (1 - (fee.scholarshipDiscountPercent ?? 0) / 100) *
+                                    100,
+                                ) / 100
+                              : fee.amountDue);
+
+                          return (
+                            <TableRow key={fee._id}>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {fee.athleteName}
+                                  </span>
+                                  {fee.athleteSport && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {fee.athleteSport}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1 items-start">
+                                  <span>{fee.label}</span>
+                                  {hasDiscount && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 max-w-[260px] truncate"
+                                      title={fee.scholarshipReason}
+                                    >
+                                      <Award className="size-3 mr-1 shrink-0" />
+                                      {fee.scholarshipDiscountPercent}% Scholarship
+                                      {fee.scholarshipReason ? ` · ${fee.scholarshipReason}` : ""}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-mono font-semibold">
+                                <div>
+                                  {fee.currency} {effectiveTotal.toFixed(2)}
+                                </div>
+                                {hasDiscount && (
+                                  <div className="text-[10px] text-muted-foreground line-through">
+                                    {fee.currency} {fee.amountDue.toFixed(2)}
+                                  </div>
+                                )}
+                                {fee.remainingBalance !== undefined &&
+                                  fee.remainingBalance < effectiveTotal && (
+                                    <div className="text-xs font-normal text-muted-foreground">
+                                      {fee.currency} {fee.remainingBalance.toFixed(2)}{" "}
+                                      rem.
+                                    </div>
+                                  )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {fee.dueDate}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                                    cfg.className,
+                                  )}
+                                >
+                                  <Icon className="size-3" />
+                                  {cfg.label}
+                                </span>
+                              </TableCell>
+                              {canManage && (
+                                <TableCell className="text-right">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8"
+                                      >
+                                        <MoreHorizontal className="size-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => setPaymentTarget(fee)}
+                                      >
+                                        <CheckCircle2 className="size-4" /> Record
+                                        payment
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => setScholarshipTarget(fee)}
+                                      >
+                                        <Award className="size-4" /> Apply scholarship / discount
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      {(["unpaid", "overdue", "waived"] as const)
+                                        .filter((s) => s !== fee.status)
+                                        .map((s) => (
+                                          <DropdownMenuItem
+                                            key={s}
+                                            onClick={() =>
+                                              handleStatusChange(fee._id, s)
+                                            }
+                                          >
+                                            {(() => {
+                                              const StatusIcon = STATUS_CONFIG[s].icon;
+                                              return <StatusIcon className="size-4" />;
+                                            })()}
+                                            Mark as {STATUS_CONFIG[s].label}
+                                          </DropdownMenuItem>
+                                        ))}
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => setDeleteTarget(fee)}
+                                      >
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* New fee dialog */}
       {canManage && (
@@ -588,6 +706,17 @@ export default function FinancePage() {
           open={paymentTarget !== null}
           onOpenChange={(open) => {
             if (!open) setPaymentTarget(null);
+          }}
+        />
+      )}
+
+      {/* Apply scholarship dialog */}
+      {scholarshipTarget && (
+        <ApplyScholarshipDialog
+          fee={scholarshipTarget}
+          open={scholarshipTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setScholarshipTarget(null);
           }}
         />
       )}

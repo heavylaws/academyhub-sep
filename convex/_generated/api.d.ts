@@ -56,6 +56,7 @@ import type * as schema_invites from "../schema/invites.js";
 import type * as schema_invoices from "../schema/invoices.js";
 import type * as schema_loginAttempts from "../schema/loginAttempts.js";
 import type * as schema_messages from "../schema/messages.js";
+import type * as schema_paymentTransactions from "../schema/paymentTransactions.js";
 import type * as schema_tacticalCache from "../schema/tacticalCache.js";
 import type * as schema_tacticalPlans from "../schema/tacticalPlans.js";
 import type * as schema_teams from "../schema/teams.js";
@@ -132,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   "schema/invoices": typeof schema_invoices;
   "schema/loginAttempts": typeof schema_loginAttempts;
   "schema/messages": typeof schema_messages;
+  "schema/paymentTransactions": typeof schema_paymentTransactions;
   "schema/tacticalCache": typeof schema_tacticalCache;
   "schema/tacticalPlans": typeof schema_tacticalPlans;
   "schema/teams": typeof schema_teams;
