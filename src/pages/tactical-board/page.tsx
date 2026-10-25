@@ -8,14 +8,10 @@ import {
   type PitchType,
   type SportType,
   createDefaultTacticalPlan,
-  createBasketballTacticalPlan,
-  createFutsalTacticalPlan,
-  createHandballTacticalPlan,
-  createVolleyballTacticalPlan,
-  createRugbyTacticalPlan,
   validateTacticalPlan,
   buildSquadPlayerNodes,
 } from "@/domain/tactics/tactical-domain.ts";
+import { TACTICAL_PRESETS } from "@/data/tactical-presets.ts";
 import { cn } from "@/lib/utils.ts";
 import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
 import {
@@ -32,8 +28,12 @@ import {
   AlertTriangle,
   Users,
   Printer,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import LoadSquadDialog from "./_components/load-squad-dialog.tsx";
+import { NewDrillWizardDialog } from "./_components/new-drill-wizard-dialog.tsx";
 import { TacticalSheetExportModal } from "@/components/tactical-board/tactical-sheet-export-modal.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -68,158 +68,7 @@ interface ParsedCloudPlan {
   plan: TacticalPlan;
 }
 
-const TACTICAL_PRESETS: Array<{ id: string; title: string; category: string; plan: TacticalPlan }> = [
-  {
-    id: "preset_433_buildup",
-    title: "4-3-3 Build-up vs 4-4-2 High Press Block",
-    category: "Positional Play",
-    plan: createDefaultTacticalPlan("4-3-3 Build-up vs 4-4-2 High Press Block"),
-  },
-  {
-    id: "preset_rondo_4v4_3",
-    title: "4v4 + 3 Neutral Jokers Directional Rondo",
-    category: "Passing & Rondos",
-    plan: {
-      id: "plan_rondo",
-      title: "4v4 + 3 Directional Possession Rondo",
-      pitchType: "rondo_grid",
-      gridDimensions: "30m × 30m Grid",
-      coachingPoints: [
-        "Play through the central #6 neutral player whenever possible.",
-        "Wide neutrals create maximum width on the boundary touchlines.",
-        "Defenders press in pairs to close the central passing lane.",
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      phases: [
-        {
-          id: "p1",
-          phaseNumber: 1,
-          title: "Possession Circulation",
-          durationSeconds: 3,
-          coachingNotes: "Blue retains ball with central joker.",
-          players: [
-            // Blue possession
-            { id: "b1", team: "home", number: 4, role: "CB", label: "Blue 4", position: { x: 25, y: 30 } },
-            { id: "b2", team: "home", number: 5, role: "CB", label: "Blue 5", position: { x: 25, y: 70 } },
-            { id: "b3", team: "home", number: 8, role: "CM", label: "Blue 8", position: { x: 75, y: 30 } },
-            { id: "b4", team: "home", number: 10, role: "AM", label: "Blue 10", position: { x: 75, y: 70 } },
-            // Red pressing
-            { id: "r1", team: "away", number: 6, role: "DM", label: "Red 6", position: { x: 42, y: 44 } },
-            { id: "r2", team: "away", number: 8, role: "CM", label: "Red 8", position: { x: 42, y: 56 } },
-            { id: "r3", team: "away", number: 9, role: "ST", label: "Red 9", position: { x: 58, y: 44 } },
-            { id: "r4", team: "away", number: 11, role: "ST", label: "Red 11", position: { x: 58, y: 56 } },
-            // Orange jokers
-            { id: "j_mid", team: "neutral", number: "J", role: "Pivot", label: "Central Joker", position: { x: 50, y: 50 }, hasBall: true },
-            { id: "j_top", team: "neutral", number: "J", role: "Width", label: "Top Joker", position: { x: 50, y: 18 } },
-            { id: "j_bot", team: "neutral", number: "J", role: "Width", label: "Bottom Joker", position: { x: 50, y: 82 } },
-          ],
-          ball: { x: 50, y: 50, attachedPlayerId: "j_mid" },
-          equipment: [
-            { id: "c1", type: "cone", position: { x: 20, y: 15 } },
-            { id: "c2", type: "cone", position: { x: 80, y: 15 } },
-            { id: "c3", type: "cone", position: { x: 20, y: 85 } },
-            { id: "c4", type: "cone", position: { x: 80, y: 85 } },
-          ],
-          annotations: [
-            {
-              id: "a1",
-              type: "pass_line",
-              points: [{ x: 50, y: 50 }, { x: 75, y: 30 }],
-              color: "#60A5FA",
-              width: 2.5,
-              label: "Quick switch",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    id: "preset_overlap_cross",
-    title: "Overlapping Fullback & Wide Channel Cross",
-    category: "Wide Play & Crossing",
-    plan: {
-      id: "plan_overlap",
-      title: "Overlapping Fullback & Near-Post Box Attack",
-      pitchType: "attacking_half",
-      gridDimensions: "Half Pitch",
-      coachingPoints: [
-        "Winger cuts inside to drag opposition full-back.",
-        "Overlapping full-back delivers low driven cross between penalty spot and 6-yard box.",
-        "Striker attacks front post; opposite winger crashes back post.",
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      phases: [
-        {
-          id: "p1",
-          phaseNumber: 1,
-          title: "Underlap & Overlap Trigger",
-          durationSeconds: 3.5,
-          coachingNotes: "Winger #7 commits defender, #2 makes blind-side overlapping sprint.",
-          players: [
-            { id: "wng", team: "home", number: 7, role: "RW", label: "Right Wing", position: { x: 65, y: 72 }, targetPosition: { x: 74, y: 62 }, hasBall: true },
-            { id: "fb", team: "home", number: 2, role: "RB", label: "Right Back", position: { x: 55, y: 85 }, targetPosition: { x: 86, y: 84 } },
-            { id: "st", team: "home", number: 9, role: "ST", label: "Striker", position: { x: 70, y: 48 }, targetPosition: { x: 88, y: 45 } },
-            { id: "am", team: "home", number: 10, role: "AM", label: "Midfielder", position: { x: 60, y: 50 }, targetPosition: { x: 78, y: 52 } },
-            { id: "lw", team: "home", number: 11, role: "LW", label: "Left Wing", position: { x: 68, y: 22 }, targetPosition: { x: 85, y: 30 } },
-            // Defenders
-            { id: "df_lb", team: "away", number: 3, role: "LB", label: "Opp. Left Back", position: { x: 72, y: 70 } },
-            { id: "df_cb1", team: "away", number: 4, role: "CB", label: "Opp. Left CB", position: { x: 80, y: 45 } },
-            { id: "df_cb2", team: "away", number: 5, role: "CB", label: "Opp. Right CB", position: { x: 80, y: 32 } },
-            { id: "gk", team: "gk_away", number: 1, role: "GK", label: "Goalkeeper", position: { x: 95, y: 50 } },
-          ],
-          ball: { x: 65, y: 72, attachedPlayerId: "wng" },
-          equipment: [
-            { id: "m1", type: "mannequin", position: { x: 75, y: 50 } },
-            { id: "m2", type: "mannequin", position: { x: 82, y: 40 } },
-          ],
-          annotations: [
-            {
-              id: "an1",
-              type: "run_arrow",
-              points: [{ x: 55, y: 85 }, { x: 86, y: 84 }],
-              color: "#34D399",
-              width: 2.5,
-              label: "Overlapping sprint",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    id: "preset_bball_pnr",
-    title: "🏀 Basketball: 5-Out Pick & Roll Motion",
-    category: "Basketball",
-    plan: createBasketballTacticalPlan(),
-  },
-  {
-    id: "preset_futsal_31",
-    title: "⚡ Futsal: 3-1 Diamond Pivot Rotation",
-    category: "Futsal",
-    plan: createFutsalTacticalPlan(),
-  },
-  {
-    id: "preset_handball_60",
-    title: "🤾 Handball: 6:0 Defense vs Crossing Attack",
-    category: "Handball",
-    plan: createHandballTacticalPlan(),
-  },
-  {
-    id: "preset_vball_51",
-    title: "🏐 Volleyball: 5-1 Serve Receive & Middle Attack",
-    category: "Volleyball",
-    plan: createVolleyballTacticalPlan(),
-  },
-  {
-    id: "preset_rugby_pods",
-    title: "🏉 Rugby: 3-Man Forward Pod & Backline Spread",
-    category: "Rugby",
-    plan: createRugbyTacticalPlan(),
-  },
-];
+
 
 export default function TacticalBoardPage() {
   const [searchParams] = useSearchParams();
@@ -260,6 +109,8 @@ export default function TacticalBoardPage() {
   const [modalTitle, setModalTitle] = useState("");
   const [modalCategory, setModalCategory] = useState("Tactics");
   const [isSaving, setIsSaving] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [newDrillWizardOpen, setNewDrillWizardOpen] = useState(false);
 
   // Parse and normalize cloud-persisted plans
   const parsedCloudPlans = useMemo<ParsedCloudPlan[]>(() => {
@@ -508,6 +359,18 @@ export default function TacticalBoardPage() {
 
         {/* Preset & Cloud Selector */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* 1-Click New Drill Wizard */}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setNewDrillWizardOpen(true)}
+            className="h-9 text-xs gap-1.5 font-bold bg-[#00E5FF] hover:bg-[#18FFFF] text-[#0A131F] shadow-[0_0_12px_rgba(0,229,255,0.3)] transition-all"
+            title="Create a fresh tactical drill or pick a squad template"
+          >
+            <Plus className="size-3.5" />
+            <span>New Drill</span>
+          </Button>
+
           <div className="flex items-center gap-1.5">
             <BookOpen className="size-4 text-muted-foreground" />
             <Select value={selectedPresetId} onValueChange={handleSelectPreset}>
@@ -571,9 +434,10 @@ export default function TacticalBoardPage() {
               setSaveModalOpen(true);
             }}
             className="h-9 text-xs gap-1.5 font-medium"
+            title="Save this board under a new custom title to your Academy Playbook"
           >
             <Save className="size-3.5" />
-            <span>Save to Cloud</span>
+            <span>Save As New...</span>
           </Button>
 
           <Button
@@ -625,7 +489,100 @@ export default function TacticalBoardPage() {
             </button>
           );
         })}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowGuide((prev) => !prev)}
+          className="ml-auto h-7 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0"
+        >
+          <HelpCircle className="size-3 text-primary" />
+          <span>{showGuide ? "Hide Guide" : "Coach Quick Guide"}</span>
+          {showGuide ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+        </Button>
       </div>
+
+      {/* Soccer Pitch Section Sub-Pills (1-click half pitch, rondo, box switching) */}
+      {["full", "attacking_half", "defending_half", "penalty_box", "rondo_grid"].includes(activePlan.pitchType) && (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-1 bg-muted/20 border-b text-xs">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+            <Compass className="size-3 text-primary" />
+            Pitch Section:
+          </span>
+          {[
+            { id: "full", label: "⚽ Full Pitch" },
+            { id: "attacking_half", label: "⚽ Attacking Half" },
+            { id: "defending_half", label: "⚽ Defending Half" },
+            { id: "penalty_box", label: "⚽ 18-Yard Box" },
+            { id: "rondo_grid", label: "⚽ Rondo / Grid" },
+          ].map((sec) => (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => {
+                setActivePlan((prev) => ({
+                  ...prev,
+                  pitchType: sec.id as PitchType,
+                  gridDimensions: sec.id === "attacking_half" ? "Half Pitch" : undefined,
+                  updatedAt: new Date().toISOString(),
+                }));
+                toast.info(`Pitch set to ${sec.label.replace("⚽ ", "")}`);
+              }}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors shrink-0",
+                activePlan.pitchType === sec.id
+                  ? "bg-primary/20 text-primary border-primary/50 font-bold shadow-xs"
+                  : "bg-muted/30 text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
+              )}
+            >
+              {sec.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 3-Step Guided Workflow Banner for Non-Technical Coaches */}
+      {showGuide && (
+        <div className="bg-[#0D1826]/80 border border-[#1E3249] rounded-xl p-3.5 space-y-3 text-white text-xs shadow-md animate-in fade-in duration-200">
+          <div className="flex items-center justify-between border-b border-[#1E3249] pb-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[11px] font-semibold bg-[#00E5FF]/10 text-[#00E5FF] border-[#00E5FF]/30">
+                Simple 3-Step Workflow
+              </Badge>
+              <span className="text-gray-300 text-xs">A quick roadmap for designing realistic drills:</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-[#142337] border border-[#1E334A] rounded-lg p-2.5 space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-[#00E5FF]">
+                <span className="size-5 rounded-full bg-[#00E5FF]/20 text-[#00E5FF] font-bold text-[11px] flex items-center justify-center">1</span>
+                <span>Setup Squad & Pitch</span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Choose sport above, then use <strong>Quick Formats</strong> or <strong>Shape</strong> in the toolbar below to automatically place your team into a formation (4-3-3, 3-5-2, etc.).
+              </p>
+            </div>
+            <div className="bg-[#142337] border border-[#1E334A] rounded-lg p-2.5 space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-[#FF6E40]">
+                <span className="size-5 rounded-full bg-[#FF6E40]/20 text-[#FF6E40] font-bold text-[11px] flex items-center justify-center">2</span>
+                <span>Position & Draw Tactics</span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Drag any player to position them. Drag their target dot to show where they run. Use the <strong>Pen</strong>, <strong>Pass</strong>, or <strong>Zone</strong> tools to sketch tactical instructions.
+              </p>
+            </div>
+            <div className="bg-[#142337] border border-[#1E334A] rounded-lg p-2.5 space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-[#69F0AE]">
+                <span className="size-5 rounded-full bg-[#69F0AE]/20 text-[#69F0AE] font-bold text-[11px] flex items-center justify-center">3</span>
+                <span>Animate & Save</span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Click <strong>+ Add</strong> next to Phase to record the next move. Press <strong>▶ Play</strong> to see the smooth animation. When happy, click <strong>Save Plan</strong> or <strong>Export Sheet</strong>!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cloud Plans Management Strip if custom boards exist */}
       {parsedCloudPlans.length > 0 && (
@@ -744,6 +701,17 @@ export default function TacticalBoardPage() {
         onOpenChange={setExportModalOpen}
         drill={exportDrillFallback}
         tacticalPlan={activePlan}
+      />
+
+      {/* 1-Click New Drill Creation Wizard */}
+      <NewDrillWizardDialog
+        open={newDrillWizardOpen}
+        onOpenChange={setNewDrillWizardOpen}
+        onDrillCreated={(plan) => {
+          setActivePlan(plan);
+          setSelectedPresetId("");
+          toast.success(`Created "${plan.title}"`);
+        }}
       />
     </div>
   );

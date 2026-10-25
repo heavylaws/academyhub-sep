@@ -127,12 +127,25 @@ export const getAthleteWorkloadAndACWR = query({
     // Aggregate attendance loads
     for (const record of attendanceList) {
       if (record.status !== "present" && record.status !== "late") continue;
-      const load = record.sessionLoad ?? 0;
+      let load = record.sessionLoad ?? 0;
+      if (load <= 0) {
+        if (record.durationMinutes && record.rpe) {
+          load = Math.round(record.durationMinutes * record.rpe);
+        } else {
+          const session = await ctx.db.get("trainingSessions", record.sessionId);
+          const duration = record.durationMinutes ?? session?.durationMinutes ?? 75;
+          const rpe = record.rpe ?? 6;
+          load = Math.round(duration * rpe);
+        }
+      }
       if (load <= 0) continue;
 
       let time = record.loggedAt;
       if (!time && record.recordedAt) {
         time = new Date(record.recordedAt).getTime();
+      }
+      if (!time || isNaN(time)) {
+        time = record._creationTime;
       }
       if (!time || time < twentyEightDaysAgo || time > now + msInDay) continue;
 

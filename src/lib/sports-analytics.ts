@@ -1,3 +1,5 @@
+import { BUILTIN_DRILL_BENCHMARKS } from "../data/soccer-drills";
+
 export interface AssessmentPoint {
   _id: string;
   assessedOn: string;
@@ -53,15 +55,207 @@ export const ACADEMY_BENCHMARKS: Record<
 > = {
   "Sprint 40m (s)": { benchmark: 4.6, unit: "s", lowerBetter: true },
   "Sprint 100m (s)": { benchmark: 11.2, unit: "s", lowerBetter: true },
+  "Flying 30m Laser Velocity Sprint": { benchmark: 4.85, unit: "s", lowerBetter: true },
   "Vertical Jump (cm)": { benchmark: 65, unit: "cm", lowerBetter: false },
+  "Countermovement Jump (CMJ) Jump Mat": { benchmark: 56.0, unit: "cm", lowerBetter: false },
   "Broad Jump (m)": { benchmark: 2.8, unit: "m", lowerBetter: false },
   "1RM Back Squat (kg)": { benchmark: 140, unit: "kg", lowerBetter: false },
   "1RM Bench Press (kg)": { benchmark: 100, unit: "kg", lowerBetter: false },
+  "Deadlift 1RM (kg)": { benchmark: 140, unit: "kg", lowerBetter: false },
   "Pro Agility 5-10-5 (s)": { benchmark: 4.25, unit: "s", lowerBetter: true },
+  "Pro Agility 5-10-5 Shuttle Run": { benchmark: 4.65, unit: "s", lowerBetter: true },
   "Agility T-Test (s)": { benchmark: 9.8, unit: "s", lowerBetter: true },
   "Yo-Yo Test Level": { benchmark: 19.5, unit: "lvl", lowerBetter: false },
+  "Yo-Yo Intermittent Recovery Level 1": { benchmark: 55.0, unit: "ml/kg/min", lowerBetter: false },
+  "VO2 Max (ml/kg/min)": { benchmark: 52.0, unit: "ml/kg/min", lowerBetter: false },
+  "Beep Test (Level)": { benchmark: 12.0, unit: "lvl", lowerBetter: false },
   "Endurance 1.5 Mile (min)": { benchmark: 9.5, unit: "min", lowerBetter: true },
+  "Toe-Tap & Foundation Castle": { benchmark: 35, unit: "touches", lowerBetter: false },
+  "Sharks & Minnows Dribble Escape": { benchmark: 45, unit: "s", lowerBetter: false },
+  "Pirate Treasure Gate Dribbling": { benchmark: 8, unit: "gates", lowerBetter: false },
+  "Red Light, Green Light Braking & Acceleration": { benchmark: 1.2, unit: "s", lowerBetter: true },
+  "Cruyff Turn & Step-Over 1v1 Escape": { benchmark: 12, unit: "moves", lowerBetter: false },
+  "3v1 Triangle Rondo with Scanning": { benchmark: 15, unit: "passes", lowerBetter: false },
+  "Cone Slalom Dribble & Laces Strike": { benchmark: 4, unit: "pts", lowerBetter: false },
+  "Four-Corner Back-Foot Receiving Box": { benchmark: 22.0, unit: "s", lowerBetter: true },
+  "4v2 Transition Breakout Rondo": { benchmark: 20, unit: "passes", lowerBetter: false },
+  "Winger Overlap & Box Finishing Waves": { benchmark: 70, unit: "%", lowerBetter: false },
+  "Aerial First Touch & Volley Control": { benchmark: 8, unit: "made", lowerBetter: false },
+  "Illinois Soccer Agility & Dribble Test": { benchmark: 16.5, unit: "s", lowerBetter: true },
+  "5v5+2 Positional Possession with Bumpers": { benchmark: 65, unit: "%", lowerBetter: false },
+  "High Pressing & Compact Block Triggers": { benchmark: 5, unit: "turnovers", lowerBetter: false },
+  "Midfield Diagonal Switch & Cutback Finish": { benchmark: 6, unit: "goals", lowerBetter: false },
+  "Rapid Counter-Press (5-Second Swarm)": { benchmark: 4.2, unit: "s", lowerBetter: true },
+  "7v7+3 Juego de Posición (Positional Mastery)": { benchmark: 75, unit: "%", lowerBetter: false },
+  "Gegenpress Wave & Rapid Vertical Counter": { benchmark: 6.8, unit: "s", lowerBetter: true },
+  "High-Speed Deceleration & COD Biomechanics Course": { benchmark: 4.8, unit: "s", lowerBetter: true },
+  "Goalkeeper Distribution & Sweeper-Keeper Action": { benchmark: 80, unit: "%", lowerBetter: false },
 };
+
+// Merge soccer drill benchmarks dynamically
+for (const entry of Object.values(BUILTIN_DRILL_BENCHMARKS)) {
+  if (!ACADEMY_BENCHMARKS[entry.metric]) {
+    ACADEMY_BENCHMARKS[entry.metric] = {
+      benchmark: entry.benchmark,
+      unit: entry.unit,
+      lowerBetter: entry.lowerBetter,
+    };
+  }
+}
+
+/**
+ * Maps metric names to their athletic competency pillar.
+ * Integrates predefined soccer drill benchmarks, custom tests, and athletic keywords.
+ */
+export function resolveMetricPillar(
+  metricName: string,
+): "Speed" | "Power" | "Agility" | "Strength" | "Endurance" | "Mobility" {
+  const name = metricName.toLowerCase().trim();
+
+  // 1. Direct Playbook & Drill Benchmark Lookup
+  const drillLookup: Record<string, "Speed" | "Power" | "Agility" | "Strength" | "Endurance" | "Mobility"> = {
+    // Speed
+    "sprint 40m (s)": "Speed",
+    "sprint 100m (s)": "Speed",
+    "flying 30m laser velocity sprint": "Speed",
+    "rapid counter-press (5-second swarm)": "Speed",
+    "gegenpress wave & rapid vertical counter": "Speed",
+    "gegenpress vertical transition (s)": "Speed",
+    "5-second counter-press recovery (s)": "Speed",
+
+    // Power
+    "cone slalom dribble & laces strike": "Power",
+    "slalom & strike precision (pts / 5)": "Power",
+    "midfield diagonal switch & cutback finish": "Power",
+    "switch & cutback conversion (goals / 10)": "Power",
+    "countermovement jump (cmj) jump mat": "Power",
+    "vertical jump (cm)": "Power",
+    "broad jump (m)": "Power",
+    "winger overlap & box finishing waves": "Power",
+    "cross delivery accuracy (%)": "Power",
+
+    // Agility
+    "illinois soccer agility & dribble test": "Agility",
+    "illinois soccer agility test": "Agility",
+    "high-speed deceleration & cod biomechanics course": "Agility",
+    "change of direction decel (s)": "Agility",
+    "pro agility 5-10-5 shuttle run": "Agility",
+    "pro agility 5-10-5 (s)": "Agility",
+    "agility t-test (s)": "Agility",
+    "sharks & minnows dribble escape": "Agility",
+    "evasion agility (survival sec)": "Agility",
+    "red light, green light braking & acceleration": "Agility",
+    "stop-go reaction (s)": "Agility",
+
+    // Strength
+    "deadlift 1rm (kg)": "Strength",
+    "1rm back squat (kg)": "Strength",
+    "1rm bench press (kg)": "Strength",
+    "high pressing & compact block triggers": "Strength",
+    "pressing turnover rate (turnovers / 5m)": "Strength",
+
+    // Endurance
+    "yo-yo intermittent recovery level 1": "Endurance",
+    "yo-yo test level": "Endurance",
+    "vo2 max (ml/kg/min)": "Endurance",
+    "beep test (level)": "Endurance",
+    "endurance 1.5 mile (min)": "Endurance",
+    "7v7+3 juego de posición (positional mastery)": "Endurance",
+    "7v7 positional third entry (%)": "Endurance",
+    "5v5+2 positional possession with bumpers": "Endurance",
+    "5v5 possession retention (%)": "Endurance",
+    "4v2 transition breakout rondo": "Endurance",
+    "4v2 rondo pass streak": "Endurance",
+
+    // Mobility / Coordination
+    "toe-tap & foundation castle": "Mobility",
+    "toe-tap speed (touches / 30s)": "Mobility",
+    "pirate treasure gate dribbling": "Mobility",
+    "gate dribbles (gates / 60s)": "Mobility",
+    "cruyff turn & step-over 1v1 escape": "Mobility",
+    "1v1 move execution (moves / min)": "Mobility",
+    "four-corner back-foot receiving box": "Mobility",
+    "back-foot receive speed (s)": "Mobility",
+    "aerial first touch & volley control": "Mobility",
+    "aerial first touch box (made / 10)": "Mobility",
+    "goalkeeper distribution & sweeper-keeper action": "Mobility",
+    "gk sweeper distribution accuracy (%)": "Mobility",
+    "3v1 triangle rondo with scanning": "Mobility",
+    "3v1 rondo pass streak": "Mobility",
+  };
+
+  if (drillLookup[name]) {
+    return drillLookup[name];
+  }
+
+  // 2. Exact match in BUILTIN_DRILL_BENCHMARKS
+  for (const entry of Object.values(BUILTIN_DRILL_BENCHMARKS)) {
+    if (entry.metric.toLowerCase() === name) {
+      if (entry.attr === "Technical" || entry.attr === "Tactical") {
+        return "Mobility";
+      }
+      return entry.attr;
+    }
+  }
+
+  // 3. Heuristic keyword fallbacks
+  if (
+    name.includes("sprint") ||
+    name.includes("dash") ||
+    name.includes("100m") ||
+    name.includes("speed") ||
+    name.includes("laser") ||
+    name.includes("velocity") ||
+    name.includes("counter-press")
+  ) {
+    return "Speed";
+  }
+  if (
+    name.includes("jump") ||
+    name.includes("power") ||
+    name.includes("watt") ||
+    name.includes("strike") ||
+    name.includes("finish") ||
+    name.includes("shot")
+  ) {
+    return "Power";
+  }
+  if (
+    name.includes("agility") ||
+    name.includes("shuttle") ||
+    name.includes("t-test") ||
+    name.includes("decel") ||
+    name.includes("evasion") ||
+    name.includes("reaction") ||
+    name.includes("turn")
+  ) {
+    return "Agility";
+  }
+  if (
+    name.includes("squat") ||
+    name.includes("bench") ||
+    name.includes("1rm") ||
+    name.includes("deadlift") ||
+    name.includes("press") ||
+    name.includes("strength") ||
+    name.includes("weight")
+  ) {
+    return "Strength";
+  }
+  if (
+    name.includes("yo-yo") ||
+    name.includes("mile") ||
+    name.includes("endurance") ||
+    name.includes("run") ||
+    name.includes("vo2") ||
+    name.includes("beep") ||
+    name.includes("possession") ||
+    name.includes("stamina")
+  ) {
+    return "Endurance";
+  }
+  return "Mobility";
+}
 
 /** Computes the personal best (PB) record for a given assessment group. */
 export function computePersonalBest(group: MetricGroup): PersonalBest | null {
@@ -145,20 +339,10 @@ export function generateAthleticRadarProfile(
   for (const g of groups) {
     const pb = computePersonalBest(g);
     if (!pb) continue;
-    const name = g.metric.toLowerCase();
 
-    if (name.includes("sprint") || name.includes("dash") || name.includes("100m")) {
-      attributes.Speed.athleteScores.push(pb.scorePct);
-    } else if (name.includes("jump") || name.includes("power") || name.includes("watt")) {
-      attributes.Power.athleteScores.push(pb.scorePct);
-    } else if (name.includes("agility") || name.includes("shuttle") || name.includes("t-test")) {
-      attributes.Agility.athleteScores.push(pb.scorePct);
-    } else if (name.includes("squat") || name.includes("bench") || name.includes("1rm") || name.includes("deadlift")) {
-      attributes.Strength.athleteScores.push(pb.scorePct);
-    } else if (name.includes("yo-yo") || name.includes("mile") || name.includes("endurance") || name.includes("run")) {
-      attributes.Endurance.athleteScores.push(pb.scorePct);
-    } else {
-      attributes.Mobility.athleteScores.push(pb.scorePct);
+    const pillar = resolveMetricPillar(g.metric);
+    if (attributes[pillar]) {
+      attributes[pillar].athleteScores.push(pb.scorePct);
     }
   }
 

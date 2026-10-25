@@ -5,6 +5,7 @@ import {
   Clock,
   DollarSign,
   HeartPulse,
+  Info,
   ShieldAlert,
   XCircle,
   Zap,
@@ -107,7 +108,7 @@ export function SessionAttendanceCard({
   };
 
   const getEffectiveRpe = (athleteId: string, record?: Doc<"attendanceRecords">) => {
-    return rpeInputs[athleteId] ?? record?.rpe;
+    return rpeInputs[athleteId] ?? record?.rpe ?? 6;
   };
 
   return (
@@ -347,7 +348,15 @@ export function SessionAttendanceCard({
                   <TableRow>
                     <TableHead>Athlete</TableHead>
                     <TableHead>Availability</TableHead>
-                    <TableHead>Workload Telemetry (sRPE)</TableHead>
+                    <TableHead>
+                      <span
+                        className="inline-flex items-center gap-1.5 cursor-help"
+                        title="Session-RPE Workload: Duration (mins) × Exertion (1–10). Measured in Arbitrary Units (AU) to monitor athlete fatigue and prevent injury."
+                      >
+                        Workload Telemetry (sRPE)
+                        <Info className="size-3.5 text-muted-foreground" />
+                      </span>
+                    </TableHead>
                     <TableHead className="text-right">Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -475,14 +484,20 @@ export function SessionAttendanceCard({
                               </select>
 
                               {currentLoad !== undefined && currentLoad > 0 && (
-                                <span className="inline-flex items-center gap-1 font-semibold text-primary text-xs">
+                                <span
+                                  className="inline-flex items-center gap-1 font-semibold text-primary text-xs cursor-help"
+                                  title={`Training Load = ${effDuration || 0} min × RPE ${effRpe || 6} = ${currentLoad} AU (Arbitrary Units)`}
+                                >
                                   <Zap className="size-3" />
                                   {currentLoad} AU
                                 </span>
                               )}
                             </div>
                           ) : currentLoad ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                            <span
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary cursor-help"
+                              title={`Training Load = ${effDuration || 0} min × RPE ${effRpe || 6} = ${currentLoad} AU (Arbitrary Units)`}
+                            >
                               <Zap className="size-3" />
                               {currentLoad} AU ({effRpe ? `RPE ${effRpe}` : ""})
                             </span>

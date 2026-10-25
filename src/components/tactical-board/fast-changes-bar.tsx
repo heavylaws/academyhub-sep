@@ -24,7 +24,6 @@ export const FastChangesBar: React.FC<FastChangesBarProps> = ({
 
   const presets = [
     { label: "+1 Defender Press", icon: ShieldAlert, color: "text-[#FF6E40]" },
-    { label: "High Tempo 1-Touch", icon: Zap, color: "text-[#FFD600]" },
     { label: "Fullback Overlap", icon: ArrowUpRight, color: "text-[#00E5FF]" },
     { label: "Add 2 Mini-Goals", icon: Target, color: "text-[#69F0AE]" },
     { label: "Add Cones & Grid", icon: Grid, color: "text-[#FF9E80]" },
@@ -68,7 +67,7 @@ export const FastChangesBar: React.FC<FastChangesBarProps> = ({
         })}
       </div>
 
-      {/* Custom Tactical Adjustment Input */}
+      {/* Custom Coaching Note Input */}
       <form
         onSubmit={handleCustomSubmit}
         className="flex items-center gap-1.5 flex-1 min-w-[200px]"
@@ -78,7 +77,7 @@ export const FastChangesBar: React.FC<FastChangesBarProps> = ({
           type="text"
           value={customChange}
           onChange={(e) => setCustomChange(e.target.value)}
-          placeholder="Custom tweak (e.g. 'Cut inside and curl')..."
+          placeholder="Add coaching note (e.g. 'Press trigger on 2nd touch')..."
           className="flex-1 bg-[#132338] border border-[#223953] focus:border-[#00E5FF] rounded-lg px-2.5 py-1 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
         />
         <Button
@@ -87,7 +86,7 @@ export const FastChangesBar: React.FC<FastChangesBarProps> = ({
           size="sm"
           disabled={!customChange.trim() || isLoading}
           className="h-7 px-2.5 bg-[#00E5FF] hover:bg-[#18FFFF] text-[#0A131F] font-bold text-xs disabled:opacity-40 rounded-lg transition-colors gap-1"
-          title="Apply Tactical Adjustment"
+          title="Add Coaching Note"
         >
           <Send className="w-3.5 h-3.5" />
         </Button>

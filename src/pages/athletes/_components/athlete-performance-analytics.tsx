@@ -147,13 +147,16 @@ export default function AthletePerformanceAnalytics({
     const recommendedDrill =
       allDrills.find((d) => {
         const cat = d.category?.toLowerCase() || "";
+        const title = d.title.toLowerCase();
         const weak = weakestPillar?.attribute.toLowerCase() || "";
-        if (weak === "speed" && (cat.includes("counter") || cat.includes("transition"))) return true;
-        if (weak === "power" && (cat.includes("finish") || cat.includes("shooting"))) return true;
-        if (weak === "agility" && (cat.includes("dribbl") || cat.includes("pass"))) return true;
-        if (weak === "strength" && (cat.includes("press") || cat.includes("defend"))) return true;
+        if (weak === "speed" && (cat.includes("speed") || title.includes("sprint") || title.includes("counter"))) return true;
+        if (weak === "power" && (cat.includes("power") || title.includes("strike") || title.includes("switch") || title.includes("finish"))) return true;
+        if (weak === "agility" && (cat.includes("agility") || title.includes("agility") || title.includes("decel"))) return true;
+        if (weak === "strength" && (cat.includes("strength") || title.includes("press") || title.includes("duel") || title.includes("block"))) return true;
+        if (weak === "endurance" && (cat.includes("endurance") || title.includes("possession") || title.includes("yo-yo") || title.includes("rondo"))) return true;
+        if (weak === "mobility" && (cat.includes("mastery") || title.includes("receiving") || title.includes("turn"))) return true;
         return false;
-      }) || allDrills[0];
+      }) || allDrills.find((d) => d.ageGroup === "U15-U16" || d.ageGroup === "All U16") || allDrills[0];
 
     return {
       archetype,

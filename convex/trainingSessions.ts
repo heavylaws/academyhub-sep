@@ -757,9 +757,16 @@ export const setAttendance = mutation({
       });
     }
 
+    const effectiveDuration =
+      args.durationMinutes ??
+      (args.status === "present" || args.status === "late" ? (session.durationMinutes ?? 60) : undefined);
+    const effectiveRpe =
+      args.rpe ??
+      (args.status === "present" || args.status === "late" ? 6 : undefined);
+
     const calculatedLoad =
-      args.durationMinutes !== undefined && args.rpe !== undefined
-        ? Math.round(args.durationMinutes * args.rpe)
+      effectiveDuration !== undefined && effectiveRpe !== undefined
+        ? Math.round(effectiveDuration * effectiveRpe)
         : undefined;
 
     const existing = await ctx.db
@@ -770,19 +777,19 @@ export const setAttendance = mutation({
       .unique();
 
     const now = Date.now();
-    const hasWorkload = args.durationMinutes !== undefined || args.rpe !== undefined;
+    const hasWorkload = calculatedLoad !== undefined;
 
     if (existing) {
       await ctx.db.patch("attendanceRecords", existing._id, {
         status: args.status,
         recordedBy: user._id,
         recordedAt: new Date(now).toISOString(),
-        ...(args.durationMinutes !== undefined && { durationMinutes: args.durationMinutes }),
-        ...(args.rpe !== undefined && { rpe: args.rpe }),
+        ...(effectiveDuration !== undefined && { durationMinutes: effectiveDuration }),
+        ...(effectiveRpe !== undefined && { rpe: effectiveRpe }),
         ...(calculatedLoad !== undefined && { sessionLoad: calculatedLoad }),
         ...(args.wellnessFatigue !== undefined && { wellnessFatigue: args.wellnessFatigue }),
         ...(args.wellnessSoreness !== undefined && { wellnessSoreness: args.wellnessSoreness }),
-        ...(hasWorkload && { loggedAt: now }),
+        ...(hasWorkload && { loggedAt: existing.loggedAt ?? now }),
       });
     } else {
       await ctx.db.insert("attendanceRecords", {
@@ -792,8 +799,8 @@ export const setAttendance = mutation({
         status: args.status,
         recordedBy: user._id,
         recordedAt: new Date(now).toISOString(),
-        durationMinutes: args.durationMinutes,
-        rpe: args.rpe,
+        durationMinutes: effectiveDuration,
+        rpe: effectiveRpe,
         sessionLoad: calculatedLoad,
         wellnessFatigue: args.wellnessFatigue,
         wellnessSoreness: args.wellnessSoreness,
@@ -1137,11 +1144,19 @@ export const checkInAthlete = mutation({
       )
       .unique();
 
+    const sessionDuration = session.durationMinutes ?? 60;
+    const defaultRpe = 6;
+    const defaultLoad = Math.round(sessionDuration * defaultRpe);
+
     if (existing) {
       await ctx.db.patch("attendanceRecords", existing._id, {
         status,
         recordedBy: user._id,
         recordedAt,
+        ...(existing.durationMinutes === undefined && { durationMinutes: sessionDuration }),
+        ...(existing.rpe === undefined && { rpe: defaultRpe }),
+        ...(existing.sessionLoad === undefined && { sessionLoad: defaultLoad }),
+        ...(existing.loggedAt === undefined && { loggedAt: now.getTime() }),
       });
     } else {
       await ctx.db.insert("attendanceRecords", {
@@ -1151,6 +1166,10 @@ export const checkInAthlete = mutation({
         status,
         recordedBy: user._id,
         recordedAt,
+        durationMinutes: sessionDuration,
+        rpe: defaultRpe,
+        sessionLoad: defaultLoad,
+        loggedAt: now.getTime(),
       });
     }
 

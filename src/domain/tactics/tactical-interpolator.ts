@@ -118,8 +118,42 @@ export function smoothInterpolatePhase(
   const fromBall = fromPhase.ball;
   const toBall = toPhase.ball;
 
-  let ballX = fromBall.x + (toBall.x - fromBall.x) * t;
-  let ballY = fromBall.y + (toBall.y - fromBall.y) * t;
+  let ballX: number;
+  let ballY: number;
+
+  // Case 1: Ball has explicit target destination (e.g. pass arrow/corridor)
+  if (fromBall.targetPosition) {
+    const targetX = fromBall.targetPosition.x;
+    const targetY = fromBall.targetPosition.y;
+    ballX = fromBall.x + (targetX - fromBall.x) * t;
+    ballY = fromBall.y + (targetY - fromBall.y) * t;
+  }
+  // Case 2: Ball is attached to a player (dribble / run with ball) - follows the carrier!
+  else if (fromBall.attachedPlayerId) {
+    const carrier = players.find((p) => p.id === fromBall.attachedPlayerId);
+    if (carrier) {
+      ballX = carrier.x;
+      ballY = carrier.y;
+    } else {
+      const targetBallX = toBall.x;
+      const targetBallY = toBall.y;
+      ballX = fromBall.x + (targetBallX - fromBall.x) * t;
+      ballY = fromBall.y + (targetBallY - fromBall.y) * t;
+    }
+  }
+  // Case 3: Ball has trajectory waypoints or phase-to-phase target
+  else {
+    const targetBallX =
+      fromBall.trajectory && fromBall.trajectory.length > 1
+        ? fromBall.trajectory[fromBall.trajectory.length - 1].x
+        : toBall.x;
+    const targetBallY =
+      fromBall.trajectory && fromBall.trajectory.length > 1
+        ? fromBall.trajectory[fromBall.trajectory.length - 1].y
+        : toBall.y;
+    ballX = fromBall.x + (targetBallX - fromBall.x) * t;
+    ballY = fromBall.y + (targetBallY - fromBall.y) * t;
+  }
 
   // Ball flight physics: parabolic arc for lofted ball passes
   let arcHeight = 0;

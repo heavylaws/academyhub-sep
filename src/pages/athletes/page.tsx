@@ -194,7 +194,7 @@ export default function Athletes() {
   }, [rawAthletes, currentAcademyId]);
   const analyticsAssessments = useQuery(
     api.assessments.listAssessmentsForAnalytics,
-    canManage && isAuthenticated ? {} : "skip",
+    canManage && isAuthenticated ? { limit: 2000 } : "skip",
   );
 
   const [createOpen, setCreateOpen] = useState(false);

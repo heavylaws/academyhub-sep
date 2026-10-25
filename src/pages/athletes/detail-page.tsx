@@ -179,6 +179,20 @@ export default function AthleteDetail() {
     } else {
       next.set("tab", tab);
     }
+    if (tab !== "performance") {
+      next.delete("view");
+    }
+    setSearchParams(next);
+  };
+
+  const perfView = searchParams.get("view") || "scout";
+  const handlePerfViewChange = (view: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (view === "scout") {
+      next.delete("view");
+    } else {
+      next.set("view", view);
+    }
     setSearchParams(next);
   };
 
@@ -813,31 +827,87 @@ export default function AthleteDetail() {
 
         {/* Tab 2: Performance, 4-Corner Intelligence & IDPs */}
         <TabsContent value="performance" className="space-y-6 pt-4">
-          <AthleteBenchmarkCard
-            athleteId={athlete._id}
-            athleteName={`${athlete.firstName} ${athlete.lastName}`}
-            teams={athleteTeams?.map((t) => ({ _id: t._id, name: t.name }))}
-          />
+          {/* Performance Sub-navigation Switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 bg-muted/40 rounded-xl border border-border/60">
+            <div className="flex items-center gap-1.5 overflow-x-auto p-0.5">
+              <Button
+                variant={perfView === "scout" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handlePerfViewChange("scout")}
+                className="h-8 text-xs gap-1.5 rounded-lg font-medium"
+              >
+                <Sparkles className="size-3.5" />
+                <span>Athletic Profile & AI Scout</span>
+              </Button>
 
-          <AthleteIdpCard
-            athleteId={athlete._id}
-            athleteName={`${athlete.firstName} ${athlete.lastName}`}
-            canManage={canManage}
-          />
+              <Button
+                variant={perfView === "cohort" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handlePerfViewChange("cohort")}
+                className="h-8 text-xs gap-1.5 rounded-lg font-medium"
+              >
+                <Users className="size-3.5" />
+                <span>Squad Cohort & Z-Scores</span>
+              </Button>
 
-          <AthletePerformanceAnalytics
-            athleteName={`${athlete.firstName} ${athlete.lastName}`}
-            athleteId={athlete._id}
-            canManage={canManage}
-            assessmentData={assessmentData}
-          />
+              <Button
+                variant={perfView === "logs" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handlePerfViewChange("logs")}
+                className="h-8 text-xs gap-1.5 rounded-lg font-medium"
+              >
+                <FileText className="size-3.5" />
+                <span>Assessment History & Logs</span>
+              </Button>
+            </div>
 
-          <AthleteAssessments
-            athleteId={athlete._id}
-            assessmentData={assessmentData}
-            canManage={canManage}
-            isLoading={assessmentData === undefined}
-          />
+            <div className="text-[11px] text-muted-foreground px-2 hidden lg:block">
+              {perfView === "scout" && "Radar profile, drill personal bests & tactical archetype"}
+              {perfView === "cohort" && "Director 4-Corner Z-scores normalized against squad peers"}
+              {perfView === "logs" && "Chronological assessment records & progress trends"}
+            </div>
+          </div>
+
+          {/* Sub-view 1: Athletic Profile & AI Scout */}
+          {perfView === "scout" && (
+            <div className="space-y-6">
+              <AthletePerformanceAnalytics
+                athleteName={`${athlete.firstName} ${athlete.lastName}`}
+                athleteId={athlete._id}
+                canManage={canManage}
+                assessmentData={assessmentData}
+              />
+
+              <AthleteIdpCard
+                athleteId={athlete._id}
+                athleteName={`${athlete.firstName} ${athlete.lastName}`}
+                canManage={canManage}
+              />
+            </div>
+          )}
+
+          {/* Sub-view 2: Squad Cohort & Z-Scores */}
+          {perfView === "cohort" && (
+            <div className="space-y-6">
+              <AthleteBenchmarkCard
+                athleteId={athlete._id}
+                athleteName={`${athlete.firstName} ${athlete.lastName}`}
+                teams={athleteTeams?.map((t) => ({ _id: t._id, name: t.name }))}
+              />
+            </div>
+          )}
+
+          {/* Sub-view 3: Assessment History & Logs */}
+          {perfView === "logs" && (
+            <div className="space-y-6">
+              <AthleteAssessments
+                athleteId={athlete._id}
+                assessmentData={assessmentData}
+                canManage={canManage}
+                isLoading={assessmentData === undefined}
+              />
+            </div>
+          )}
         </TabsContent>
 
         {/* Tab 3: Training Plans */}

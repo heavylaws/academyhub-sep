@@ -19,6 +19,9 @@ import {
   Shield,
   Layers,
   Crown,
+  Lightbulb,
+  Compass,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -38,7 +41,11 @@ import {
   type RadarAttribute,
   type MetricGroup,
 } from "@/lib/sports-analytics.ts";
-import { ScoutDossierDialog, type ScoutedAthleteProfile } from "./scout-dossier-dialog.tsx";
+import {
+  ScoutDossierDialog,
+  type ScoutedAthleteProfile,
+  type ScoutSuggestion,
+} from "./scout-dossier-dialog.tsx";
 
 interface RawAthlete {
   _id: string;
@@ -83,6 +90,241 @@ function calculateAge(dateOfBirth: string | undefined): number | null {
 
 function initials(firstName: string, lastName: string): string {
   return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
+}
+
+function generateSportArchetype(
+  sport: string,
+  topPillar: RadarAttribute | null,
+  secondPillar: RadarAttribute | null,
+): { archetype: string; archetypeDescription: string } {
+  const s = (sport || "Soccer").toLowerCase();
+  const pair = topPillar && secondPillar ? [topPillar.attribute, secondPillar.attribute].sort().join("+") : "";
+
+  if (s.includes("track") || s.includes("field") || s.includes("sprint")) {
+    if (pair.includes("Speed") && pair.includes("Power")) {
+      return {
+        archetype: "Explosive Sprint & Jump Specialist",
+        archetypeDescription: "Exceptional start acceleration and reactive force application over short distances.",
+      };
+    }
+    if (pair.includes("Speed") && pair.includes("Endurance")) {
+      return {
+        archetype: "Speed-Endurance Middle Distance Specialist",
+        archetypeDescription: "High-cadence stride sustainability with delayed onset of neuromuscular fatigue.",
+      };
+    }
+    if (pair.includes("Power") && pair.includes("Strength")) {
+      return {
+        archetype: "Power-Throw & Heavy Field Specialist",
+        archetypeDescription: "Dominates high-load release velocity and explosive ground force transference.",
+      };
+    }
+    return {
+      archetype: "Dynamic Track & Field Contender",
+      archetypeDescription: "Solid athletic base across speed, agility, and explosive stride mechanics.",
+    };
+  }
+
+  if (s.includes("fitness") || s.includes("gym") || s.includes("strength") || s.includes("crossfit")) {
+    if (pair.includes("Strength") && pair.includes("Power")) {
+      return {
+        archetype: "Heavy Strength & Power Lifter",
+        archetypeDescription: "High mechanical output on compound movements with superior force generation.",
+      };
+    }
+    if (pair.includes("Endurance") && pair.includes("Agility")) {
+      return {
+        archetype: "Hyrox & High-Pacing Engine",
+        archetypeDescription: "Remarkable work capacity under continuous metabolic strain and rapid station recovery.",
+      };
+    }
+    return {
+      archetype: "Functional Conditioning Specialist",
+      archetypeDescription: "Balanced aerobic capacity, muscular endurance, and movement efficiency.",
+    };
+  }
+
+  // Soccer / Football defaults
+  if (pair === "Agility+Speed" || pair === "Mobility+Speed") {
+    return {
+      archetype: "Explosive Transition Specialist / Winger",
+      archetypeDescription: "Dominates open-field counter-attacks, rapid transitions, and wide-channel accelerations.",
+    };
+  }
+  if (pair === "Power+Strength") {
+    return {
+      archetype: "Commanding Physical Anchor / Target Player",
+      archetypeDescription: "Dominates physical duels, aerial contests, and provides a commanding central spine.",
+    };
+  }
+  if (pair === "Agility+Power" || pair === "Power+Speed") {
+    return {
+      archetype: "Dynamic Box-to-Box Attacking Threat",
+      archetypeDescription: "Combines explosive shot release with high-velocity penetration into the final third.",
+    };
+  }
+  if (pair === "Agility+Mobility") {
+    return {
+      archetype: "Technical Agile Playmaker / Tight-Space Maestro",
+      archetypeDescription: "Evasive maneuverability in congested zones with quick distribution and tempo control.",
+    };
+  }
+  if (pair === "Agility+Strength") {
+    return {
+      archetype: "Resilient Ball-Winning Defender",
+      archetypeDescription: "Combines solid physical balance with rapid lateral tackling and defensive containment.",
+    };
+  }
+  if (pair === "Endurance+Speed") {
+    return {
+      archetype: "High-Stamina Full-Back / Box-to-Box Operator",
+      archetypeDescription: "Capable of sustaining high sprint intensity and repeated efforts into late match phases.",
+    };
+  }
+  if (pair.includes("Endurance")) {
+    return {
+      archetype: "Relentless Midfield Engine",
+      archetypeDescription: "Continuous work rate covering expansive ground, leading counter-press and recovery cycles.",
+    };
+  }
+
+  return {
+    archetype: "Dynamic All-Rounder",
+    archetypeDescription: "Maintains a balanced athletic and tactical base across core disciplines.",
+  };
+}
+
+function generateScoutSuggestion(
+  sport: string,
+  topPillar: RadarAttribute | null,
+  weakestPillar: RadarAttribute | null,
+  overallIndex: number,
+  eliteTalents: string[],
+): ScoutSuggestion {
+  const s = (sport || "Soccer").toLowerCase();
+  const weakAttr = weakestPillar?.attribute || "Power";
+  const topAttr = topPillar?.attribute || "Speed";
+
+  let focusTitle = `Elevate ${weakAttr} Baseline`;
+  let drillTitle = "Midfield Diagonal Switch & Cutback Finish";
+  let drillCategory = "Power & Strike Technique";
+  let tacticalAdvice = "Deploy in primary position with emphasis on progressive actions.";
+  let actionReason = `Enhance relative ${weakAttr} output to balance athletic profile.`;
+
+  if (s.includes("track") || s.includes("field") || s.includes("run")) {
+    if (weakAttr === "Speed") {
+      drillTitle = "Flying 30m Laser Velocity Sprint";
+      drillCategory = "Sprint Velocity";
+      actionReason = "Accelerate peak top-end drive mechanics and ground force application.";
+    } else if (weakAttr === "Power") {
+      drillTitle = "Countermovement Jump (CMJ) Jump Mat";
+      drillCategory = "Explosive Plyometrics";
+      actionReason = "Maximize vertical force transference and triple-extension stiffness.";
+    } else if (weakAttr === "Strength") {
+      drillTitle = "Deadlift 1RM Conditioning";
+      drillCategory = "Maximal Strength";
+      actionReason = "Strengthen posterior chain and hip drive to prevent hamstring deceleration strains.";
+    } else if (weakAttr === "Endurance") {
+      drillTitle = "VO2 Max High-Lactate Repeats";
+      drillCategory = "Speed-Endurance";
+      actionReason = "Delay lactate threshold fatigue onset during final 100m split.";
+    } else {
+      drillTitle = "Pro Agility 5-10-5 Shuttle Run";
+      drillCategory = "Reaction & COD";
+      actionReason = "Improve lateral hip mobility and hurdle step-over clearance.";
+    }
+    tacticalAdvice = `Deploy as primary ${topAttr.toLowerCase()} competitor; schedule individual strength-speed block.`;
+  } else if (s.includes("fitness") || s.includes("gym") || s.includes("strength") || s.includes("crossfit")) {
+    if (weakAttr === "Strength") {
+      drillTitle = "Deadlift 1RM Conditioning";
+      drillCategory = "Functional Strength";
+      actionReason = "Establish high-tensile core bracing and heavy load mechanics.";
+    } else if (weakAttr === "Power") {
+      drillTitle = "Vertical Jump & Explosive Kettlebell Snatches";
+      drillCategory = "Rate of Force Development";
+      actionReason = "Increase rate of force production during high-intensity intervals.";
+    } else if (weakAttr === "Endurance") {
+      drillTitle = "Yo-Yo Intermittent Recovery Level 1";
+      drillCategory = "Aerobic Capacity";
+      actionReason = "Expand aerobic work threshold across long-duration conditioning sets.";
+    } else if (weakAttr === "Speed") {
+      drillTitle = "Rapid Counter-Press (5-Second Swarm)";
+      drillCategory = "Sprint Cadence";
+      actionReason = "Sharpen fast-twitch neural recruitment and sprint transition rate.";
+    } else {
+      drillTitle = "High-Speed Deceleration & COD Biomechanics Course";
+      drillCategory = "Dynamic Mobility";
+      actionReason = "Improve multi-planar hip mobility and joint stability under fatigue.";
+    }
+    tacticalAdvice = `Program structured load progression targeting ${weakAttr.toLowerCase()} capacity.`;
+  } else {
+    // Default: Soccer / Football
+    if (weakAttr === "Power") {
+      drillTitle = "Midfield Diagonal Switch & Cutback Finish";
+      drillCategory = "Power & Strike Technique";
+      actionReason = "Raise ball-striking velocity, aerial duel leap, and shooting precision in the final third.";
+    } else if (weakAttr === "Strength") {
+      drillTitle = "High Pressing & Compact Block Triggers";
+      drillCategory = "Duel & Physical Containment";
+      actionReason = "Build physical core stability to win 1v1 ground duels and shield opponents under contact.";
+    } else if (weakAttr === "Speed") {
+      drillTitle = "Gegenpress Wave & Rapid Vertical Counter";
+      drillCategory = "Transition Acceleration";
+      actionReason = "Sharpen initial 3-stride burst to capitalize on offensive turnover transitions.";
+    } else if (weakAttr === "Agility") {
+      drillTitle = "Illinois Soccer Agility & Dribble Test";
+      drillCategory = "Sharp Directional Shifts";
+      actionReason = "Improve dynamic deceleration angle and evasive maneuvering in tight defensive blocks.";
+    } else if (weakAttr === "Endurance") {
+      drillTitle = "7v7+3 Juego de Posición (Positional Mastery)";
+      drillCategory = "Match Aerobic Conditioning";
+      actionReason = "Sustain repeated high-intensity sprint bursts and pressing waves into match minute 75+.";
+    } else {
+      drillTitle = "Four-Corner Back-Foot Receiving Box";
+      drillCategory = "Body Shape & Mobility";
+      actionReason = "Refine open-body orientation and first-touch clearance speed under tight pressing.";
+    }
+
+    if (topAttr === "Speed") {
+      tacticalAdvice = "Deploy in wide transition channels or inverted winger role to exploit high-speed counter opportunities.";
+    } else if (topAttr === "Power") {
+      tacticalAdvice = "Utilize as primary direct threat in the penalty area or focal point for vertical progression.";
+    } else if (topAttr === "Agility") {
+      tacticalAdvice = "Deploy in central midfield half-spaces or attacking flank to unbalance defenders 1v1.";
+    } else if (topAttr === "Strength") {
+      tacticalAdvice = "Station in central defensive spine or target striker role to dominate second balls and physical duels.";
+    } else if (topAttr === "Endurance") {
+      tacticalAdvice = "Deploy as high-work-rate box-to-box midfielder or relentless pressing wing-back.";
+    } else {
+      tacticalAdvice = "Station as playmaker in possession phases to orchestrate ball tempo and rhythm.";
+    }
+  }
+
+  // Compute readiness verdict
+  let readinessVerdict: ScoutSuggestion["readinessVerdict"] = "Solid Core Contributor";
+  let verdictColor = "border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/10";
+
+  if (overallIndex >= 85 || eliteTalents.length >= 2) {
+    readinessVerdict = "Immediate First-Team / Advanced Call-Up";
+    verdictColor = "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/15";
+  } else if (overallIndex >= 72) {
+    readinessVerdict = "Ready for Starting XI";
+    verdictColor = "border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/15";
+  } else if (weakestPillar && weakestPillar.athleteScore < 60) {
+    readinessVerdict = "Priority Development Focus";
+    verdictColor = "border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/15";
+  }
+
+  return {
+    focusPillar: weakAttr,
+    focusTitle,
+    drillTitle,
+    drillCategory,
+    tacticalAdvice,
+    actionReason,
+    readinessVerdict,
+    verdictColor,
+  };
 }
 
 export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProps) {
@@ -149,29 +391,12 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
       const secondPillar = sortedPillars[1] || null;
       const weakestPillar = sortedPillars[sortedPillars.length - 1] || null;
 
-      // Determine Tactical Archetype (Option A)
-      let archetype = "Dynamic All-Rounder";
-      let archetypeDescription = "Maintains a balanced athletic and tactical base across core disciplines.";
-
-      if (topPillar && secondPillar) {
-        const pair = [topPillar.attribute, secondPillar.attribute].sort().join("+");
-        if (pair === "Agility+Speed" || pair === "Mobility+Speed") {
-          archetype = "Explosive Transition Specialist / Winger";
-          archetypeDescription = "Dominates open-field counter-attacks, rapid transitions, and wide-channel accelerations.";
-        } else if (pair === "Power+Strength") {
-          archetype = "Commanding Physical Anchor / Target Player";
-          archetypeDescription = "Dominates physical duels, aerial contests, and provides a commanding central spine.";
-        } else if (pair === "Agility+Mobility" || pair === "Agility+Power") {
-          archetype = "High-Pressing Box-to-Box Engine";
-          archetypeDescription = "Relentless motor with quick recovery cycles and evasive maneuverability in tight midfield zones.";
-        } else if (pair === "Agility+Strength") {
-          archetype = "Resilient Ball-Winning Defender";
-          archetypeDescription = "Combines solid physical balance with rapid lateral tackling and defensive containment.";
-        } else if (pair === "Endurance+Speed") {
-          archetype = "High-Stamina Full-Back / Box-to-Box Operator";
-          archetypeDescription = "Capable of sustaining high sprint intensity and repeated efforts into late match phases.";
-        }
-      }
+      // Determine Sport-Aware Tactical Archetype (Option A)
+      const { archetype, archetypeDescription } = generateSportArchetype(
+        ath.sport || "Soccer",
+        topPillar,
+        secondPillar,
+      );
 
       // Statistical Outlier Detection (Option B)
       const standoutTalents = radarData
@@ -191,6 +416,15 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
       const eliteTalents = radarData
         .filter((r) => r.athleteScore >= 85)
         .map((r) => r.attribute);
+
+      // AI Scouting Prescription & Action Suggestion
+      const scoutSuggestion = generateScoutSuggestion(
+        ath.sport || "Soccer",
+        topPillar,
+        weakestPillar,
+        overallIndex,
+        eliteTalents,
+      );
 
       // Key Personal Bests
       const keyPersonalBests = personalBests.map((pb) => ({
@@ -240,6 +474,7 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
         personalBestsCount: personalBests.length,
         keyPersonalBests,
         breakoutGainPct: finalBreakoutGain,
+        scoutSuggestion,
       };
     });
   }, [athletes, assessmentsByAthlete]);
@@ -318,6 +553,11 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
   // Academy-wide stats
   const totalScouted = scoutedAthletes.length;
   const eliteTalentsCount = scoutedAthletes.filter((a) => a.eliteTalents.length > 0).length;
+  const callUpReadyCount = scoutedAthletes.filter(
+    (a) =>
+      a.scoutSuggestion?.readinessVerdict.includes("Call-Up") ||
+      a.scoutSuggestion?.readinessVerdict.includes("Starting XI"),
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -343,12 +583,15 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Badge variant="outline" className="border-purple-500/30 text-purple-600 dark:text-purple-400 font-mono text-xs px-2.5 py-1">
               {totalScouted} Athletes Evaluated
             </Badge>
             <Badge variant="outline" className="border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-xs px-2.5 py-1">
               {eliteTalentsCount} Elite Outliers
+            </Badge>
+            <Badge variant="outline" className="border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono text-xs px-2.5 py-1">
+              {callUpReadyCount} Call-Up Ready
             </Badge>
           </div>
         </div>
@@ -656,6 +899,34 @@ export function AiTalentScoutHub({ athletes, assessments }: AiTalentScoutHubProp
                           {t.attribute} (+{t.diff} pts)
                         </Badge>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Scouting Prescription & Target Drill */}
+                {ath.scoutSuggestion && (
+                  <div className="pt-2 border-t space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                        <Lightbulb className="size-3 text-amber-500" />
+                        Scout Prescription
+                      </span>
+                      <Badge className={`text-[9px] px-1.5 py-0 border font-mono ${ath.scoutSuggestion.verdictColor}`}>
+                        {ath.scoutSuggestion.readinessVerdict}
+                      </Badge>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/20 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-foreground truncate pr-1">
+                          {ath.scoutSuggestion.drillTitle}
+                        </span>
+                        <Badge variant="outline" className="text-[9px] font-mono border-amber-500/30 text-amber-500 h-4 px-1 shrink-0">
+                          Focus: {ath.scoutSuggestion.focusPillar}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
+                        {ath.scoutSuggestion.actionReason}
+                      </p>
                     </div>
                   </div>
                 )}

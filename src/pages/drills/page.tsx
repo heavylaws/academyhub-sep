@@ -28,6 +28,7 @@ import {
   History,
   CalendarClock,
   MoreHorizontal,
+  Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -160,6 +161,8 @@ export default function DrillsPage() {
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [sessionDrill, setSessionDrill] = useState<SoccerDrill | null>(null);
+  const [cloningDrill, setCloningDrill] = useState<SoccerDrill | null>(null);
+  const [selectedSquadSize, setSelectedSquadSize] = useState<string>("all");
 
   // Queries & Mutations
   const { isAuthenticated } = useConvexAuth();
@@ -244,6 +247,23 @@ export default function DrillsPage() {
       if (selectedCategory !== "all" && drill.category !== selectedCategory) {
         return false;
       }
+      // Squad size filter
+      if (selectedSquadSize !== "all") {
+        const text = `${drill.title} ${drill.summary} ${drill.setup} ${drill.instructions.join(" ")} ${(drill.variations || []).join(" ")}`.toLowerCase();
+        if (selectedSquadSize === "2-4") {
+          const match = text.includes("2–4") || text.includes("2-4") || text.includes("1v1") || text.includes("2v2") || text.includes("3v1") || text.includes("4-player");
+          if (!match) return false;
+        } else if (selectedSquadSize === "5-8") {
+          const match = text.includes("5–8") || text.includes("5-8") || text.includes("3v3") || text.includes("4v2") || text.includes("4v4") || text.includes("5v2") || text.includes("5v5") || text.includes("6v3");
+          if (!match) return false;
+        } else if (selectedSquadSize === "9-12") {
+          const match = text.includes("9–12") || text.includes("9-12") || text.includes("6v6") || text.includes("7v7") || text.includes("8v8") || text.includes("positional");
+          if (!match) return false;
+        } else if (selectedSquadSize === "13+") {
+          const match = text.includes("13+") || text.includes("9v9") || text.includes("11v11") || text.includes("match play") || text.includes("half pitch") || text.includes("full pitch");
+          if (!match) return false;
+        }
+      }
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -257,7 +277,7 @@ export default function DrillsPage() {
       }
       return true;
     });
-  }, [allDrills, selectedAge, selectedCategory, searchQuery, selectedCollectionId, collections]);
+  }, [allDrills, selectedAge, selectedCategory, selectedSquadSize, searchQuery, selectedCollectionId, collections]);
 
   const handleDeleteDrill = async (drill: SoccerDrill) => {
     if (!window.confirm(`Are you sure you want to delete "${drill.title}"?`)) return;
@@ -383,22 +403,22 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
 
           {isCoachOrAdmin && (
             <Button
-              onClick={() => setAiDesignerOpen(true)}
-              className="gap-1.5 text-xs font-semibold shadow-sm h-10 sm:h-9"
+              onClick={() => setCreateModalOpen(true)}
+              className="gap-1.5 text-xs font-semibold shadow-sm h-10 sm:h-9 bg-primary text-primary-foreground"
             >
-              <Sparkles className="size-4" />
-              AI Drill Designer
+              <Plus className="size-4" />
+              Create Drill
             </Button>
           )}
 
           {isCoachOrAdmin && (
             <Button
               variant="outline"
-              onClick={() => setCreateModalOpen(true)}
-              className="gap-1.5 text-xs font-semibold shadow-sm h-10 sm:h-9"
+              onClick={() => setAiDesignerOpen(true)}
+              className="gap-1.5 text-xs font-semibold shadow-sm h-10 sm:h-9 border-primary/20 hover:bg-primary/5"
             >
-              <Plus className="size-4" />
-              Manual Drill
+              <Sparkles className="size-4 text-primary" />
+              AI Tactical Studio
             </Button>
           )}
         </div>
@@ -487,7 +507,7 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
             value={selectedCategory}
             onValueChange={setSelectedCategory}
           >
-            <SelectTrigger className="h-11 sm:h-10 text-xs w-full sm:w-44 bg-background">
+            <SelectTrigger className="h-11 sm:h-10 text-xs w-full sm:w-40 bg-background">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
@@ -496,6 +516,23 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                   {cat.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={selectedSquadSize}
+            onValueChange={setSelectedSquadSize}
+          >
+            <SelectTrigger className="h-11 sm:h-10 text-xs w-full sm:w-40 bg-background">
+              <Users className="mr-1.5 size-3.5 text-muted-foreground" />
+              <SelectValue placeholder="Squad Size" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">All Squad Sizes</SelectItem>
+              <SelectItem value="2-4" className="text-xs">2–4 Players (1v1/2v2)</SelectItem>
+              <SelectItem value="5-8" className="text-xs">5–8 Players (Rondos/4v4)</SelectItem>
+              <SelectItem value="9-12" className="text-xs">9–12 Players (6v6/8v8)</SelectItem>
+              <SelectItem value="13+" className="text-xs">13+ Players (Full Match)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -658,6 +695,16 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                           >
                             <Plus className="size-4" />
                             <span>Assign to Athlete</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setCloningDrill(drill);
+                              setCreateModalOpen(true);
+                            }}
+                            className="cursor-pointer gap-2"
+                          >
+                            <Copy className="size-4 text-amber-500" />
+                            <span>Clone & Tweak</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                         </>
@@ -854,6 +901,19 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        setCloningDrill(activeDrill);
+                        setCreateModalOpen(true);
+                        setActiveDrill(null);
+                      }}
+                      className="w-full sm:w-auto text-xs gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                    >
+                      <Copy className="size-3.5" />
+                      Clone & Tweak
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
                         setSessionDrill(activeDrill);
                         setActiveDrill(null);
                       }}
@@ -983,10 +1043,19 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
       {/* Create Specific Drill Modal (for Coach & higher roles) */}
       <CreateSpecificDrillDialog
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open);
+          if (!open) setCloningDrill(null);
+        }}
+        initialDrill={cloningDrill}
+        onScheduleDrill={(drill) => {
+          setSessionDrill(drill);
+        }}
         onDrillCreated={() => {
           setSelectedAge("all");
           setSelectedCategory("all");
+          setSelectedSquadSize("all");
+          setCloningDrill(null);
         }}
       />
 

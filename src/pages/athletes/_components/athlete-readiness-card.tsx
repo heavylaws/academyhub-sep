@@ -142,7 +142,12 @@ export default function AthleteReadinessCard({
                 <span className="font-display text-xl font-bold">
                   {workload.acuteLoad7d.toLocaleString()}
                 </span>
-                <span className="text-[11px] text-muted-foreground ml-1">AU</span>
+                <span
+                  className="text-[11px] text-muted-foreground ml-1 cursor-help"
+                  title="Arbitrary Units (AU): Session RPE × Duration in minutes. Standard sports science training load."
+                >
+                  AU
+                </span>
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">Fatigue stimulus (last 7 days)</p>
             </div>
@@ -157,7 +162,12 @@ export default function AthleteReadinessCard({
                 <span className="font-display text-xl font-bold">
                   {workload.chronicLoadWeeklyAvg28d.toLocaleString()}
                 </span>
-                <span className="text-[11px] text-muted-foreground ml-1">AU/wk</span>
+                <span
+                  className="text-[11px] text-muted-foreground ml-1 cursor-help"
+                  title="Arbitrary Units per week (AU/wk): 28-day rolling weekly average training load."
+                >
+                  AU/wk
+                </span>
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">Historical baseline fitness</p>
             </div>

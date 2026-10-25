@@ -7,6 +7,8 @@ import {
   Plus,
   Minus,
   Sparkles,
+  ArrowUpRight,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -166,6 +168,82 @@ export const PlayerQuickPopover: React.FC<PlayerQuickPopoverProps> = ({
             Joker
           </button>
         </div>
+      </div>
+
+      {/* Movement / Run Trajectory Section */}
+      <div className="mb-2.5 p-2 rounded-lg bg-muted/30 border border-border/50">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <ArrowUpRight className="size-3 text-primary" /> Movement Run
+          </span>
+          {player.targetPosition && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 text-emerald-400 border-emerald-500/40 bg-emerald-500/10">
+              Target Set
+            </Badge>
+          )}
+        </div>
+
+        {player.targetPosition ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground bg-background/50 px-2 py-1 rounded border">
+              <span>Destination:</span>
+              <span className="font-mono font-bold text-foreground">
+                X: {Math.round(player.targetPosition.x)}%, Y: {Math.round(player.targetPosition.y)}%
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  onUpdatePlayer({
+                    ...player,
+                    targetPosition: {
+                      x: Math.min(95, Math.max(5, player.targetPosition!.x + (player.team === "away" ? -6 : 6))),
+                      y: player.targetPosition!.y,
+                    },
+                  })
+                }
+                className="h-6 text-[10px] px-2 flex-1 hover:bg-muted"
+                title="Nudge run further"
+              >
+                +6% Forward
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onUpdatePlayer({ ...player, targetPosition: undefined })}
+                className="h-6 text-[10px] px-2 text-destructive border-destructive/40 hover:bg-destructive/10 gap-1 flex-1 font-bold"
+                title="Remove movement run"
+              >
+                <Trash2 className="size-2.5" />
+                <span>Remove Run</span>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const forwardOffset = player.team === "away" || player.team === "gk_away" ? -10 : 10;
+              onUpdatePlayer({
+                ...player,
+                targetPosition: {
+                  x: Math.min(95, Math.max(5, player.position.x + forwardOffset)),
+                  y: player.position.y,
+                },
+              });
+            }}
+            className="w-full h-7 text-[11px] gap-1 font-bold text-primary border-primary/40 hover:bg-primary/10"
+          >
+            <ArrowUpRight className="size-3" />
+            <span>+ Add Run Arrow</span>
+          </Button>
+        )}
       </div>
 
       {/* Quick Action Footer: Ball Possession & Delete */}

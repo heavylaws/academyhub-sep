@@ -9,14 +9,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
-import { Badge } from "@/components/ui/badge.tsx";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,44 +16,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.tsx";
-import type { BoardInteractionMode } from "./tactical-board-canvas.tsx";
-import type { EquipmentType, PitchType, TacticalPhase } from "@/domain/tactics/tactical-domain.ts";
+import type { EquipmentType, TacticalPhase } from "@/domain/tactics/tactical-domain.ts";
 
 interface TacticalBoardControlsProps {
-  mode?: BoardInteractionMode;
-  onSetMode?: (mode: BoardInteractionMode) => void;
-  activeColor?: string;
-  onSetColor?: (color: string) => void;
-  pitchType: PitchType;
-  onSetPitchType: (type: PitchType) => void;
   phases: TacticalPhase[];
   activePhaseIndex: number;
   onSelectPhase: (index: number) => void;
   onAddPhase: () => void;
   onDuplicatePhase: () => void;
   onDeletePhase: (index: number) => void;
-  isPlaying?: boolean;
-  onTogglePlay?: () => void;
-  onResetPlayback?: () => void;
-  showHeatmap?: boolean;
-  onToggleHeatmap?: () => void;
-  onClearAnnotations?: () => void;
-  onAddPlayer: (team: "home" | "away" | "neutral" | "gk_home") => void;
   onAddEquipment: (type: EquipmentType) => void;
   selectedCount?: number;
   onClearSelection?: () => void;
 }
 
 export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
-  pitchType,
-  onSetPitchType,
   phases,
   activePhaseIndex,
   onSelectPhase,
   onAddPhase,
   onDuplicatePhase,
   onDeletePhase,
-  onAddPlayer,
   onAddEquipment,
   selectedCount = 0,
   onClearSelection,
@@ -71,28 +46,8 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
       id="tactical-apparatus-deployment-bar"
       className="flex flex-wrap items-center justify-between gap-2.5 w-full bg-[#0D1826]/90 backdrop-blur-md border border-[#1E3249] rounded-xl p-3 shadow-md text-white text-xs"
     >
-      {/* Left: Pitch Selector & Phase Management */}
+      {/* Left: Phase Management */}
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={pitchType} onValueChange={(val) => onSetPitchType(val as PitchType)}>
-          <SelectTrigger className="h-8 w-[160px] text-xs bg-[#142337] border-[#1E334A] text-white">
-            <SelectValue placeholder="Pitch type" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#0D1826] border-[#1E3249] text-white text-xs">
-            <SelectItem value="full">⚽ Full Pitch (105×68)</SelectItem>
-            <SelectItem value="attacking_half">⚽ Attacking Half</SelectItem>
-            <SelectItem value="defending_half">⚽ Defending Half</SelectItem>
-            <SelectItem value="penalty_box">⚽ 18-Yard Box</SelectItem>
-            <SelectItem value="rondo_grid">⚽ Rondo / Grid</SelectItem>
-            <SelectItem value="basketball_half">🏀 Basketball Half Court</SelectItem>
-            <SelectItem value="basketball_full">🏀 Basketball Full Court</SelectItem>
-            <SelectItem value="futsal_court">⚡ Futsal Court</SelectItem>
-            <SelectItem value="handball_court">🤾 Handball Court</SelectItem>
-            <SelectItem value="volleyball_court">🏐 Volleyball Court</SelectItem>
-            <SelectItem value="rugby_pitch">🏉 Rugby Pitch</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Phase Management Buttons */}
         <div className="flex items-center gap-1 bg-[#142337] p-1 rounded-lg border border-[#1E334A]">
           <span className="text-[10px] text-gray-400 font-semibold px-1">Phase:</span>
           <Button
@@ -143,34 +98,9 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
         )}
       </div>
 
-      {/* Right: Quick Deploy Players & Field Apparatus */}
+      {/* Right: Field Apparatus & Equipment */}
       <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-        {/* Add Home Player */}
-        <button
-          onClick={() => onAddPlayer("home")}
-          className="px-2.5 py-1.5 bg-[#00E5FF]/15 hover:bg-[#00E5FF]/25 border border-[#00E5FF]/40 rounded-lg text-xs font-semibold text-[#00E5FF] transition-all flex items-center gap-1"
-        >
-          <Plus className="size-3" />
-          <span>Home</span>
-        </button>
-
-        {/* Add Away Defender */}
-        <button
-          onClick={() => onAddPlayer("away")}
-          className="px-2.5 py-1.5 bg-[#FF6E40]/15 hover:bg-[#FF6E40]/25 border border-[#FF6E40]/40 rounded-lg text-xs font-semibold text-[#FF6E40] transition-all flex items-center gap-1"
-        >
-          <Plus className="size-3" />
-          <span>Away</span>
-        </button>
-
-        {/* Add Neutral Joker */}
-        <button
-          onClick={() => onAddPlayer("neutral")}
-          className="px-2.5 py-1.5 bg-[#69F0AE]/15 hover:bg-[#69F0AE]/25 border border-[#69F0AE]/40 rounded-lg text-xs font-semibold text-[#69F0AE] transition-all flex items-center gap-1"
-        >
-          <Plus className="size-3" />
-          <span>Neutral</span>
-        </button>
+        <span className="text-[10px] text-gray-400 font-semibold mr-1">Equipment:</span>
 
         {/* Add Training Cone */}
         <button
@@ -209,7 +139,7 @@ export const TacticalBoardControls: React.FC<TacticalBoardControlsProps> = ({
               className="px-2.5 py-1.5 bg-[#142337] hover:bg-[#1B2F48] border border-dashed border-[#1E334A] rounded-lg text-xs font-medium text-gray-300 hover:text-white transition-all flex items-center gap-1"
               title="More Training Field Apparatus"
             >
-              <span>Apparatus</span>
+              <span>More Apparatus</span>
               <ChevronDown className="size-3 text-gray-400" />
             </button>
           </DropdownMenuTrigger>

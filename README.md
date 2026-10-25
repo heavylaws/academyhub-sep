@@ -12,7 +12,7 @@
 | **Styling & UI**             | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) + [Radix UI](https://www.radix-ui.com/) |
 | **Backend & Database**       | [Convex](https://www.convex.dev/) (Serverless Reactive Database & Functions)                                              |
 | **Authentication**           | Convex Auth (email + password, email verified by one-time code)                                                           |
-| **AI Biomechanics Analysis** | Google Gemini Vision (`GEMINI_API_KEY`) on Convex                                         |
+| **AI Biomechanics Analysis** | Google Gemini Vision (`GEMINI_API_KEY`) on Convex                                                                         |
 | **Testing**                  | [Vitest](https://vitest.dev/) (Edge-runtime for Convex backend + jsdom for React frontend)                                |
 | **Package Manager**          | [pnpm v9](https://pnpm.io/)                                                                                               |
 
@@ -20,7 +20,7 @@
 
 ## Directory Structure
 
-```
+```text
 ├── archives/               # Original snapshot & source archives (git-ignored)
 ├── convex/                 # Backend Convex functions & database schemas
 │   ├── _generated/         # Convex auto-generated API & data model types

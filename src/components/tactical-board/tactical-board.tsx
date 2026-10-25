@@ -30,13 +30,11 @@ import {
 import { TacticalBoardControls } from "./tactical-board-controls.tsx";
 import { PlayerInspectorDrawer } from "./player-inspector-drawer.tsx";
 import { SquadStepperToolbar } from "./squad-stepper-toolbar.tsx";
-import { TacticalSheetExportModal } from "./tactical-sheet-export-modal.tsx";
 import { TacticalTimelineScrubber } from "./tactical-timeline-scrubber.tsx";
 import {
   smoothInterpolatePhase,
   resolveGlobalTime,
 } from "@/domain/tactics/tactical-interpolator.ts";
-import { SOCCER_DRILLS } from "@/data/soccer-drills.ts";
 import {
   Maximize2,
   Minimize2,
@@ -46,7 +44,8 @@ import {
   FileText,
   Save,
   Check,
-  Printer,
+  Pencil,
+  Plus,
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -83,7 +82,26 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [printSheetOpen, setPrintSheetOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState("");
+
+  const handleStartEditTitle = () => {
+    setTitleInput(plan.title);
+    setIsEditingTitle(true);
+  };
+
+  const handleCommitTitle = () => {
+    const trimmed = titleInput.trim();
+    if (trimmed && trimmed !== plan.title) {
+      setPlan((prev) => {
+        const updated = { ...prev, title: trimmed, updatedAt: new Date().toISOString() };
+        onPlanChange?.(updated);
+        return updated;
+      });
+      toast.success(`Title renamed to: "${trimmed}"`);
+    }
+    setIsEditingTitle(false);
+  };
 
   // Tactical Layers & Fast Changes Panels
   const [layers, setLayers] = useState<Record<TacticalLayerType, TacticalLayerConfig>>(
@@ -133,15 +151,26 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
   }, [interpolatedState, currentPhase.players]);
 
   const displayBall: BallNode = useMemo(() => {
-    if (interpolatedState) {
+    if ((isPlaying || playbackProgress > 0) && interpolatedState) {
       return {
         ...currentPhase.ball,
         x: interpolatedState.ball.x,
         y: interpolatedState.ball.y,
       };
     }
+    // When not animating, keep ball at carrier player's feet if attached
+    if (currentPhase.ball.attachedPlayerId) {
+      const carrier = currentPhase.players.find((p) => p.id === currentPhase.ball.attachedPlayerId);
+      if (carrier) {
+        return {
+          ...currentPhase.ball,
+          x: carrier.position.x,
+          y: carrier.position.y,
+        };
+      }
+    }
     return currentPhase.ball;
-  }, [interpolatedState, currentPhase.ball]);
+  }, [isPlaying, playbackProgress, interpolatedState, currentPhase.ball, currentPhase.players]);
 
   // Animation Loop with Speed Control and Loop Support
   useEffect(() => {
@@ -264,14 +293,33 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
 
   const handleUpdatePlayers = useCallback(
     (newPlayers: PlayerNode[]) => {
-      updateCurrentPhase((phase) => ({ ...phase, players: newPlayers }));
+      updateCurrentPhase((phase) => {
+        let updatedBall = phase.ball;
+        if (phase.ball.attachedPlayerId) {
+          const carrier = newPlayers.find((p) => p.id === phase.ball.attachedPlayerId);
+          if (carrier) {
+            updatedBall = {
+              ...phase.ball,
+              x: carrier.position.x,
+              y: carrier.position.y,
+            };
+          }
+        }
+        return { ...phase, players: newPlayers, ball: updatedBall };
+      });
     },
     [updateCurrentPhase],
   );
 
   const handleUpdateBall = useCallback(
     (newBall: BallNode) => {
-      updateCurrentPhase((phase) => ({ ...phase, ball: newBall }));
+      updateCurrentPhase((phase) => {
+        const updatedPlayers = phase.players.map((p) => ({
+          ...p,
+          hasBall: Boolean(newBall.attachedPlayerId && p.id === newBall.attachedPlayerId),
+        }));
+        return { ...phase, ball: newBall, players: updatedPlayers };
+      });
     },
     [updateCurrentPhase],
   );
@@ -386,9 +434,6 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           ],
         }));
         toast.success("+1 Defender Press deployed with press corridor");
-      } else if (changeType === "High Tempo 1-Touch") {
-        setPlaybackSpeed(1.5);
-        toast.success("Tempo accelerated to 1.5x (High Tempo 1-Touch)");
       } else if (changeType === "Fullback Overlap") {
         updateCurrentPhase((p) => {
           const lb = p.players.find((pl) => pl.role === "LB" || pl.role === "LWB") || p.players[1];
@@ -460,7 +505,7 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           ...p,
           coachingNotes: (p.coachingNotes ? `${p.coachingNotes}\n• ` : "• ") + changeType,
         }));
-        toast.success(`Applied tactical tweak: "${changeType}"`);
+        toast.success(`Added coaching note: "${changeType}"`);
       }
     },
     [plan.pitchType, updateCurrentPhase],
@@ -615,10 +660,45 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           >
             CoachTactics Pro
           </Badge>
-          <div>
-            <h2 className="font-display text-base sm:text-lg font-bold text-white leading-tight">
-              {plan.title}
-            </h2>
+          <div className="flex-1 min-w-0">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  onBlur={handleCommitTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCommitTitle();
+                    if (e.key === "Escape") {
+                      setTitleInput(plan.title);
+                      setIsEditingTitle(false);
+                    }
+                  }}
+                  autoFocus
+                  className="bg-[#132338] border border-[#00E5FF] rounded px-2 py-0.5 text-base sm:text-lg font-bold text-white focus:outline-none w-full max-w-md"
+                />
+                <button
+                  type="button"
+                  onClick={handleCommitTitle}
+                  className="p-1 text-emerald-400 hover:text-emerald-300"
+                  title="Save title"
+                >
+                  <Check className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={handleStartEditTitle}
+                className="group flex items-center gap-2 cursor-pointer"
+                title="Click to rename drill"
+              >
+                <h2 className="font-display text-base sm:text-lg font-bold text-white leading-tight group-hover:text-[#00E5FF] transition-colors truncate">
+                  {plan.title}
+                </h2>
+                <Pencil className="size-3 text-gray-500 group-hover:text-[#00E5FF] transition-colors shrink-0" />
+              </div>
+            )}
             <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
               <span>{plan.gridDimensions || (plan.pitchType === "full" ? "Full Pitch (105m × 68m)" : "Attacking Half")}</span>
               <span>•</span>
@@ -652,16 +732,6 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
             <span className="hidden sm:inline">Export</span>
           </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPrintSheetOpen(true)}
-            className="h-8 text-xs gap-1.5 font-medium bg-[#142337] border border-[#1E334A] text-gray-300 hover:text-white hover:bg-[#1B2F48]"
-            title="Print Tactical Clipboard Sheet"
-          >
-            <Printer className="size-3.5 text-[#00E5FF]" />
-            <span className="hidden sm:inline">Print Sheet</span>
-          </Button>
 
           <Button
             variant="ghost"
@@ -687,20 +757,101 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
         </div>
       </div>
 
-      {/* Coaching Notes Panel (Collapsible) */}
+      {/* Coaching Notes & Points Panel (Collapsible) */}
       {showNotes && (
-        <div className="bg-[#0D1826]/95 border border-[#1E3249] rounded-xl p-3.5 space-y-2 text-xs text-white animate-in fade-in duration-200">
-          <h4 className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#00E5FF]">
-            <FileText className="size-3.5" /> Tactical Coaching Instructions
-          </h4>
-          <Textarea
-            value={currentPhase.coachingNotes || ""}
-            onChange={(e) =>
-              updateCurrentPhase((p) => ({ ...p, coachingNotes: e.target.value }))
-            }
-            placeholder="Add key coaching points for this phase (e.g. body orientation, tempo, passing lanes)..."
-            className="text-xs resize-none h-18 bg-[#132338] border-[#1E334A] text-white placeholder-gray-500"
-          />
+        <div className="bg-[#0D1826]/95 border border-[#1E3249] rounded-xl p-3.5 space-y-3 text-xs text-white animate-in fade-in duration-200 shadow-lg">
+          <div className="flex items-center justify-between border-b border-[#1E3249] pb-2">
+            <h4 className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#00E5FF]">
+              <FileText className="size-3.5" /> Coaching Points & Instructions
+            </h4>
+            <span className="text-[10px] text-gray-400">Included on exported clipboard cards</span>
+          </div>
+
+          {/* Quick Preset Coaching Cues for 1-Click Insertion */}
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase">Quick Coaching Cues:</span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                "Open body shape to receive",
+                "2-Touch maximum tempo",
+                "Scan shoulder before receiving",
+                "Commit defender before pass",
+                "Sprint into half-spaces",
+                "Counter-press immediately on turnover",
+              ].map((cue) => (
+                <button
+                  key={cue}
+                  type="button"
+                  onClick={() => {
+                    const currentPoints = plan.coachingPoints || [];
+                    if (!currentPoints.includes(cue)) {
+                      setPlan((p) => {
+                        const updated = {
+                          ...p,
+                          coachingPoints: [...currentPoints, cue],
+                          updatedAt: new Date().toISOString(),
+                        };
+                        onPlanChange?.(updated);
+                        return updated;
+                      });
+                      toast.success(`Added coaching cue: "${cue}"`);
+                    }
+                  }}
+                  className="px-2 py-1 bg-[#132338] hover:bg-[#1C324E] border border-[#223953] hover:border-[#00E5FF]/40 rounded text-[11px] text-gray-300 hover:text-white transition-all flex items-center gap-1"
+                >
+                  <Plus className="size-3 text-[#00E5FF]" />
+                  <span>{cue}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Active Coaching Points (Editable / Removable) */}
+          {plan.coachingPoints && plan.coachingPoints.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 py-1">
+              {plan.coachingPoints.map((pt, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#00E5FF]/10 border border-[#00E5FF]/30 text-[#00E5FF] text-[11px] font-medium"
+                >
+                  <span>• {pt}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlan((p) => {
+                        const updated = {
+                          ...p,
+                          coachingPoints: p.coachingPoints.filter((_, i) => i !== idx),
+                          updatedAt: new Date().toISOString(),
+                        };
+                        onPlanChange?.(updated);
+                        return updated;
+                      });
+                    }}
+                    className="hover:text-red-400 ml-1 text-gray-400"
+                    title="Remove point"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Phase-Specific Coaching Notes */}
+          <div className="space-y-1 pt-1 border-t border-[#1E3249]">
+            <label className="text-[10px] font-semibold text-gray-400 uppercase">
+              Phase {currentPhase.phaseNumber} Specific Instructions:
+            </label>
+            <Textarea
+              value={currentPhase.coachingNotes || ""}
+              onChange={(e) =>
+                updateCurrentPhase((p) => ({ ...p, coachingNotes: e.target.value }))
+              }
+              placeholder="Add key coaching cues for this phase (e.g. body orientation, tempo, passing triggers)..."
+              className="text-xs resize-none h-16 bg-[#132338] border-[#1E334A] text-white placeholder-gray-500"
+            />
+          </div>
         </div>
       )}
 
@@ -861,19 +1012,6 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
       {/* Tactical Board Controls Toolbar */}
       {!readOnly && (
         <TacticalBoardControls
-          mode={mode}
-          onSetMode={setMode}
-          activeColor={activeColor}
-          onSetColor={setActiveColor}
-          pitchType={plan.pitchType}
-          onSetPitchType={(type) => {
-            setPlan((p) => {
-              const updated = { ...p, pitchType: type, updatedAt: new Date().toISOString() };
-              onPlanChange?.(updated);
-              return updated;
-            });
-            toast.info(`Pitch mode switched to ${type.replace(/_/g, " ")}`);
-          }}
           phases={plan.phases}
           activePhaseIndex={activePhaseIndex}
           onSelectPhase={(idx) => {
@@ -885,35 +1023,9 @@ export const TacticalBoard: React.FC<TacticalBoardProps> = ({
           onDeletePhase={handleDeletePhase}
           selectedCount={selectedPlayerIds.length}
           onClearSelection={() => setSelectedPlayerIds([])}
-          isPlaying={isPlaying}
-          onTogglePlay={() => {
-            if (isPlaying) {
-              setIsPlaying(false);
-              setPlaybackProgress(0);
-            } else {
-              setIsPlaying(true);
-            }
-          }}
-          onResetPlayback={() => {
-            setIsPlaying(false);
-            setActivePhaseIndex(0);
-            setPlaybackProgress(0);
-          }}
-          showHeatmap={showHeatmap}
-          onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
-          onClearAnnotations={handleClearAnnotations}
-          onAddPlayer={handleAddPlayer}
           onAddEquipment={handleAddEquipment}
         />
       )}
-
-      {/* High-Contrast Print / Clipboard Sheet Modal */}
-      <TacticalSheetExportModal
-        open={printSheetOpen}
-        onOpenChange={setPrintSheetOpen}
-        drill={SOCCER_DRILLS[0] || null}
-        tacticalPlan={plan}
-      />
     </div>
   );
 };

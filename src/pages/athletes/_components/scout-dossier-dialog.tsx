@@ -12,6 +12,9 @@ import {
   Activity,
   Award,
   TrendingUp,
+  Compass,
+  Lightbulb,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +36,17 @@ import {
   Legend,
 } from "recharts";
 import type { RadarAttribute } from "@/lib/sports-analytics.ts";
+
+export interface ScoutSuggestion {
+  focusPillar: string;
+  focusTitle: string;
+  drillTitle: string;
+  drillCategory: string;
+  tacticalAdvice: string;
+  actionReason: string;
+  readinessVerdict: "Immediate First-Team / Advanced Call-Up" | "Ready for Starting XI" | "Priority Development Focus" | "Solid Core Contributor";
+  verdictColor: string;
+}
 
 export interface ScoutedAthleteProfile {
   athleteId: string;
@@ -66,6 +80,7 @@ export interface ScoutedAthleteProfile {
     scorePct: number;
   }>;
   breakoutGainPct?: number;
+  scoutSuggestion?: ScoutSuggestion;
 }
 
 interface ScoutDossierDialogProps {
@@ -319,6 +334,75 @@ export function ScoutDossierDialog({
               </p>
             )}
           </div>
+
+          {/* AI Scouting Prescription & Player Development Plan */}
+          {athlete.scoutSuggestion && (
+            <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-primary/5 to-card p-4 space-y-3 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  <Sparkles className="size-4" />
+                  <span>AI Scouting Prescription & Player Development Plan</span>
+                </div>
+                <Badge className={`text-[10px] font-medium border ${athlete.scoutSuggestion.verdictColor}`}>
+                  {athlete.scoutSuggestion.readinessVerdict}
+                </Badge>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {/* Priority Development Focus & Prescribed Drill */}
+                <div className="p-3 rounded-lg border bg-background/80 space-y-2">
+                  <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Target className="size-3.5 text-amber-500" />
+                    <span>Target Growth Area</span>
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                      <span>{athlete.scoutSuggestion.focusTitle}</span>
+                      <Badge variant="outline" className="text-[9px] font-mono border-amber-500/30 text-amber-500">
+                        Pillar: {athlete.scoutSuggestion.focusPillar}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                      {athlete.scoutSuggestion.actionReason}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t mt-2">
+                    <div className="text-[10px] uppercase font-bold text-foreground flex items-center gap-1 mb-1">
+                      <Lightbulb className="size-3 text-amber-500" />
+                      Prescribed Training Drill
+                    </div>
+                    <div className="text-xs font-semibold text-purple-600 dark:text-purple-400">
+                      {athlete.scoutSuggestion.drillTitle}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Module: {athlete.scoutSuggestion.drillCategory}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tactical Deployment & Pitch Recommendation */}
+                <div className="p-3 rounded-lg border bg-background/80 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Compass className="size-3.5 text-primary" />
+                      <span>Tactical Match Deployment</span>
+                    </div>
+                    <p className="text-xs text-foreground font-medium leading-relaxed">
+                      {athlete.scoutSuggestion.tacticalAdvice}
+                    </p>
+                  </div>
+
+                  <div className="p-2 rounded-md bg-muted/40 border border-border/60 text-[11px] text-muted-foreground flex items-start gap-1.5">
+                    <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span>
+                      Synthesized from real radar benchmark variances, peak sprint telemetry, and current archetype fit.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Key Personal Bests Recorded */}
           {athlete.keyPersonalBests.length > 0 && (

@@ -6,7 +6,7 @@ The app has two parts:
    authentication (Convex Auth: email + password, emails verified by code).
 2. **Frontend — static files** (`dist/`) served by nginx on your own server.
 
-```
+```text
 Browser ──HTTPS──► your server (nginx, static dist/)
    │
    └────WebSocket/HTTPS──► Convex Cloud (data, auth, emails via Resend, AI via OpenAI)
@@ -54,7 +54,7 @@ Production → Settings → Environment Variables, or with `npx convex env set -
 | `EMAIL_FROM`              | `PeakForm Athletics <no-reply@example.com>` | yes — must be on your verified Resend domain    |
 | `JWT_PRIVATE_KEY`, `JWKS` | _(set by `npx @convex-dev/auth`)_           | yes                                             |
 | `GEMINI_API_KEY`          | `AIza...`                                   | only for AI biomechanics video analysis         |
-| `GEMINI_MODEL`             | `gemini-2.5-flash`                          | optional; defaults to gemini-2.5-flash           |
+| `GEMINI_MODEL`            | `gemini-2.5-flash`                          | optional; defaults to gemini-2.5-flash          |
 
 Deploy the backend:
 

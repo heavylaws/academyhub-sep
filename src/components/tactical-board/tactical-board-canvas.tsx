@@ -14,7 +14,7 @@ import { TacticalRoleModal } from "./tactical-role-modal.tsx";
 import { QuickNoteDialog } from "./quick-note-dialog.tsx";
 import type { TacticalLayerConfig, TacticalLayerType } from "./tactical-layers-panel.tsx";
 import { toast } from "sonner";
-import { Sparkles, StickyNote } from "lucide-react";
+import { Sparkles, StickyNote, Pencil } from "lucide-react";
 
 export type BoardInteractionMode =
   | "select"
@@ -228,6 +228,23 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     }
 
     if (isEraserMode) {
+      // Check if clicking near any player's movement run target
+      const targetPlayer = players.find(
+        (p) => p.targetPosition && Math.hypot(p.targetPosition.x - coords.x, p.targetPosition.y - coords.y) < 6,
+      );
+      if (targetPlayer) {
+        onUpdatePlayers(players.map((p) => (p.id === targetPlayer.id ? { ...p, targetPosition: undefined } : p)));
+        toast.info(`Removed run for #${targetPlayer.number}`);
+        return;
+      }
+
+      // Check if clicking near ball passing target
+      if (ball.targetPosition && Math.hypot(ball.targetPosition.x - coords.x, ball.targetPosition.y - coords.y) < 6) {
+        onUpdateBall({ ...ball, targetPosition: undefined });
+        toast.info("Removed ball pass");
+        return;
+      }
+
       // Find nearest annotation to erase
       const clickedAnn = annotations.find((ann) => {
         return ann.points.some((pt) => Math.hypot(pt.x - coords.x, pt.y - coords.y) < 6);
@@ -311,6 +328,16 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
                 p.id === draggingEntity.id ? { ...p, position: targetCoords } : p,
               );
               onUpdatePlayers(updated);
+
+              // If player has the ball, move the ball along with them
+              if (ball.attachedPlayerId === draggingEntity.id || activePlayer.hasBall) {
+                onUpdateBall({
+                  ...ball,
+                  x: targetCoords.x,
+                  y: targetCoords.y,
+                  attachedPlayerId: draggingEntity.id,
+                });
+              }
             }
           } else if (draggingEntity.type === "player_target") {
             const updated = players.map((p) =>
@@ -376,6 +403,44 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
+
+      // If ball was dropped near a player, attach possession!
+      if (draggingEntity.type === "ball") {
+        const nearPlayer = players.find(
+          (p) => Math.hypot(p.position.x - ball.x, p.position.y - ball.y) < 6,
+        );
+        if (nearPlayer) {
+          onUpdateBall({
+            ...ball,
+            x: nearPlayer.position.x,
+            y: nearPlayer.position.y,
+            attachedPlayerId: nearPlayer.id,
+          });
+          onUpdatePlayers(
+            players.map((p) => ({
+              ...p,
+              hasBall: p.id === nearPlayer.id,
+            })),
+          );
+          toast.success(`Ball possessed by #${nearPlayer.number}`);
+        }
+      }
+
+      // If ball_target was dropped near a player, snap pass destination to that player!
+      if (draggingEntity.type === "ball_target" && ball.targetPosition) {
+        const receiver = players.find(
+          (p) =>
+            Math.hypot(p.position.x - ball.targetPosition!.x, p.position.y - ball.targetPosition!.y) < 6,
+        );
+        if (receiver) {
+          onUpdateBall({
+            ...ball,
+            targetPosition: { x: receiver.position.x, y: receiver.position.y },
+          });
+          toast.success(`Pass targeted directly to #${receiver.number}`);
+        }
+      }
+
       lastPlayerPosRef.current = null;
       setDraggingEntity(null);
       return;
@@ -433,42 +498,74 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
 
   // Drag start helpers
   const startDragPlayer = (e: React.PointerEvent, playerId: string) => {
-    if (isReadOnly || !isMoveMode) return;
-    e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
-    setDraggingEntity({ type: "player", id: playerId });
+    if (isReadOnly) return;
     const p = players.find((pl) => pl.id === playerId) || null;
-    lastPlayerPosRef.current = p ? { ...p.position } : null;
     onSelectPlayer?.(p);
+
+    // If user is in Arrow / Run mode, dragging the player directly adjusts their run target!
+    if (isArrowMode) {
+      e.stopPropagation();
+      try {
+        containerRef.current?.setPointerCapture(e.pointerId);
+      } catch {}
+      setDraggingEntity({ type: "player_target", id: playerId });
+      return;
+    }
+
+    if (!isMoveMode) return;
+    e.stopPropagation();
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {}
+    setDraggingEntity({ type: "player", id: playerId });
+    lastPlayerPosRef.current = p ? { ...p.position } : null;
   };
 
   const startDragPlayerTarget = (e: React.PointerEvent, playerId: string) => {
-    if (isReadOnly || !isMoveMode) return;
+    if (isReadOnly) return;
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {}
     setDraggingEntity({ type: "player_target", id: playerId });
     const p = players.find((pl) => pl.id === playerId) || null;
     onSelectPlayer?.(p);
   };
 
   const startDragBall = (e: React.PointerEvent) => {
-    if (isReadOnly || !isMoveMode) return;
+    if (isReadOnly) return;
+    // If in Pass mode, dragging from the ball immediately begins dragging the ball pass target!
+    if (isPassMode) {
+      e.stopPropagation();
+      try {
+        containerRef.current?.setPointerCapture(e.pointerId);
+      } catch {}
+      setDraggingEntity({ type: "ball_target", id: "ball" });
+      return;
+    }
+
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {}
     setDraggingEntity({ type: "ball", id: "ball" });
   };
 
   const startDragBallTarget = (e: React.PointerEvent) => {
-    if (isReadOnly || !isMoveMode) return;
+    if (isReadOnly) return;
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {}
     setDraggingEntity({ type: "ball_target", id: "ball" });
   };
 
   const startDragEquipment = (e: React.PointerEvent, eqId: string) => {
     if (isReadOnly || !isMoveMode) return;
     e.stopPropagation();
-    containerRef.current?.setPointerCapture(e.pointerId);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {}
     setDraggingEntity({ type: "equipment", id: eqId });
   };
 
@@ -743,14 +840,24 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
         {/* Ball Trajectory Corridors */}
         {ball.targetPosition && (!layers || layers.BALL_CORRIDORS.visible) && (
           <g key="ball_trajectory">
+            {/* Shadow line for pitch contrast */}
             <line
-              x1={ball.x}
-              y1={ball.y}
+              x1={ball.attachedPlayerId ? Math.min(97, ball.x + 2.5) : ball.x}
+              y1={ball.attachedPlayerId ? Math.min(97, ball.y + 2.5) : ball.y}
+              x2={ball.targetPosition.x}
+              y2={ball.targetPosition.y}
+              stroke="#000000"
+              strokeWidth={2}
+              strokeOpacity={0.6}
+            />
+            <line
+              x1={ball.attachedPlayerId ? Math.min(97, ball.x + 2.5) : ball.x}
+              y1={ball.attachedPlayerId ? Math.min(97, ball.y + 2.5) : ball.y}
               x2={ball.targetPosition.x}
               y2={ball.targetPosition.y}
               stroke={layers?.BALL_CORRIDORS.pathColor || "#FFD600"}
-              strokeWidth={1}
-              strokeDasharray="2 1.5"
+              strokeWidth={1.2}
+              strokeDasharray="2.5 1.5"
               markerEnd="url(#arrow-yellow)"
             />
           </g>
@@ -845,12 +952,11 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
 
       {/* Interactive Destination Target Handles for Players */}
       {players.map((p) => {
+        if (!p.targetPosition) return null;
         if (!isPlayerLayerVisible(p.team)) return null;
-        const isSelected = selectedPlayerId === p.id || hoveredPlayerId === p.id;
-        if (!isMoveMode && !isSelected) return null;
 
-        const targetPos = p.targetPosition || p.position;
-        const dist = Math.hypot(targetPos.x - p.position.x, targetPos.y - p.position.y);
+        const isSelected = selectedPlayerId === p.id || hoveredPlayerId === p.id;
+        const targetPos = p.targetPosition;
         const pathColor = getPlayerPathColor(p.team, p.team === "home" ? "#00E5FF" : "#FF6E40");
 
         return (
@@ -862,44 +968,82 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
               top: `${targetPos.y}%`,
               transform: "translate(-50%, -50%)",
             }}
-            className={`absolute z-15 size-5 sm:size-6 rounded-full flex items-center justify-center cursor-crosshair transition-transform ${
+            className={`absolute z-30 flex items-center gap-1 cursor-grab active:cursor-grabbing ${
               isReadOnly ? "pointer-events-none" : "touch-none"
-            } ${isSelected ? "scale-115" : "opacity-80 hover:opacity-100"}`}
+            } ${isSelected ? "scale-115" : "opacity-90 hover:opacity-100"}`}
             title={`Drag to set destination run for #${p.number}`}
           >
-            {/* Target Ring with Crosshair */}
+            {/* Target Ring with Crosshair and Number */}
             <div
-              className="size-4 sm:size-5 rounded-full border border-dashed flex items-center justify-center shadow-xs"
+              className="size-5 sm:size-6 rounded-full border-2 border-dashed flex items-center justify-center shadow-lg transition-transform bg-[#0A131F]/90"
               style={{
                 borderColor: pathColor,
-                backgroundColor: isSelected ? "rgba(0, 229, 255, 0.25)" : "rgba(255, 255, 255, 0.15)",
               }}
             >
-              {dist > 1.5 && (
-                <div className="size-1 rounded-full" style={{ backgroundColor: pathColor }} />
-              )}
+              <span className="text-[9px] font-black font-mono leading-none" style={{ color: pathColor }}>
+                {p.number}
+              </span>
             </div>
+
+            {/* 1-Click Remove Movement Run Button */}
+            {!isReadOnly && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdatePlayers(players.map((pl) => (pl.id === p.id ? { ...pl, targetPosition: undefined } : pl)));
+                  toast.info(`Removed run for #${p.number}`);
+                }}
+                className="size-4 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center font-bold text-[10px] shadow-md border border-white/60 hover:scale-115 transition-transform cursor-pointer"
+                title={`Remove movement run for #${p.number}`}
+              >
+                ✕
+              </button>
+            )}
           </div>
         );
       })}
 
       {/* Interactive Destination Target Handle for Ball */}
-      {(!layers || layers.BALL_CORRIDORS.visible) && (isMoveMode || ball.targetPosition) && (
+      {ball.targetPosition && (!layers || layers.BALL_CORRIDORS.visible) && (
         <div
           onPointerDown={startDragBallTarget}
           style={{
-            left: `${(ball.targetPosition || ball).x}%`,
-            top: `${(ball.targetPosition || ball).y}%`,
+            left: `${ball.targetPosition.x}%`,
+            top: `${ball.targetPosition.y}%`,
             transform: "translate(-50%, -50%)",
           }}
-          className={`absolute z-15 size-5 sm:size-6 rounded-full flex items-center justify-center cursor-crosshair ${
+          className={`absolute z-40 flex items-center gap-1.5 cursor-grab active:cursor-grabbing ${
             isReadOnly ? "pointer-events-none" : "touch-none"
           }`}
-          title="Drag to set ball passing destination"
+          title="Drag to set ball passing destination (drag near teammate to snap)"
         >
-          <div className="size-4 sm:size-5 rounded-full border border-dashed border-[#FFD600] bg-[#FFD600]/25 flex items-center justify-center">
-            <div className="size-1 rounded-full bg-[#FFD600]" />
+          {/* Target Ring with Yellow Pulsing Glow */}
+          <div className="size-6 sm:size-7 rounded-full border-2 border-dashed border-[#FFD600] bg-[#1E293B]/90 shadow-[0_0_16px_#FFD600] flex items-center justify-center animate-pulse">
+            <div className="size-2.5 rounded-full bg-[#FFD600] shadow-[0_0_8px_#FFD600]" />
           </div>
+
+          <span className="px-1.5 py-0.5 rounded bg-[#0A131F]/90 text-[#FFD600] text-[8px] font-black uppercase tracking-wider border border-[#FFD600]/60 shadow-md select-none pointer-events-none whitespace-nowrap">
+            Pass Target
+          </span>
+
+          {/* 1-Click Remove Ball Pass Button */}
+          {!isReadOnly && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateBall({ ...ball, targetPosition: undefined });
+                toast.info("Cleared ball pass");
+              }}
+              className="size-4 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center font-bold text-[10px] shadow-md border border-white/60 hover:scale-115 transition-transform cursor-pointer"
+              title="Remove ball pass destination"
+            >
+              ✕
+            </button>
+          )}
         </div>
       )}
 
@@ -1013,16 +1157,45 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
         <div
           onPointerDown={startDragBall}
           style={{
-            left: `${ball.x}%`,
-            top: `${ball.y}%`,
+            left: `${ball.attachedPlayerId ? Math.min(97, ball.x + 2.5) : ball.x}%`,
+            top: `${ball.attachedPlayerId ? Math.min(97, ball.y + 2.5) : ball.y}%`,
             transform: "translate(-50%, -50%)",
           }}
-          className={`absolute z-20 flex items-center justify-center size-5 sm:size-6 rounded-full bg-white border border-slate-700 shadow-md cursor-grab active:cursor-grabbing ${
+          className={`absolute z-35 flex items-center justify-center size-5 sm:size-6 rounded-full bg-white border border-slate-700 shadow-md cursor-grab active:cursor-grabbing ${
             isReadOnly ? "pointer-events-none" : "touch-none"
           }`}
-          title="Soccer Ball"
+          title="Soccer Ball - Drag to move or click +Pass to set trajectory"
         >
           <div className="size-2 sm:size-2.5 bg-[#1E293B] rounded-full" />
+
+          {/* Quick Add Pass Button when ball does not have a destination */}
+          {!isReadOnly && !ball.targetPosition && (
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const passOffsetX = ball.x > 75 ? -18 : 18;
+                const passOffsetY = ball.y > 75 ? -10 : ball.y < 25 ? 10 : 0;
+                const targetX = Math.min(95, Math.max(5, ball.x + passOffsetX));
+                const targetY = Math.min(95, Math.max(5, ball.y + passOffsetY));
+                onUpdateBall({
+                  ...ball,
+                  targetPosition: {
+                    x: targetX,
+                    y: targetY,
+                  },
+                });
+                toast.success("Ball pass added! Drag the yellow target circle to set receiver.");
+              }}
+              className="absolute -bottom-5 px-1.5 py-0.2 rounded-full bg-[#FFD600] hover:bg-[#FFE082] text-black font-extrabold text-[8px] tracking-tight shadow-md border border-black/40 hover:scale-105 transition-transform whitespace-nowrap cursor-pointer z-35 flex items-center gap-0.5"
+              title="Add pass destination"
+            >
+              + Pass
+            </button>
+          )}
         </div>
       )}
 
@@ -1083,6 +1256,18 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
               >
                 <span className="size-1.5 rounded-full" style={{ backgroundColor: teamColor }} />
                 <span>{p.tacticalRole || p.role || "Role"}</span>
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQuickEditPlayer(p);
+                  }}
+                  className="ml-1 opacity-75 hover:opacity-100 hover:text-[#00E5FF] transition-opacity"
+                  title="Quick edit player details and runs"
+                >
+                  <Pencil className="size-2.5" />
+                </button>
               </div>
             )}
 
@@ -1110,6 +1295,36 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
             >
               {p.label || p.role}
             </span>
+
+            {/* Quick Add Run Button when player does not have a destination */}
+            {!isReadOnly && isSelected && !p.targetPosition && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const forwardOffset = p.team === "away" || p.team === "gk_away" ? -10 : 10;
+                  onUpdatePlayers(
+                    players.map((pl) =>
+                      pl.id === p.id
+                        ? {
+                            ...pl,
+                            targetPosition: {
+                              x: Math.min(95, Math.max(5, p.position.x + forwardOffset)),
+                              y: p.position.y,
+                            },
+                          }
+                        : pl,
+                    ),
+                  );
+                  toast.success(`Added run for #${p.number} - drag the target circle to adjust destination!`);
+                }}
+                className="absolute -bottom-6 px-2 py-0.5 rounded-full bg-[#00E5FF] hover:bg-[#18FFFF] text-[#0A131F] font-extrabold text-[9px] shadow-lg border border-black/30 hover:scale-105 transition-transform whitespace-nowrap cursor-pointer z-30 flex items-center gap-0.5"
+                title={`Add movement run arrow for #${p.number}`}
+              >
+                + Run
+              </button>
+            )}
           </div>
         );
       })}

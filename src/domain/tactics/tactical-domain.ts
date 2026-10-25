@@ -361,6 +361,8 @@ export function validateTacticalPlan(raw: unknown): TacticalValidationResult {
         "cover_shadow",
         "defensive_block",
         "freehand",
+        "laser",
+        "note",
         "text",
       ];
       const type: AnnotationType = validTypes.includes(ann.type as AnnotationType)

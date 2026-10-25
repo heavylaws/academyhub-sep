@@ -6,6 +6,7 @@ import {
   TrendingUp,
   Shield,
   User,
+  ArrowUpRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -152,6 +153,60 @@ export const PlayerInspectorDrawer: React.FC<PlayerInspectorDrawerProps> = ({
               <SelectItem value="hold">Hold Positional Shape</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Movement Destination & Run Trajectory */}
+        <div className="p-2.5 rounded-lg bg-muted/30 border border-border/60 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+              <ArrowUpRight className="size-3.5 text-primary" /> Run Destination
+            </Label>
+            {player.targetPosition ? (
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                Active ({Math.round(player.targetPosition.x)}%, {Math.round(player.targetPosition.y)}%)
+              </span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">Static</span>
+            )}
+          </div>
+
+          {player.targetPosition ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-muted-foreground">
+                Player will run to destination circle during this phase. Drag the dashed circle on pitch to adjust.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onUpdatePlayer({ ...player, targetPosition: undefined })}
+                className="w-full h-7 text-xs text-destructive border-destructive/40 hover:bg-destructive/10 gap-1 font-bold"
+              >
+                <Trash2 className="size-3" />
+                <span>Remove Movement Run</span>
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const forwardOffset = player.team === "away" || player.team === "gk_away" ? -10 : 10;
+                onUpdatePlayer({
+                  ...player,
+                  targetPosition: {
+                    x: Math.min(95, Math.max(5, player.position.x + forwardOffset)),
+                    y: player.position.y,
+                  },
+                });
+              }}
+              className="w-full h-8 text-xs gap-1 font-bold text-primary border-primary/40 hover:bg-primary/10"
+            >
+              <ArrowUpRight className="size-3.5" />
+              <span>+ Set Run Destination</span>
+            </Button>
+          )}
         </div>
 
         {/* Ball Possession Attachment */}
