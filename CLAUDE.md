@@ -38,8 +38,7 @@ Multi-tenant sports-academy SaaS. React 19 + Vite SPA in `src/`, Convex backend
 
 Gotchas:
 - `pnpm typecheck` is a **no-op** (root `tsconfig.json` has `"files": []`). Use the two `tsc` commands above.
-- Baseline at `87ffbf6`: `pnpm lint` = 13 pre-existing errors; `tsc -b` = 2 errors in
-  `src/data/tactical-presets.ts`; ~227 files not Prettier-clean. Don't fix unrelated ones in feature work.
+- ~227 files are not Prettier-clean; don't reformat unrelated files in feature work.
 - Convex imports use explicit extensions: `./lib/email.ts`, `./_generated/server.js`.
 - `ctx.db.get("users", id)` — this Convex version takes the table name first.
 - Aliases: `@/` → `src/`, `@/convex/` → `convex/`.
