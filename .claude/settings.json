@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "outputStyle": "Concise",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm test)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm exec vitest *)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm exec eslint *)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm exec tsc *)",
+      "Bash(pnpm exec prettier --check *)",
+      "Bash(pnpm prettier-check)",
+      "Bash(pnpm run build)",
+      "Bash(pnpm list *)",
+      "Bash(pnpm why *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch)",
+      "Bash(git branch --show-current)",
+      "Bash(git rev-parse *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr status)",
+      "Bash(gh pr checks *)"
+    ],
+    "ask": [
+      "Bash(pnpm install)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)",
+      "Bash(pnpm update *)",
+      "Bash(pnpm up *)",
+      "Bash(pnpm dlx *)",
+      "Bash(pnpm prettier-fix)",
+      "Bash(npx *)",
+      "Bash(npm *)",
+      "Bash(yarn *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(chmod *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env*)",
+      "Read(**/.env)",
+      "Read(**/.env*)",
+      "Read(**/*credential*)",
+      "Read(**/credentials.md)",
+      "Read(**/academy_admins.*)",
+      "Read(**/secrets/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(~/.ssh/**)",
+      "Bash(cat .env*)",
+      "Bash(cat ./.env*)",
+      "Bash(rm -rf *)",
+      "Bash(rm -rf)",
+      "Bash(rm -fr *)",
+      "Bash(git push --force *)",
+      "Bash(git push --force)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git push * --force)",
+      "Bash(git push * --force *)",
+      "Bash(git push * -f)",
+      "Bash(npx convex deploy *)",
+      "Bash(npx convex deploy)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/compact-reminder.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-files.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit-format.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-green-tests.py",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
