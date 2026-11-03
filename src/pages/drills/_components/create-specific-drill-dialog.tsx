@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useMutation, useAction } from "convex/react";
 import { toast } from "sonner";
 import {
@@ -466,9 +466,13 @@ export default function CreateSpecificDrillDialog({
     "Speed" | "Power" | "Agility" | "Strength" | "Endurance" | "Mobility" | "Technical" | "Tactical"
   >("Tactical");
 
-  // Prepopulate if cloning from an existing drill
-  useEffect(() => {
-    if (initialDrill && open) {
+  // Prepopulate if cloning from an existing drill (adjust state during render on prop change)
+  const prefillSource = open ? (initialDrill ?? null) : null;
+  const [prefilledFrom, setPrefilledFrom] = useState<SoccerDrill | null>(null);
+  if (prefillSource !== prefilledFrom) {
+    setPrefilledFrom(prefillSource);
+    if (prefillSource) {
+      const initialDrill = prefillSource;
       setTitle(`${initialDrill.title} (Progression)`);
       setIsTitleTouched(true);
       setAgeGroup(initialDrill.ageGroup);
@@ -490,7 +494,7 @@ export default function CreateSpecificDrillDialog({
       }
       setCurrentStep(1);
     }
-  }, [initialDrill, open]);
+  }
 
   // Category change handler
   const handleSelectCategory = (catId: string) => {

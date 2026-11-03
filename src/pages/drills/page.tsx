@@ -905,7 +905,7 @@ ${drill.coachingPoints.map((cp) => `• ${cp}`).join("\n")}`;
                         setCreateModalOpen(true);
                         setActiveDrill(null);
                       }}
-                      className="w-full sm:w-auto text-xs gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                      className="w-full sm:w-auto text-xs gap-1 border-amber-500/30"
                     >
                       <Copy className="size-3.5" />
                       Clone & Tweak

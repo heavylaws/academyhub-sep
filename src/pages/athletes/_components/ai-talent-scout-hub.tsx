@@ -206,10 +206,10 @@ function generateScoutSuggestion(
   const topAttr = topPillar?.attribute || "Speed";
 
   let focusTitle = `Elevate ${weakAttr} Baseline`;
-  let drillTitle = "Midfield Diagonal Switch & Cutback Finish";
-  let drillCategory = "Power & Strike Technique";
-  let tacticalAdvice = "Deploy in primary position with emphasis on progressive actions.";
-  let actionReason = `Enhance relative ${weakAttr} output to balance athletic profile.`;
+  let drillTitle: string;
+  let drillCategory: string;
+  let tacticalAdvice: string;
+  let actionReason: string;
 
   if (s.includes("track") || s.includes("field") || s.includes("run")) {
     if (weakAttr === "Speed") {

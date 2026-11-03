@@ -507,7 +507,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
       e.stopPropagation();
       try {
         containerRef.current?.setPointerCapture(e.pointerId);
-      } catch {}
+      } catch {
+        // Pointer capture can fail if the pointer was already released; dragging still works.
+      }
       setDraggingEntity({ type: "player_target", id: playerId });
       return;
     }
@@ -516,7 +518,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // Pointer capture can fail if the pointer was already released; dragging still works.
+    }
     setDraggingEntity({ type: "player", id: playerId });
     lastPlayerPosRef.current = p ? { ...p.position } : null;
   };
@@ -526,7 +530,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // Pointer capture can fail if the pointer was already released; dragging still works.
+    }
     setDraggingEntity({ type: "player_target", id: playerId });
     const p = players.find((pl) => pl.id === playerId) || null;
     onSelectPlayer?.(p);
@@ -539,7 +545,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
       e.stopPropagation();
       try {
         containerRef.current?.setPointerCapture(e.pointerId);
-      } catch {}
+      } catch {
+        // Pointer capture can fail if the pointer was already released; dragging still works.
+      }
       setDraggingEntity({ type: "ball_target", id: "ball" });
       return;
     }
@@ -547,7 +555,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // Pointer capture can fail if the pointer was already released; dragging still works.
+    }
     setDraggingEntity({ type: "ball", id: "ball" });
   };
 
@@ -556,7 +566,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // Pointer capture can fail if the pointer was already released; dragging still works.
+    }
     setDraggingEntity({ type: "ball_target", id: "ball" });
   };
 
@@ -565,7 +577,9 @@ export const TacticalBoardCanvas: React.FC<TacticalBoardCanvasProps> = ({
     e.stopPropagation();
     try {
       containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+      // Pointer capture can fail if the pointer was already released; dragging still works.
+    }
     setDraggingEntity({ type: "equipment", id: eqId });
   };
 

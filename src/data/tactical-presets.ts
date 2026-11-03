@@ -1,4 +1,6 @@
 import {
+  type PitchType,
+  type SportType,
   type TacticalPlan,
   createDefaultTacticalPlan,
   createBasketballTacticalPlan,
