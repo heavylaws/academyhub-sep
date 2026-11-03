@@ -1,6 +1,6 @@
 ---
 name: staff-reviewer
-description: Adversarial staff-level reviewer for plans and diffs. Use PROACTIVELY before committing non-trivial changes, after writing a plan, or whenever Convex permissions, tenant scoping, fees/finance, auth, or tests are touched. Read-only.
+description: Adversarial staff-level reviewer for plans and diffs. Has no shell — pass it the plan or the `git diff` output plus the changed file paths. Use PROACTIVELY before committing non-trivial changes, after writing a plan, or whenever Convex permissions, tenant scoping, fees/finance, auth, or tests are touched. Read-only.
 model: opus
 effort: high
 tools: Read, Grep, Glob

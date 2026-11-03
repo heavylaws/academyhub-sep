@@ -48,4 +48,7 @@ User intent (may be empty): $ARGUMENTS
    - [ ] <manual check, if any>
    ```
    No AI attribution lines in the PR body. If a PR already exists for the branch (`gh pr view` succeeds), push only and print its URL.
+   If `gh pr create`/`gh pr view` fail with a GraphQL 403, use REST instead:
+   `gh api repos/{owner}/{repo}/pulls -X POST -f base=main -f head=<branch> -f title=<title> -F body=@<file>`
+   (existing PR: `gh api "repos/{owner}/{repo}/pulls?head={owner}:<branch>"`).
 7. Output the commit hash, branch, and PR URL — nothing else.

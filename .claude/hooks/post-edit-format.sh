@@ -32,6 +32,15 @@ if [ ! -x "$prettier" ]; then
   exit 0
 fi
 
+# Only format files that were Prettier-clean at HEAD (or are new); otherwise one edit
+# would reformat the whole file and bury the real change in formatting churn.
+rel="${file_path#"$PROJECT_DIR"/}"
+if git -C "$PROJECT_DIR" cat-file -e "HEAD:$rel" 2>/dev/null; then
+  if ! git -C "$PROJECT_DIR" show "HEAD:$rel" | "$prettier" --check --stdin-filepath "$rel" >/dev/null 2>&1; then
+    exit 0
+  fi
+fi
+
 if ! out="$(cd "$PROJECT_DIR" && "$prettier" --write --ignore-unknown --log-level warn -- "$file_path" 2>&1)"; then
   echo "post-edit-format: prettier failed on ${file_path#"$PROJECT_DIR"/} (advisory):" >&2
   printf '%s\n' "$out" | tail -n 20 >&2

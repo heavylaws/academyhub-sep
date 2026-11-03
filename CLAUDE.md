@@ -33,7 +33,7 @@ Multi-tenant sports-academy SaaS. React 19 + Vite SPA in `src/`, Convex backend
 | Tests touched by your diff | `pnpm exec vitest run --changed HEAD` |
 | Typecheck frontend | `pnpm exec tsc -b` |
 | Typecheck backend | `pnpm exec tsc -p convex --noEmit` |
-| Lint changed files | `pnpm exec eslint <files>` |
+| Lint (CI gate, must stay at 0 errors) | `pnpm lint` · single file: `pnpm exec eslint <files>` |
 | Format | `pnpm exec prettier --write <files>` |
 
 Gotchas:
@@ -68,10 +68,11 @@ Gotchas:
 - Edits to `.env*`, lockfiles, credential/secret files, migrations and `convex/_generated/`
   are blocked by `.claude/hooks/protect-files.sh`. To override deliberately:
   `touch .claude/allow-sensitive.flag` (git-ignored) — delete it afterwards.
-- Every edited file is auto-formatted with Prettier, so touching an unformatted file
-  produces a formatting diff. Mention it in the PR rather than reverting.
+- Edited files are auto-formatted with Prettier only if they were already Prettier-clean
+  (or are new). Never run `prettier --write` on an existing unformatted file.
 - The Stop hook runs `vitest run --changed HEAD` when tracked code changed; a red run blocks finishing.
-- Subagents: `staff-reviewer` (adversarial review), `code-simplifier`. Ship via `/commit-push-pr`.
+- Subagents: `staff-reviewer` (adversarial review), `code-simplifier`. The user ships with
+  `/commit-push-pr`; never commit or push unless asked.
 
 ## Progressive disclosure — read only when relevant
 - `agent_docs/backend-convex.md` — writing queries/mutations/actions, RBAC recipe, error codes, crons.

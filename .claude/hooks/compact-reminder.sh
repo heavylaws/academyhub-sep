@@ -8,6 +8,6 @@ Post-compact reminders (academyhub-sep):
 - Errors: ConvexError({ code: NOT_FOUND|BAD_REQUEST|FORBIDDEN|UNAUTHENTICATED|CONFLICT, message }).
 - New Convex API used by the UI needs a matching handler in src/lib/local-mock-store.ts (mock mode + src/test).
 - Protected files (.env*, lockfiles, secrets, migrations, convex/_generated) need .claude/allow-sensitive.flag.
-- Re-read CLAUDE.md and the relevant agent_docs/*.md before continuing non-trivial work.
+- Re-read the agent_docs/*.md file for the area you are working in before continuing.
 EOF
 exit 0
